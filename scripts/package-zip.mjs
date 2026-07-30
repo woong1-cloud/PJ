@@ -127,6 +127,31 @@ SIGNUP_ALLOWED_DOMAINS=${values.signupDomains}
 # 그래도 여기에 직접 적으시려면 아래 = 뒤에 붙이면 동작합니다.
 # 그 경우 배포가 끝난 뒤 Supabase 에서 키를 재발급하는 것을 권합니다.
 SUPABASE_SERVICE_ROLE_KEY=
+
+# ── 알림 메일(선택) ─────────────────────────────────────────────
+# 비워 두면 메일 기능만 꺼지고 나머지는 전부 그대로 동작합니다.
+# 인앱 알림(벨)은 이 설정과 무관합니다.
+#
+# 메일이 나가는 경우는 셋뿐입니다: 배치 대기(가입), 담당자 지정, @멘션.
+#
+# Gmail / Google Workspace 를 쓰신다면
+#   SMTP_HOST=smtp.gmail.com  SMTP_PORT=587
+#   SMTP_PASS 는 계정 비밀번호가 아니라 '앱 비밀번호'입니다(2단계 인증 필수).
+#   Google 계정 > 보안 > 2단계 인증 > 앱 비밀번호에서 발급합니다.
+# Microsoft 365 는 smtp.office365.com:587 입니다.
+# 사내 SMTP 릴레이로 옮길 때도 코드는 그대로고 아래 값만 바꾸면 됩니다.
+#
+# SMTP_PASS 도 비밀입니다 — service_role 키와 같이 플랫폼 환경변수 화면에
+# 두는 편이 안전합니다.
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM=
+
+# 메일 본문 링크의 기준 주소. 사용자가 브라우저에 치는 주소 그대로 넣습니다
+# (예: https://moa.eland.co.kr). 비우면 메일에 링크가 빠집니다.
+APP_BASE_URL=
 `;
 }
 
