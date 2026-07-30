@@ -21,6 +21,8 @@ import { RequirementLinks } from '@/components/RequirementLinks';
 import { ActivityFeed } from '@/components/ActivityFeed';
 import { StatusDurations } from '@/components/StatusDurations';
 import { ChecklistSection } from '@/components/ChecklistSection';
+import { RequirementDangerZone } from '@/components/RequirementDangerZone';
+import { canDeleteRequirement } from '@/lib/deleteRequirement';
 import {
   Select,
   SelectContent,
@@ -209,7 +211,8 @@ export function RequirementDetail({ id }) {
   if (loadError) return <p className="text-sm text-red-600">{loadError}</p>;
   if (!data) return <p className="text-sm text-slate-500">불러오는 중...</p>;
 
-  const { requirement: r, history, duplicates, mergedInto, images, statusDurations } = data;
+  const { requirement: r, history, duplicates, mergedInto, images, statusDurations, commentCount } =
+    data;
 
   const canEdit =
     (processAllowed || r.requester?.id === identity.memberId) &&
@@ -537,6 +540,19 @@ export function RequirementDetail({ id }) {
         history={history}
         memberId={identity.memberId}
       />
+
+      {/* 영구 삭제는 화면 맨 아래, 전체 관리자에게만. 서버도 같은 판정을 다시 한다. */}
+      {canDeleteRequirement(identity) && (
+        <RequirementDangerZone
+          requirementId={id}
+          summary={{
+            historyCount: history?.length ?? 0,
+            commentCount: commentCount ?? 0,
+            imageCount: images?.length ?? 0,
+            mergedCount: duplicates?.length ?? 0,
+          }}
+        />
+      )}
     </div>
   );
 }
