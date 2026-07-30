@@ -5,6 +5,7 @@ import { TIER_RANK } from '@/lib/tiers';
 import { DONE_STATUS, MERGED_STATUS } from '@/lib/statuses';
 import { CHANNELS, DEFAULT_CHANNEL } from '@/lib/channels';
 import { toSignedImageList } from '@/lib/storage';
+import { computeStatusDurations } from '@/lib/statusDurations';
 
 export async function GET(request, { params }) {
   try {
@@ -65,7 +66,17 @@ export async function GET(request, { params }) {
     if (imgError) throw imgError;
     const images = await toSignedImageList(imageRows);
 
-    return Response.json({ requirement, history, duplicates, mergedInto, images });
+    // history 는 이미 이 요구사항의 change_logs 전체다 — 새 쿼리 없이 여기서
+    // 상태 구간만 걸러 계산한다. field_name 으로 거른다, change_type 이 아니라 —
+    // 상태 변경은 '상태변경'과 '중복병합' 두 change_type 을 쓴다.
+    const statusDurations = computeStatusDurations({
+      createdAt: requirement.created_at,
+      currentStatus: requirement.status,
+      changeLogs: (history ?? []).filter((h) => h.field_name === 'status'),
+      nowIso: new Date().toISOString(),
+    });
+
+    return Response.json({ requirement, history, duplicates, mergedInto, images, statusDurations });
   } catch (error) {
     return errorResponse(error);
   }

@@ -19,6 +19,8 @@ import { ImageDropzone } from '@/components/ImageDropzone';
 import { RequirementEditForm } from '@/components/RequirementEditForm';
 import { RequirementLinks } from '@/components/RequirementLinks';
 import { ActivityFeed } from '@/components/ActivityFeed';
+import { StatusDurations } from '@/components/StatusDurations';
+import { ChecklistSection } from '@/components/ChecklistSection';
 import {
   Select,
   SelectContent,
@@ -207,7 +209,7 @@ export function RequirementDetail({ id }) {
   if (loadError) return <p className="text-sm text-red-600">{loadError}</p>;
   if (!data) return <p className="text-sm text-slate-500">불러오는 중...</p>;
 
-  const { requirement: r, history, duplicates, mergedInto, images } = data;
+  const { requirement: r, history, duplicates, mergedInto, images, statusDurations } = data;
 
   const canEdit =
     (processAllowed || r.requester?.id === identity.memberId) &&
@@ -518,6 +520,14 @@ export function RequirementDetail({ id }) {
           </ul>
         </section>
       )}
+
+      <StatusDurations durations={statusDurations} />
+
+      <ChecklistSection
+        requirementId={id}
+        brandId={requirementBrandId}
+        canManage={processAllowed}
+      />
 
       {/* 상태 이력과 코멘트를 한 줄기로 보여준다. 이력은 상세 API 가 이미
           내려주고, 코멘트는 자기 엔드포인트에서 따로 불러와 화면에서 섞는다. */}
