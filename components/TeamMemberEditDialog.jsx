@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { AFFILIATIONS, JOB_ROLES, suggestTier } from '@/lib/signup';
+import { TIER_LABELS } from '@/lib/tiers';
 
 // 팀원 이름·소속·직무 수정.
 //
@@ -144,20 +145,25 @@ export function TeamMemberEditDialog({ open, onOpenChange, member, onSaved }) {
           {affiliationChanged && (
             <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
               <p>
-                소속을 <b>{affiliation}</b>로 바꾸면 제안 등급은 <b>{proposed}</b>입니다. 소속은
+                소속을 <b>{affiliation}</b>로 바꾸면 제안 등급은{' '}
+                <b>{TIER_LABELS[proposed] ?? proposed}</b>입니다. 소속은
                 등급을 제안할 뿐이고, 실제 권한은 브랜드별 배치에서 나옵니다.
               </p>
               {roles.length === 0 ? (
                 <p className="mt-1">현재 배치된 브랜드가 없습니다. 저장 후 배치해 주세요.</p>
               ) : mismatched.length === 0 ? (
                 <p className="mt-1">
-                  현재 배치({roles.map((r) => `${r.brandName} ${r.tier}`).join(', ')})가 제안과
-                  일치합니다.
+                  현재 배치(
+                  {roles.map((r) => `${r.brandName} ${TIER_LABELS[r.tier] ?? r.tier}`).join(', ')})가
+                  제안과 일치합니다.
                 </p>
               ) : (
                 <p className="mt-1">
-                  현재 배치 {mismatched.map((r) => `${r.brandName} ${r.tier}`).join(', ')} 는 제안과
-                  다릅니다. 필요하면 저장 후 목록에서 등급을 바꿔 주세요.
+                  현재 배치{' '}
+                  {mismatched
+                    .map((r) => `${r.brandName} ${TIER_LABELS[r.tier] ?? r.tier}`)
+                    .join(', ')}{' '}
+                  는 제안과 다릅니다. 필요하면 저장 후 목록에서 등급을 바꿔 주세요.
                 </p>
               )}
             </div>

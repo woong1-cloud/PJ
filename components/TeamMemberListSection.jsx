@@ -1,5 +1,7 @@
 'use client';
 
+import { TIER_LABELS } from '@/lib/tiers';
+
 // props: members(전사 팀원, 비활성 포함), onCreate(), onAccount(member),
 //        onToggleGlobalAdmin(member), onToggleActive(member),
 //        onEdit(member), onChangeTier(member, brandId, tier)
@@ -88,9 +90,13 @@ export function TeamMemberListSection({
                           className="rounded border border-slate-300 bg-white px-1 py-0.5 text-xs text-slate-700"
                           aria-label={`${m.name} ${r.brandName} 등급`}
                         >
+                          {/* 저장값은 '2차/3차/4차' 지만 화면에는 이름을 보여준다.
+                              숫자만 있으면 그 사람이 무엇을 할 수 있는지 알 수
+                              없다. 브랜드 목록·브랜드 설정·배치 다이얼로그가
+                              이미 TIER_LABELS 를 쓰고 있어 여기만 달랐다. */}
                           {['2차', '3차', '4차'].map((t) => (
                             <option key={t} value={t}>
-                              {t}
+                              {TIER_LABELS[t] ?? t}
                             </option>
                           ))}
                         </select>
