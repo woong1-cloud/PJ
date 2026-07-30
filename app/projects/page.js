@@ -87,9 +87,14 @@ export default function ProjectsPage() {
           <ScopeButton active={scope === 'brand'} onClick={() => setScope('brand')}>
             내 브랜드
           </ScopeButton>
-          <ScopeButton active={scope === 'all'} onClick={() => setScope('all')}>
-            전사 전체
-          </ScopeButton>
+          {/* 전체관리자에게만 보인다. 서버가 이미 "내가 배치된 브랜드에 전개된
+              프로젝트"로 거르므로 다른 사람이 눌러도 결과는 같지만, 눌러도
+              아무 변화가 없는 버튼은 고장난 것처럼 보인다. */}
+          {globalAdmin && (
+            <ScopeButton active={scope === 'all'} onClick={() => setScope('all')}>
+              전사 전체
+            </ScopeButton>
+          )}
         </div>
         <span className="h-4 w-px bg-slate-200" />
         <div className="flex gap-1">

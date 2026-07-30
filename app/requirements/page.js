@@ -10,6 +10,7 @@ import { buildRequirementsQuery } from '@/lib/requirementFilters';
 import { RequirementList } from '@/components/RequirementList';
 import { RequirementFormDialog } from '@/components/RequirementFormDialog';
 import { FilterBar } from '@/components/FilterBar';
+import { MergeDialog } from '@/components/MergeDialog';
 import {
   useRequirementFilters,
   useRequirementFilterOptions,
@@ -30,6 +31,7 @@ export default function RequirementsPage() {
 function RequirementsView() {
   const { identity } = useIdentity();
   const processAllowed = canProcess(identity);
+  const [mergeSource, setMergeSource] = useState(null);
   const [requirements, setRequirements] = useState([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
@@ -149,6 +151,19 @@ function RequirementsView() {
           sort={sort}
           onSort={handleSort}
           today={today}
+          onMerge={processAllowed ? setMergeSource : undefined}
+        />
+      )}
+      {/* 보드와 같은 다이얼로그를 그대로 쓴다. 병합 규칙이 두 곳에 갈리면
+          한쪽만 고쳐진다. */}
+      {mergeSource && (
+        <MergeDialog
+          source={mergeSource}
+          onClose={() => setMergeSource(null)}
+          onMerged={() => {
+            setMergeSource(null);
+            refreshRequirements();
+          }}
         />
       )}
       <RequirementFormDialog

@@ -5,6 +5,7 @@ import { errorResponse, ApiError } from '@/lib/apiError';
 import { computeProjectProgress } from '@/lib/projectProgress';
 import { visibleRequirements } from '@/lib/visibleRequirements';
 import { assertDateOrder, parseDateInput } from '@/lib/projectDates';
+import { canSeeProject, requirementsOfMyBrands } from '@/lib/projectAccess';
 
 export async function GET(request, { params }) {
   try {
@@ -51,18 +52,31 @@ export async function GET(request, { params }) {
     // 비공개 판정 규칙은 lib/visibleRequirements.js 한 곳에 있다.
     // 프로젝트 목록 라우트도 같은 함수를 쓴다 — 규칙이 두 곳에 적혀 있으면
     // 한쪽만 고쳐지고, 새는 방향의 실수는 조용하다.
+    const myBrandIds = (rolesResult.data ?? []).map((r) => r.brand_id);
+
+    // 권한 확인이 여기여야 하는 이유: 이 라우트는 로그인만 보고 있어서, id 만
+    // 알면 다른 브랜드 프로젝트의 이름·담당자·브랜드별 진척이 그대로 나갔다.
+    // 목록에서 안 보이게 하는 것만으로는 막히지 않는다.
+    if (!canSeeProject({ projectBrands, myBrandIds, isGlobalAdmin })) {
+      throw new ApiError(403, '이 프로젝트를 볼 권한이 없습니다.');
+    }
+
     const tierByBrand = new Map((rolesResult.data ?? []).map((r) => [r.brand_id, r.tier]));
 
     // allRequirements와 visible을 절대 바꿔 쓰면 안 된다.
     // - 진척률에 visible을 쓰면 분모가 사람마다 달라진다(같은 프로젝트가 다르게 보임).
     // - 응답에 all을 쓰면 비공개 요구사항이 그대로 새어나간다.
     const allRequirements = reqResult.data ?? [];
-    const visible = visibleRequirements(allRequirements, { isGlobalAdmin, tierByBrand }).map(
-      (row) => {
-        const { requirement_images, ...rest } = row;
-        return { ...rest, image_count: requirement_images?.[0]?.count ?? 0 };
-      },
-    );
+    // 두 축을 모두 걸어야 한다. requirementsOfMyBrands 는 "내 브랜드인가",
+    // visibleRequirements 는 "비공개인가" — 하나만 걸면 다른 축으로 새어 나간다.
+    // 공홈 프로젝트를 스파오 4차가 열면 스파오 건만 보여야 한다.
+    const visible = visibleRequirements(
+      requirementsOfMyBrands(allRequirements, { myBrandIds, isGlobalAdmin }),
+      { isGlobalAdmin, tierByBrand },
+    ).map((row) => {
+      const { requirement_images, ...rest } = row;
+      return { ...rest, image_count: requirement_images?.[0]?.count ?? 0 };
+    });
 
     const progress = computeProjectProgress({
       requirements: allRequirements,

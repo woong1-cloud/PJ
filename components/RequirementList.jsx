@@ -55,7 +55,12 @@ function SortableTh({ label, sortKey, sort, onSort, className = '' }) {
   );
 }
 
-export function RequirementList({ requirements, sort, onSort, today }) {
+// props: requirements, sort, onSort, today, onMerge
+//
+// onMerge 를 주면 중복처리 열이 생긴다. 목록이 기본 뷰인데 중복처리가 보드에만
+// 있어서, 목록으로 훑다가 같은 요청 둘을 발견하면 보드로 옮겨 가야 했다.
+// 3차 미만에게는 주지 않는다(병합은 IT 판단이다).
+export function RequirementList({ requirements, sort, onSort, today, onMerge }) {
   if (requirements.length === 0) {
     return <p className="text-sm text-slate-500">등록된 요구사항이 없습니다.</p>;
   }
@@ -95,6 +100,7 @@ export function RequirementList({ requirements, sort, onSort, today }) {
                 onSort={onSort}
                 className="w-28"
               />
+              {onMerge && <th className="w-16 px-3 py-2" />}
             </tr>
           </thead>
           <tbody>
@@ -131,6 +137,21 @@ export function RequirementList({ requirements, sort, onSort, today }) {
                 <td className="px-3 py-2 text-xs">
                   <DateCell req={req} today={today} />
                 </td>
+                {onMerge && (
+                  <td className="px-3 py-2 text-right">
+                    {/* 이미 병합된 건은 다시 병합할 수 없다. 버튼을 남겨 두면
+                        눌러서 400 을 받는 길만 생긴다. */}
+                    {req.status !== MERGED_STATUS && (
+                      <button
+                        type="button"
+                        onClick={() => onMerge(req)}
+                        className="whitespace-nowrap text-xs text-slate-500 underline hover:text-slate-700"
+                      >
+                        중복
+                      </button>
+                    )}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
