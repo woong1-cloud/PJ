@@ -12,6 +12,7 @@ import {
   CANCELLED_STATUS,
 } from '@/lib/statuses';
 import { statusStyle } from '@/lib/statusMeta';
+import { canSubmitForReview } from '@/lib/submitRequirement';
 import { isOverdue, toLocalDateString } from '@/lib/overdue';
 import { Badge } from '@/components/ui/badge';
 import { ImageDropzone } from '@/components/ImageDropzone';
@@ -215,6 +216,23 @@ export function RequirementDetail({ id }) {
   // canEdit이 false로 바뀌면(예: 편집 중 상태를 완료/중복으로 변경) 편집 폼을 자동으로 닫는다.
   const showEditForm = editing && canEdit;
 
+  // 브랜드가 '검토 요청'을 누르는 길. 상태 변경(3차 이상)과 다른 라우트를 쓴다 —
+  // 목적지가 검토대기 하나로 고정이라 4차에게도 열어도 안전하다.
+  async function submitForReview() {
+    setActionError('');
+    const res = await fetch(`/api/requirements/${id}/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brandId: requirementBrandId }),
+    });
+    if (!res.ok) {
+      const d = await res.json();
+      setActionError(d.error ?? '검토 요청 실패');
+      return;
+    }
+    refresh();
+  }
+
   const isOffBoard = !BOARD_STATUSES.includes(r.status);
   // 병합된 건은 종결할 수 없다(API도 막는다). 이미 반려·취소된 건은 서로
   // 바꿀 수 있게 둔다 — 잘못 누른 것을 고칠 방법이 있어야 한다.
@@ -373,6 +391,28 @@ export function RequirementDetail({ id }) {
             ) : (
               <p className="font-medium text-slate-900">{r.status}</p>
             )}
+            {/* 4차 요청자에게 보이는 유일한 제출 수단이다. 3차 이상은 위 Select
+                로 바로 옮길 수 있으므로 중복해서 보여주지 않는다.
+                이 버튼이 없던 동안 4차가 올린 건은 '작성중'에 머물렀고,
+                올린 사람은 접수됐다고 믿었다. */}
+            {!processAllowed &&
+              canSubmitForReview(
+                { status: r.status, requester: r.requester?.id },
+                { memberId: identity.memberId, tier: identity.tier, isGlobalAdmin: false },
+              ) && (
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    onClick={submitForReview}
+                    className="w-full rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-700"
+                  >
+                    검토 요청
+                  </button>
+                  <p className="mt-1 text-xs text-slate-500">
+                    누르면 IT 담당자에게 전달되고 상태가 검토대기로 바뀝니다.
+                  </p>
+                </div>
+              )}
           </div>
           {canClose && (
             <CloseActions

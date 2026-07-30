@@ -53,6 +53,8 @@ function RequirementsView() {
     setQuery,
     setIncludeDone,
     resetFilters,
+    mine,
+    setMine,
   } = useRequirementFilters();
   const { teamMembers, categories, projects } = useRequirementFilterOptions(identity.brandId);
 
@@ -61,6 +63,8 @@ function RequirementsView() {
     filters,
     query: appliedQuery,
     includeDone,
+    mine,
+    memberId: identity.memberId,
   });
   const currentKey = `${reloadToken}|${apiQuery}`;
   const loading = loadedKey !== currentKey;
@@ -132,6 +136,8 @@ function RequirementsView() {
         onReset={resetFilters}
         includeDone={includeDone}
         onIncludeDoneChange={setIncludeDone}
+        mine={mine}
+        onMineChange={setMine}
       />
 
       {error && <p className="text-sm text-red-600">{error}</p>}

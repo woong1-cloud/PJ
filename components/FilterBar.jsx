@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/select';
 import { CHANNELS } from '@/lib/channels';
 import { hasActiveFilters } from '@/lib/requirementFilters';
+import { REQUIREMENT_STATUSES } from '@/lib/statuses';
 
 const PRIORITIES = ['상', '중', '하'];
 
@@ -16,9 +17,9 @@ const PRIORITIES = ['상', '중', '하'];
 // 이 컴포넌트는 그리기만 한다.
 //
 // props: teamMembers[], categories[], projects[],
-//        value{assignee,category,channel,priority,project},
+//        value{status,assignee,category,channel,priority,project},
 //        onChange(patch), query, onQueryChange, onReset,
-//        includeDone, onIncludeDoneChange, showIncludeDone
+//        includeDone, onIncludeDoneChange, showIncludeDone, mine, onMineChange
 export function FilterBar({
   teamMembers,
   categories,
@@ -32,6 +33,8 @@ export function FilterBar({
   onIncludeDoneChange,
   // 보드에서는 끈다. 이유는 아래 체크박스 주석 참조.
   showIncludeDone = true,
+  mine = false,
+  onMineChange,
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -41,6 +44,16 @@ export function FilterBar({
         onChange={(e) => onQueryChange(e.target.value)}
         placeholder="제목 검색"
         className="h-8 w-48 rounded-lg border border-slate-300 px-3 text-xs placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none"
+      />
+      {/* 보드에서도 감추지 않는다. 보드는 상태가 컬럼 그 자체라 상태로 거르면
+          컬럼 하나만 채워지는데, 그래도 컨트롤을 보여주는 쪽이 맞다 — 목록에서
+          상태를 걸고 보드로 넘어왔을 때 컨트롤을 숨기면 필터는 URL 에 남아
+          적용되는데 화면에는 근거가 없다. 보이지 않는 필터가 제일 나쁘다. */}
+      <FilterSelect
+        placeholder="상태"
+        options={REQUIREMENT_STATUSES.map((s) => ({ value: s, label: s }))}
+        current={value.status}
+        onPick={(v) => onChange({ status: v })}
       />
       <FilterSelect
         placeholder="담당자"
@@ -95,7 +108,24 @@ export function FilterBar({
           종결 숨김
         </label>
       )}
-      {hasActiveFilters({ filters: value, query }) && (
+      {/* 내가 올린 것만. 4차 요청자가 가장 자주 찾는 화면인데 지금까지
+          방법이 없었다(담당자 필터만 있었다). 요청자 셀렉트를 두는 대신
+          토글로 둔 이유는 lib/requirementFilters.js 주석 참조. */}
+      {onMineChange && (
+        <label
+          className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-500"
+          title="내가 등록한 요구사항만 봅니다."
+        >
+          <input
+            type="checkbox"
+            checked={mine}
+            onChange={(e) => onMineChange(e.target.checked)}
+            className="h-3.5 w-3.5 accent-indigo-600"
+          />
+          내 요청만
+        </label>
+      )}
+      {hasActiveFilters({ filters: value, query, mine }) && (
         <button
           type="button"
           onClick={onReset}

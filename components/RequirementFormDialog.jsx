@@ -92,7 +92,15 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
     onOpenChange(next);
   }
 
-  async function handleSubmit(event) {
+  // submitForReview: true 면 검토대기로, false 면 작성중(임시저장)으로 만든다.
+  //
+  // 두 버튼으로 나눈 이유: 예전에는 등록이 무조건 작성중이었고, 4차 요청자는
+  // 거기서 검토대기로 올릴 방법이 없었다(상태 변경은 3차 이상). 올린 사람은
+  // 접수됐다고 믿고 IT 는 존재를 몰랐다.
+  //
+  // 그렇다고 등록=제출로만 두면 초안을 잡아 둘 방법이 없어진다 — 이미지를
+  // 나중에 붙이거나 내용을 더 다듬으려는 경우가 실제로 있다. 그래서 둘 다 둔다.
+  async function handleSubmit(event, submitForReview) {
     event.preventDefault();
     setSubmitting(true);
     setError('');
@@ -111,6 +119,7 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
           toBe: form.toBe,
           note: form.note,
           isConfidential: form.isConfidential,
+          submit: submitForReview === true,
         }),
       });
       const data = await res.json();
@@ -177,7 +186,9 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
         <DialogHeader>
           <DialogTitle>새 요구사항 등록</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        {/* 엔터 키로 제출될 때도 '검토 요청'이 되게 둔다. 등록하러 들어온
+            사람의 기본 의도는 제출이고, 임시저장은 명시적으로 누르는 행동이다. */}
+        <form onSubmit={(e) => handleSubmit(e, true)} className="flex flex-col gap-3">
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex flex-col gap-1">
             <Label htmlFor="title">제목</Label>
@@ -294,9 +305,26 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
             />
             <Label htmlFor="isConfidential">비공개 요구사항 (브랜드 관리자 이상만 조회 가능)</Label>
           </div>
-          <DialogFooter>
-            <Button type="submit" disabled={submitting} className="bg-indigo-600 hover:bg-indigo-700">
-              {submitting ? '등록 중...' : '등록'}
+          <DialogFooter className="flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-end">
+            {/* 무엇이 달라지는지 한 줄로 적어 둔다. 버튼 이름만 보고
+                '임시저장'이 남에게 보이는지 아닌지 알 수 없다. */}
+            <p className="mr-auto text-xs text-slate-500">
+              검토 요청하면 IT 담당자에게 전달됩니다. 임시저장은 나에게만 보입니다.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={submitting}
+              onClick={(e) => handleSubmit(e, false)}
+            >
+              {submitting ? '저장 중...' : '임시저장'}
+            </Button>
+            <Button
+              type="submit"
+              disabled={submitting}
+              className="bg-indigo-600 hover:bg-indigo-700"
+            >
+              {submitting ? '요청 중...' : '검토 요청'}
             </Button>
           </DialogFooter>
         </form>

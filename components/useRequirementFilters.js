@@ -29,6 +29,7 @@ export function useRequirementFilters() {
     filters,
     query: appliedQuery,
     includeDone,
+    mine,
   } = useMemo(() => parseFilterParams(new URLSearchParams(searchKey)), [searchKey]);
 
   // 입력창은 즉시 반응해야 하므로 로컬 상태로 둔다. 키 입력마다 주소를 바꾸면
@@ -93,12 +94,20 @@ export function useRequirementFilters() {
     [replaceParams],
   );
 
+  const setMine = useCallback(
+    (value) => replaceParams({ mine: value ? 'true' : '' }),
+    [replaceParams],
+  );
+
   const resetFilters = useCallback(() => {
     // 입력창·디바운스·주소를 한 번에 맞춘다. 입력창만 비우고 디바운스를
     // 기다리면 300ms 동안 지운 검색어로 걸러진 결과가 남는다.
     setQuery('');
     setDebouncedQuery('');
-    replaceParams({ ...EMPTY_FILTERS, q: '' });
+    // mine 도 함께 지운다. EMPTY_FILTERS 는 FILTER_KEYS 만 담으므로 mine 은
+    // 여기서 직접 비워야 한다 — 빠뜨리면 '필터 초기화'를 눌러도 내 요청만
+    // 켜진 채 남고, 사용자는 초기화가 안 먹는다고 본다.
+    replaceParams({ ...EMPTY_FILTERS, q: '', mine: '' });
   }, [replaceParams]);
 
   return {
@@ -106,10 +115,12 @@ export function useRequirementFilters() {
     query,
     appliedQuery,
     includeDone,
+    mine,
     searchKey,
     setFilters,
     setQuery,
     setIncludeDone,
+    setMine,
     resetFilters,
   };
 }

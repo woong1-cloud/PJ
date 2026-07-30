@@ -34,7 +34,7 @@ function BoardView() {
 
   // 목록과 같은 URL 파라미터를 읽는다. 목록에서 필터를 걸고 보드로 넘어오면
   // 그대로 이어진다.
-  const { filters, query, appliedQuery, setFilters, setQuery, resetFilters } =
+  const { filters, query, appliedQuery, mine, setFilters, setQuery, setMine, resetFilters } =
     useRequirementFilters();
   const { teamMembers, categories, projects } = useRequirementFilterOptions(identity.brandId);
 
@@ -51,6 +51,10 @@ function BoardView() {
     filters,
     query: appliedQuery,
     forceIncludeDone: true,
+    // 목록에서 '내 요청만'을 켜고 보드로 넘어오면 그대로 이어진다. 읽고도
+    // 적용하지 않으면 URL 에는 켜져 있는데 화면은 전체를 보여준다.
+    mine,
+    memberId: identity.memberId,
   });
 
   const load = useCallback(() => {
@@ -106,6 +110,8 @@ function BoardView() {
         onQueryChange={setQuery}
         onReset={resetFilters}
         showIncludeDone={false}
+        mine={mine}
+        onMineChange={setMine}
       />
 
       {error && <p className="text-sm text-red-600">{error}</p>}
