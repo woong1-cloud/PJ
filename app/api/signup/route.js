@@ -1,0 +1,126 @@
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { errorResponse, ApiError } from '@/lib/apiError';
+import { AFFILIATIONS, JOB_ROLES, isAllowedEmail } from '@/lib/signup';
+
+// 이 라우트는 로그인하지 않은 사람이 호출한다. 다른 모든 라우트와 달리
+// getSessionMember()가 없으므로 아래 입력 검증이 유일한 방어선이다.
+//
+// 여기서 받은 값 중 어느 것도 권한이 되지 않는다는 점이 핵심이다.
+// user_brand_roles 행은 만들지 않는다 — 그건 관리자만 만든다.
+
+// 환경변수로 빼서 계열사가 늘어도 코드를 안 고치게 한다.
+const ALLOWED_DOMAINS = (process.env.SIGNUP_ALLOWED_DOMAINS ?? 'eland.co.kr')
+  .split(',')
+  .map((d) => d.trim())
+  .filter(Boolean);
+
+// 비로그인 입력이라 길이를 열어 두지 않는다.
+const MAX_NAME_LENGTH = 50;
+const MAX_EMAIL_LENGTH = 254;
+const MAX_PASSWORD_LENGTH = 72;
+
+export async function POST(request) {
+  try {
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      // 본문이 JSON이 아니면 요청이 잘못된 것이지 서버가 고장난 게 아니다.
+      throw new ApiError(400, '잘못된 요청입니다.');
+    }
+    if (!body || typeof body !== 'object') throw new ApiError(400, '잘못된 요청입니다.');
+
+    const { name, email, password, affiliation, jobRole, brandId } = body;
+
+    if (typeof name !== 'string' || !name.trim()) throw new ApiError(400, '이름을 입력해 주세요.');
+    if (name.trim().length > MAX_NAME_LENGTH) {
+      throw new ApiError(400, `이름은 ${MAX_NAME_LENGTH}자 이하여야 합니다.`);
+    }
+
+    if (typeof email !== 'string' || email.length > MAX_EMAIL_LENGTH) {
+      throw new ApiError(400, '이메일을 입력해 주세요.');
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!isAllowedEmail(normalizedEmail, ALLOWED_DOMAINS)) {
+      throw new ApiError(400, `사내 이메일(@${ALLOWED_DOMAINS[0]})로만 가입할 수 있습니다.`);
+    }
+
+    if (typeof password !== 'string' || password.length < 8) {
+      throw new ApiError(400, '비밀번호는 8자 이상이어야 합니다.');
+    }
+    if (password.length > MAX_PASSWORD_LENGTH) {
+      throw new ApiError(400, `비밀번호는 ${MAX_PASSWORD_LENGTH}자 이하여야 합니다.`);
+    }
+
+    if (!AFFILIATIONS.includes(affiliation)) throw new ApiError(400, '소속을 선택해 주세요.');
+    if (!JOB_ROLES.includes(jobRole)) throw new ApiError(400, '직무를 선택해 주세요.');
+
+    // 브랜드 소속은 근무 브랜드가 필요하다. 본부 소속은 여러 브랜드를 함께
+    // 보므로 묻지 않는다.
+    const wantsBrand = affiliation === '브랜드';
+    if (wantsBrand && (typeof brandId !== 'string' || !brandId)) {
+      throw new ApiError(400, '근무 브랜드를 선택해 주세요.');
+    }
+
+    const supabase = getSupabaseAdmin();
+
+    // 신청 브랜드가 실재하는 활성 브랜드인지 확인한다. 이 값으로 권한이
+    // 생기지는 않지만, 검증 없이 넣으면 FK 위반이 500으로 튀어나온다.
+    let requestedBrandId = null;
+    if (wantsBrand) {
+      const { data: brand, error: brandErr } = await supabase
+        .from('brands')
+        .select('id')
+        .eq('id', brandId)
+        .eq('is_active', true)
+        .maybeSingle();
+      if (brandErr) throw brandErr;
+      if (!brand) throw new ApiError(400, '근무 브랜드를 선택해 주세요.');
+      requestedBrandId = brand.id;
+    }
+
+    // 이미 가입된 이메일인지 먼저 본다. auth 계정만 만들어 놓고 team_members
+    // 삽입이 실패하면 그 이메일은 영원히 쓸 수 없게 된다.
+    const { data: existing, error: existErr } = await supabase
+      .from('team_members')
+      .select('id')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+    if (existErr) throw existErr;
+    if (existing) throw new ApiError(400, '이미 가입된 이메일입니다.');
+
+    const { data: created, error: createError } = await supabase.auth.admin.createUser({
+      email: normalizedEmail,
+      password,
+      email_confirm: true,
+    });
+    if (createError) throw new ApiError(400, createError.message);
+
+    const { error: insertError } = await supabase.from('team_members').insert({
+      name: name.trim(),
+      email: normalizedEmail,
+      auth_user_id: created.user.id,
+      // 아래 세 값은 자기 신고다. 관리자 화면에 힌트로만 쓰이고
+      // 어떤 조회·권한 판단에도 쓰이지 않는다.
+      affiliation,
+      job_role: jobRole,
+      requested_brand_id: requestedBrandId,
+      signed_up_at: new Date().toISOString(),
+      is_active: true,
+      // 전체관리자는 가입으로 얻을 수 있는 것이 아니다.
+      is_global_admin: false,
+      // 본인이 정한 비밀번호라 변경을 강제할 이유가 없다.
+      must_change_password: false,
+    });
+    if (insertError) {
+      // 연결이 실패하면 방금 만든 auth 계정은 아무와도 이어지지 않은 채
+      // 이메일만 점유한다 — 되돌린다. (create-account 라우트와 같은 패턴)
+      await supabase.auth.admin.deleteUser(created.user.id).catch(() => {});
+      throw insertError;
+    }
+
+    return Response.json({ ok: true }, { status: 201 });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
