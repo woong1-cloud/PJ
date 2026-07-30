@@ -109,6 +109,15 @@ NEXT_PUBLIC_SUPABASE_URL=${values.publicUrl}
 NEXT_PUBLIC_SUPABASE_ANON_KEY=${values.anonKey}
 SUPABASE_URL=${values.serverUrl}
 
+# 가입 허용 이메일 도메인. 비밀이 아니라 정책값이라 파일에 담는다.
+#
+# 이 줄을 빈 값으로 두면 안 된다. 코드가 (process.env.X ?? '기본값') 형태라
+# 값이 '없을 때'만 기본값으로 넘어가는데, 빈 문자열은 '없음'이 아니어서
+# 허용 목록이 빈 배열이 된다. 그러면 아무도 가입할 수 없고, 가입 화면에는
+# "사내 이메일(@undefined)로만 가입할 수 있습니다" 가 뜬다.
+# 계열사가 늘면 쉼표로 이어 쓴다: eland.co.kr,elandmall.com
+SIGNUP_ALLOWED_DOMAINS=${values.signupDomains}
+
 # service_role 키는 일부러 비워 두었습니다.
 #
 # 이 키만 RLS 를 우회합니다. 나머지 값은 유출돼도 DB 가 열리지 않지만
@@ -134,10 +143,13 @@ async function readPublicEnv() {
   const publicUrl = get('NEXT_PUBLIC_SUPABASE_URL');
   const anonKey = get('NEXT_PUBLIC_SUPABASE_ANON_KEY');
   const serverUrl = get('SUPABASE_URL') || publicUrl;
+  // 로컬에 없으면 코드의 기본값과 같은 값을 쓴다(app/api/signup/route.js).
+  // 빈 문자열로 내보내면 가입이 전부 막히므로 절대 비워 두지 않는다.
+  const signupDomains = get('SIGNUP_ALLOWED_DOMAINS') || 'eland.co.kr';
   if (!publicUrl || !anonKey) {
     fail('.env.local 에 NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY 가 없습니다.');
   }
-  return { publicUrl, anonKey, serverUrl };
+  return { publicUrl, anonKey, serverUrl, signupDomains };
 }
 
 // 소스 ZIP. 플랫폼이 npm install 과 next build 를 대신 해 주는 경우용.
@@ -187,7 +199,10 @@ async function packSource() {
     const values = await readPublicEnv();
     await writeFile(path.join(stage, '.env.local'), envFileBody(values), 'utf8');
     console.log(`    - .env.local 넣음 (${values.publicUrl})`);
-    console.log('      NEXT_PUBLIC 2개 + SUPABASE_URL 채움 / service_role 비움');
+    console.log(
+      `      NEXT_PUBLIC 2개 + SUPABASE_URL + SIGNUP_ALLOWED_DOMAINS(${values.signupDomains}) 채움`,
+    );
+    console.log('      service_role 만 비움');
   }
 
   console.log('4/4 압축');
@@ -331,10 +346,11 @@ function sourceGuide(name, withEnv) {
   const envSection = withEnv
     ? `## 환경변수 — 플랫폼에 넣을 것은 **하나**입니다
 
-이 ZIP 에는 \`.env.local\` 이 들어 있고, 비밀이 아닌 세 값이 이미 채워져
-있습니다(\`NEXT_PUBLIC_SUPABASE_URL\`, \`NEXT_PUBLIC_SUPABASE_ANON_KEY\`,
-\`SUPABASE_URL\`). 이 셋은 빌드하면 브라우저 코드에 박히거나 그와 같은 값이라
-숨길 수 있는 값이 아닙니다.
+이 ZIP 에는 \`.env.local\` 이 들어 있고, 비밀이 아닌 네 값이 이미 채워져
+있습니다 — \`NEXT_PUBLIC_SUPABASE_URL\`, \`NEXT_PUBLIC_SUPABASE_ANON_KEY\`,
+\`SUPABASE_URL\`, \`SIGNUP_ALLOWED_DOMAINS\`.
+앞의 셋은 빌드하면 브라우저 코드에 박히거나 그와 같은 값이라 숨길 수 있는
+값이 아니고, 마지막은 가입 허용 도메인이라 정책값입니다.
 
 플랫폼 환경변수 화면에는 아래만 넣으세요.
 
