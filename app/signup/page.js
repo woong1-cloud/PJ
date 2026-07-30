@@ -12,6 +12,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AFFILIATIONS, JOB_ROLES } from '@/lib/signup';
+import { BrandHeader } from '@/components/BrandHeader';
 
 export default function SignupPage() {
   const [name, setName] = useState('');
@@ -74,10 +75,7 @@ export default function SignupPage() {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-6">
         <div className="w-full max-w-sm">
-          <div className="mb-6 text-center">
-            <p className="text-3xl font-semibold tracking-tight text-slate-900">모아 MOA</p>
-            <p className="mt-1 text-sm text-slate-500">요구사항과 프로젝트를 한곳에 모읍니다</p>
-          </div>
+          <BrandHeader />
           <div className="rounded-lg border border-slate-200 bg-white p-6 text-center shadow-sm">
             <p className="text-base font-medium text-slate-900">가입이 완료됐습니다.</p>
             <p className="mt-2 text-sm text-slate-600">
@@ -110,10 +108,9 @@ export default function SignupPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-6">
       <div className="w-full max-w-sm">
-        <div className="mb-6 text-center">
-          <p className="text-3xl font-semibold tracking-tight text-slate-900">모아 MOA</p>
-          <p className="mt-1 text-sm text-slate-500">요구사항과 프로젝트를 한곳에 모읍니다</p>
-        </div>
+        {/* 가입 화면이 이 앱의 실제 대문이다. 처음 오는 사람만 보는 화면이라
+            약어 풀이와 설명을 여기서 다 보여준다. */}
+        <BrandHeader withAcronym withDescription />
         <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
           <h1 className="text-xl font-semibold text-slate-900">가입</h1>
           <p className="mt-1 text-sm text-slate-500">

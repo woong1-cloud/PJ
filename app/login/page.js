@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { BrandHeader } from '@/components/BrandHeader';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -222,10 +223,7 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-6">
       <div className="w-full max-w-sm">
-        <div className="mb-6 text-center">
-          <p className="text-3xl font-semibold tracking-tight text-slate-900">모아 MOA</p>
-          <p className="mt-1 text-sm text-slate-500">요구사항과 프로젝트를 한곳에 모읍니다</p>
-        </div>
+        <BrandHeader />
         <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
           <h1 className="text-xl font-semibold text-slate-900">로그인</h1>
           {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
