@@ -11,6 +11,7 @@ import { TeamMemberListSection } from '@/components/TeamMemberListSection';
 import { TeamMemberFormDialog } from '@/components/TeamMemberFormDialog';
 import { AccountCredentialDialog } from '@/components/AccountCredentialDialog';
 import { BrandTeamAssignDialog } from '@/components/BrandTeamAssignDialog';
+import { TeamMemberEditDialog } from '@/components/TeamMemberEditDialog';
 
 // 이 화면은 "사람"만 다룬다. 배치 대기 → 전사 팀원 순서인 이유는 위계가 아니라
 // 급한 순서다: 배치 대기는 누군가 기다리고 있는 대기열이고, 아래 목록은 언제
@@ -28,6 +29,7 @@ export default function AdminMembersPage() {
   const [memberDialogOpen, setMemberDialogOpen] = useState(false);
   const [accountDialogTarget, setAccountDialogTarget] = useState(null);
   const [assignTarget, setAssignTarget] = useState(null);
+  const [editTarget, setEditTarget] = useState(null);
 
   useEffect(() => {
     if (!globalAdmin) router.replace('/requirements');
@@ -82,6 +84,24 @@ export default function AdminMembersPage() {
     refresh();
   }
 
+  // 등급 변경은 team_members 가 아니라 user_brand_roles 를 고친다. 그래서
+  // patchMember 를 쓰지 않고 brand-team 라우트로 간다 — 그 라우트에는 마지막
+  // 브랜드 관리자를 강등하지 못하게 막는 검사가 들어 있다.
+  async function changeTier(member, brandId, tier) {
+    setActionError('');
+    const res = await fetch(`/api/brand-team/${member.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brandId, tier }),
+    });
+    if (!res.ok) {
+      const d = await res.json();
+      setActionError(d.error ?? '등급 변경 실패');
+      return;
+    }
+    refresh();
+  }
+
   if (!globalAdmin) {
     return <p className="text-sm text-slate-500">권한이 없습니다. 목록으로 이동합니다...</p>;
   }
@@ -114,6 +134,20 @@ export default function AdminMembersPage() {
           patchMember(m, { isGlobalAdmin: !m.is_global_admin }, '전체관리자 권한 변경 실패')
         }
         onToggleActive={(m) => patchMember(m, { isActive: !m.is_active }, '재직여부 변경 실패')}
+        onEdit={setEditTarget}
+        onChangeTier={changeTier}
+      />
+
+      <TeamMemberEditDialog
+        open={Boolean(editTarget)}
+        onOpenChange={(v) => {
+          if (!v) setEditTarget(null);
+        }}
+        member={editTarget}
+        onSaved={() => {
+          setEditTarget(null);
+          refresh();
+        }}
       />
 
       <TeamMemberFormDialog

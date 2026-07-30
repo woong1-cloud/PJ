@@ -41,13 +41,23 @@ export async function GET(request) {
 
     // 어떤 팀원이 아직 어느 브랜드에도 배치되지 않았는지. "배치 대기"는 별도
     // 상태가 아니라 그냥 user_brand_roles 행이 없는 팀원이다.
+    // 배치 여부만 보던 것을 브랜드·등급까지 실어 보내도록 넓혔다.
+    // 팀원 관리 화면에서 "이 사람 지금 몇 차지"를 보려면 브랜드 설정으로 들어가야
+    // 했고, 그러면 등급을 바꿀 곳을 찾지 못한다.
     let assignedIds = null;
+    let rolesByMember = null;
     if (isGlobalAdmin) {
       const { data: roles, error: rolesError } = await supabase
         .from('user_brand_roles')
-        .select('team_member_id');
+        .select('team_member_id, brand_id, tier, brands(name)');
       if (rolesError) throw rolesError;
       assignedIds = new Set((roles ?? []).map((r) => r.team_member_id));
+      rolesByMember = new Map();
+      for (const r of roles ?? []) {
+        const list = rolesByMember.get(r.team_member_id) ?? [];
+        list.push({ brandId: r.brand_id, brandName: r.brands?.name ?? '', tier: r.tier });
+        rolesByMember.set(r.team_member_id, list);
+      }
     }
 
     // auth_user_id 는 화면 밖으로 내보내지 않는다. 계정 유무만 알면 되는데
@@ -60,6 +70,11 @@ export async function GET(request) {
         ...base,
         requestedBrandName: requested_brand?.name ?? null,
         hasBrandAssignment: assignedIds.has(row.id),
+        // 브랜드 이름순으로 고정한다. 순서가 요청마다 바뀌면 화면의 셀렉트가
+        // 자리를 옮겨서 잘못 누르게 된다.
+        brandRoles: (rolesByMember.get(row.id) ?? []).sort((a, b) =>
+          a.brandName.localeCompare(b.brandName),
+        ),
       };
     });
     return Response.json({ teamMembers });

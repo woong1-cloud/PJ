@@ -2,12 +2,13 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { requireGlobalAdmin } from '@/lib/permissions';
 import { errorResponse, ApiError } from '@/lib/apiError';
 import { checkLastGlobalAdmin } from '@/lib/checkLastGlobalAdmin';
+import { AFFILIATIONS, JOB_ROLES } from '@/lib/signup';
 
 export async function PATCH(request, { params }) {
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, isActive, isGlobalAdmin } = body;
+    const { name, isActive, isGlobalAdmin, affiliation, jobRole } = body;
 
     await requireGlobalAdmin();
 
@@ -30,6 +31,19 @@ export async function PATCH(request, { params }) {
     }
     if (isActive !== undefined) updates.is_active = isActive;
     if (isGlobalAdmin !== undefined) updates.is_global_admin = isGlobalAdmin;
+    // 소속·직무는 가입 때 한 번 적고 영구 고정이었다. 사람이 브랜드에서 본부로
+    // 옮기거나 직무가 바뀌면 고칠 방법이 SQL 뿐이었고, 그건 기능이 없는 것과 같다.
+    //
+    // 가입 폼과 같은 목록으로 검증한다. DB CHECK 도 같은 값이라 여기서 막지
+    // 않으면 23514 가 사용자 화면에 뜬다.
+    if (affiliation !== undefined) {
+      if (!AFFILIATIONS.includes(affiliation)) throw new ApiError(400, '유효하지 않은 소속입니다.');
+      updates.affiliation = affiliation;
+    }
+    if (jobRole !== undefined) {
+      if (!JOB_ROLES.includes(jobRole)) throw new ApiError(400, '유효하지 않은 직무입니다.');
+      updates.job_role = jobRole;
+    }
     if (Object.keys(updates).length === 0) throw new ApiError(400, '수정할 필드가 없습니다.');
 
     const { data, error } = await supabase

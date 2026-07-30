@@ -1,7 +1,8 @@
 'use client';
 
 // props: members(전사 팀원, 비활성 포함), onCreate(), onAccount(member),
-//        onToggleGlobalAdmin(member), onToggleActive(member)
+//        onToggleGlobalAdmin(member), onToggleActive(member),
+//        onEdit(member), onChangeTier(member, brandId, tier)
 //
 // member 객체는 GET /api/team-members 가 준 모양 그대로 넘겨야 한다.
 // AccountCredentialDialog 가 member.hasAccount 로 생성/재설정 모드를 정하기
@@ -12,6 +13,8 @@ export function TeamMemberListSection({
   onAccount,
   onToggleGlobalAdmin,
   onToggleActive,
+  onEdit,
+  onChangeTier,
 }) {
   return (
     <section className="flex flex-col gap-2">
@@ -32,7 +35,10 @@ export function TeamMemberListSection({
           <tr className="border-b border-slate-200 text-left text-slate-500">
             <th className="py-2">이름</th>
             <th className="py-2">이메일</th>
-            <th className="py-2">소속</th>
+            <th className="py-2">소속·직무</th>
+            {/* 등급이 여기 없어서 "이 사람 몇 차지"를 보려면 브랜드 설정으로
+                들어가야 했다. 그러면 등급을 바꿀 곳도 못 찾는다. */}
+            <th className="py-2">브랜드 배치</th>
             <th className="py-2">재직여부</th>
             <th className="py-2" />
           </tr>
@@ -61,7 +67,38 @@ export function TeamMemberListSection({
                 )}
               </td>
               <td className="py-2 text-slate-500">{m.email ?? ''}</td>
-              <td className="py-2 text-slate-500">{m.affiliation ?? ''}</td>
+              <td className="py-2 text-slate-500">
+                {[m.affiliation, m.job_role].filter(Boolean).join(' · ') || '—'}
+              </td>
+              <td className="py-2">
+                {(m.brandRoles ?? []).length === 0 ? (
+                  <span className="text-slate-400">—</span>
+                ) : (
+                  <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    {(m.brandRoles ?? []).map((r) => (
+                      <span key={r.brandId} className="flex items-center gap-1 text-xs">
+                        <span className="text-slate-600">{r.brandName}</span>
+                        {/* 등급만 셀렉트로 둔다. 브랜드 추가·해제는 배치
+                            다이얼로그가 하고, 여기는 "이미 배치된 사람의 등급"만
+                            건드린다 — 한 자리에서 다 하려 하면 마지막 브랜드
+                            관리자를 실수로 지우는 길이 생긴다. */}
+                        <select
+                          value={r.tier}
+                          onChange={(e) => onChangeTier(m, r.brandId, e.target.value)}
+                          className="rounded border border-slate-300 bg-white px-1 py-0.5 text-xs text-slate-700"
+                          aria-label={`${m.name} ${r.brandName} 등급`}
+                        >
+                          {['2차', '3차', '4차'].map((t) => (
+                            <option key={t} value={t}>
+                              {t}
+                            </option>
+                          ))}
+                        </select>
+                      </span>
+                    ))}
+                  </span>
+                )}
+              </td>
               <td className="py-2">
                 <span
                   className={`rounded px-1.5 py-0.5 text-xs ${
@@ -72,6 +109,13 @@ export function TeamMemberListSection({
                 </span>
               </td>
               <td className="py-2 text-right">
+                <button
+                  type="button"
+                  onClick={() => onEdit(m)}
+                  className="mr-3 text-indigo-600 hover:underline"
+                >
+                  수정
+                </button>
                 <button
                   type="button"
                   onClick={() => onAccount(m)}
