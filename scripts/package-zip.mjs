@@ -47,14 +47,14 @@ async function git(args) {
 
 // 압축이 끝난 뒤 한 번 더 훑는다. 앞 단계에서 빠뜨렸는지 여기서 잡는다 —
 // service_role 키가 사내 파일 서버를 돌아다니면 DB 전체가 열린다.
-async function findEnvFiles(dir) {
+async function findEnvFiles(dir, allowed = ['.env.local.example']) {
   const found = [];
   async function walk(d, rel) {
     for (const entry of await readdir(d, { withFileTypes: true })) {
       const next = path.join(d, entry.name);
       const nextRel = rel ? `${rel}/${entry.name}` : entry.name;
       if (entry.isDirectory()) await walk(next, nextRel);
-      else if (entry.name.startsWith('.env') && entry.name !== '.env.local.example') {
+      else if (entry.name.startsWith('.env') && !allowed.includes(entry.name)) {
         found.push(nextRel);
       }
     }
@@ -83,6 +83,61 @@ function stamp() {
 async function main() {
   if (process.argv.includes('--source')) return packSource();
   return packBuilt();
+}
+
+// --with-env 로 ZIP 안에 .env.local 을 넣는다.
+//
+// 넣는 값과 넣지 않는 값을 가른 기준은 "이미 공개되어 있는가" 다.
+//
+// NEXT_PUBLIC_SUPABASE_URL / ANON_KEY 는 빌드할 때 브라우저 코드에 박히므로
+// 앱을 열어 본 사람은 누구나 이미 볼 수 있다. ZIP 에 넣어도 노출이 늘지 않는다.
+// 게다가 이 둘은 빌드 시점에 필요해서, 플랫폼 환경변수 화면에 빠뜨리면
+// "빌드는 성공하고 로그인만 안 되는" 가장 찾기 어려운 실패가 난다.
+// 파일로 같이 보내면 그 실패 자체가 사라진다.
+//
+// SUPABASE_SERVICE_ROLE_KEY 는 다르다. RLS 를 우회하는 유일한 값이고,
+// 나머지는 전부 RLS + 라우트 검사로 막혀 있다(anon 키로는 조회도 쓰기도 안 된다).
+// ZIP 은 돌아다닌다 — 배포 도구 저장소에 남고, 다시 내려받고, 메신저로 전달되고,
+// 다운로드 폴더에 남는다. 그 하나만 파일 밖에 두면 나머지 편의를 다 가져갈 수 있다.
+function envFileBody(values) {
+  return `# 이 파일은 npm run package:src -- --with-env 가 만들었습니다.
+#
+# 아래 세 값은 비밀이 아닙니다. NEXT_PUBLIC_ 두 개는 빌드할 때 브라우저
+# 코드에 박히므로 앱을 열어 본 사람은 이미 볼 수 있습니다. 그래서 파일에
+# 담아 보냅니다 — 빌드 전에 넣는 것을 잊어버리는 사고를 막는 쪽이 낫습니다.
+NEXT_PUBLIC_SUPABASE_URL=${values.publicUrl}
+NEXT_PUBLIC_SUPABASE_ANON_KEY=${values.anonKey}
+SUPABASE_URL=${values.serverUrl}
+
+# service_role 키는 일부러 비워 두었습니다.
+#
+# 이 키만 RLS 를 우회합니다. 나머지 값은 유출돼도 DB 가 열리지 않지만
+# 이 키는 열립니다. ZIP 은 배포 도구 저장소에 남고 다시 내려받게 되므로,
+# 이 한 줄만 파일 밖(플랫폼 환경변수 화면)에 두는 것을 권합니다.
+#
+# 그래도 여기에 직접 적으시려면 아래 = 뒤에 붙이면 동작합니다.
+# 그 경우 배포가 끝난 뒤 Supabase 에서 키를 재발급하는 것을 권합니다.
+SUPABASE_SERVICE_ROLE_KEY=
+`;
+}
+
+// 로컬 .env.local 에서 비밀 아닌 값만 골라 읽는다. service_role 은 읽지 않는다 —
+// 실수로 파일에 흘려 넣을 경로를 아예 만들지 않는다.
+async function readPublicEnv() {
+  const raw = await readFile(path.join(root, '.env.local'), 'utf8').catch(() => {
+    fail('.env.local 이 없습니다. --with-env 는 여기서 공개 값을 읽어옵니다.');
+  });
+  const get = (key) => {
+    const line = raw.split(/\r?\n/).find((l) => l.startsWith(`${key}=`));
+    return line ? line.slice(key.length + 1).trim() : '';
+  };
+  const publicUrl = get('NEXT_PUBLIC_SUPABASE_URL');
+  const anonKey = get('NEXT_PUBLIC_SUPABASE_ANON_KEY');
+  const serverUrl = get('SUPABASE_URL') || publicUrl;
+  if (!publicUrl || !anonKey) {
+    fail('.env.local 에 NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY 가 없습니다.');
+  }
+  return { publicUrl, anonKey, serverUrl };
 }
 
 // 소스 ZIP. 플랫폼이 npm install 과 next build 를 대신 해 주는 경우용.
@@ -123,22 +178,49 @@ async function packSource() {
   }
   console.log(`    - ${files.length}개`);
 
+  const withEnv = process.argv.includes('--with-env');
+
   console.log('3/4 배포 안내 작성');
   await writeFile(path.join(stage, '.env.local.example'), SOURCE_ENV_EXAMPLE, 'utf8');
-  await writeFile(path.join(stage, '배포안내.md'), sourceGuide(name), 'utf8');
+  await writeFile(path.join(stage, '배포안내.md'), sourceGuide(name, withEnv), 'utf8');
+  if (withEnv) {
+    const values = await readPublicEnv();
+    await writeFile(path.join(stage, '.env.local'), envFileBody(values), 'utf8');
+    console.log(`    - .env.local 넣음 (${values.publicUrl})`);
+    console.log('      NEXT_PUBLIC 2개 + SUPABASE_URL 채움 / service_role 비움');
+  }
 
   console.log('4/4 압축');
   await rm(zip, { force: true });
   await compress(stage, zip);
 
-  const stray = await findEnvFiles(stage);
-  if (stray.length > 0) fail(`ZIP 에 비밀 파일이 들어갔습니다: ${stray.join(', ')}`);
-  console.log('    - .env.local 없음 확인 (정상)');
+  // 압축이 끝난 뒤 한 번 더 훑는다. 앞 단계에서 무엇이 들어갔든 여기서
+  // 최종 판정한다 — 통과했다고 믿고 넘어가는 것이 제일 위험하다.
+  const allowed = withEnv ? ['.env.local.example', '.env.local'] : ['.env.local.example'];
+  const stray = await findEnvFiles(stage, allowed);
+  if (stray.length > 0) fail(`ZIP 에 예상하지 못한 env 파일이 들어갔습니다: ${stray.join(', ')}`);
+  if (withEnv) {
+    // 파일 안에 service_role 키가 채워져 있는지도 본다. --with-env 는 비워
+    // 두지만, 누군가 dist/ 의 스테이지 폴더를 손으로 고친 뒤 다시 압축할 수 있다.
+    const body = await readFile(path.join(stage, '.env.local'), 'utf8');
+    const filled = /^SUPABASE_SERVICE_ROLE_KEY=.+$/m.test(body);
+    console.log(
+      filled
+        ? '    - 주의: .env.local 에 service_role 키가 채워져 있습니다. 배포 후 재발급을 권합니다.'
+        : '    - service_role 키 비어 있음 확인 (플랫폼 환경변수로 넣으세요)',
+    );
+  } else {
+    console.log('    - .env.local 없음 확인');
+  }
 
   const { size } = await stat(zip);
   console.log(`\n완료: dist/${path.basename(zip)} (${(size / 1024 / 1024).toFixed(1)} MB)`);
   console.log('플랫폼이 install + build 를 실행하는 배포용입니다.');
-  console.log('환경변수 4개를 빌드 전에 넣어야 합니다 — ZIP 안의 배포안내.md 참고.\n');
+  console.log(
+    withEnv
+      ? '플랫폼 환경변수에 넣을 것: SUPABASE_SERVICE_ROLE_KEY, HOSTNAME=0.0.0.0, PORT\n'
+      : '환경변수 4개를 빌드 전에 넣어야 합니다 — ZIP 안의 배포안내.md 참고.\n',
+  );
 }
 
 async function packBuilt() {
@@ -245,7 +327,46 @@ SUPABASE_URL=https://xxxxx.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=
 `;
 
-function sourceGuide(name) {
+function sourceGuide(name, withEnv) {
+  const envSection = withEnv
+    ? `## 환경변수 — 플랫폼에 넣을 것은 **하나**입니다
+
+이 ZIP 에는 \`.env.local\` 이 들어 있고, 비밀이 아닌 세 값이 이미 채워져
+있습니다(\`NEXT_PUBLIC_SUPABASE_URL\`, \`NEXT_PUBLIC_SUPABASE_ANON_KEY\`,
+\`SUPABASE_URL\`). 이 셋은 빌드하면 브라우저 코드에 박히거나 그와 같은 값이라
+숨길 수 있는 값이 아닙니다.
+
+플랫폼 환경변수 화면에는 아래만 넣으세요.
+
+| 이름 | 값 |
+|---|---|
+| \`SUPABASE_SERVICE_ROLE_KEY\` | service_role 키 |
+| \`HOSTNAME\` | \`0.0.0.0\` |
+| \`PORT\` | 플랫폼이 지정한 포트 (없으면 \`3000\`) |
+
+\`SUPABASE_SERVICE_ROLE_KEY\` 를 \`.env.local\` 에 직접 적어도 동작합니다.
+다만 이 키만 RLS 를 우회하므로 DB 전체가 열리는 값입니다. ZIP 은 배포 도구
+저장소에 남고 다시 내려받게 되므로, 이 한 줄은 파일 밖에 두는 편이 안전합니다.
+파일에 적으셨다면 배포 후 Supabase 에서 재발급하시기를 권합니다.
+
+\`KEEP_ALIVE_TIMEOUT\`, \`NODE_ENV\`, \`__NEXT_PRIVATE_STANDALONE_CONFIG\` 는
+비워 두거나 삭제하세요. 마지막 것은 Next 내부 변수라 값을 넣으면 앱이 깨집니다.`
+    : `## 환경변수 (네 개, 빌드 전에 넣어야 함)
+
+| 이름 | 언제 읽히는가 |
+|---|---|
+| \`NEXT_PUBLIC_SUPABASE_URL\` | **빌드 시점** — 브라우저 코드에 박힘 |
+| \`NEXT_PUBLIC_SUPABASE_ANON_KEY\` | **빌드 시점** — 브라우저 코드에 박힘 |
+| \`SUPABASE_URL\` | 실행 시점 (위 URL 과 같은 값) |
+| \`SUPABASE_SERVICE_ROLE_KEY\` | 실행 시점 |
+
+\`NEXT_PUBLIC_\` 두 개를 빌드 전에 넣지 않으면 **빌드는 성공하고 로그인만
+안 됩니다** — 브라우저가 붙을 Supabase 주소를 모르는 상태로 빌드됩니다.
+로그가 아니라 화면에서만 드러나는 실패라 찾기 어렵습니다.
+
+플랫폼이 포트나 바인딩 주소를 지정하라고 하면 \`PORT\`, \`HOSTNAME=0.0.0.0\` 을
+함께 주세요.`;
+
   return `# 모아 MOA 배포 안내 — 소스 ZIP (${name})
 
 이 ZIP 은 **소스**입니다. 플랫폼이 의존성 설치와 빌드를 실행하는 배포용입니다.
@@ -268,21 +389,7 @@ npm start
 Tailwind(\`tailwindcss\`, \`@tailwindcss/postcss\`)가 devDependencies 에 있고
 빌드에 필요합니다. 빼면 빌드가 PostCSS 플러그인 오류로 실패합니다.
 
-## 환경변수 (네 개, 빌드 전에 넣어야 함)
-
-| 이름 | 언제 읽히는가 |
-|---|---|
-| \`NEXT_PUBLIC_SUPABASE_URL\` | **빌드 시점** — 브라우저 코드에 박힘 |
-| \`NEXT_PUBLIC_SUPABASE_ANON_KEY\` | **빌드 시점** — 브라우저 코드에 박힘 |
-| \`SUPABASE_URL\` | 실행 시점 (위 URL 과 같은 값) |
-| \`SUPABASE_SERVICE_ROLE_KEY\` | 실행 시점 |
-
-\`NEXT_PUBLIC_\` 두 개를 빌드 전에 넣지 않으면 **빌드는 성공하고 로그인만
-안 됩니다** — 브라우저가 붙을 Supabase 주소를 모르는 상태로 빌드됩니다.
-로그가 아니라 화면에서만 드러나는 실패라 찾기 어렵습니다.
-
-플랫폼이 포트나 바인딩 주소를 지정하라고 하면 \`PORT\`, \`HOSTNAME=0.0.0.0\` 을
-함께 주세요.
+${envSection}
 
 ## 확인 (순서대로)
 1. \`/login\` 이 **모양을 갖춘 채로** 열린다 → 빌드/정적파일 정상
