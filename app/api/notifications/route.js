@@ -15,12 +15,22 @@ export async function GET() {
     const { memberId } = await getSessionMember();
     const supabase = getSupabaseAdmin();
 
-    const { data, error } = await supabase
-      .from('in_app_notifications')
-      .select('id, requirement_id, message, is_read, created_at')
-      .eq('team_member_id', memberId)
-      .order('created_at', { ascending: false })
-      .limit(NOTIFICATION_LIMIT);
+    function query(columns) {
+      return supabase
+        .from('in_app_notifications')
+        .select(columns)
+        .eq('team_member_id', memberId)
+        .order('created_at', { ascending: false })
+        .limit(NOTIFICATION_LIMIT);
+    }
+
+    let { data, error } = await query('id, requirement_id, link, message, is_read, created_at');
+    // 42703 = undefined_column. 0015 미적용 DB 에서는 link 없이 다시 읽는다.
+    // 컬럼 하나 때문에 벨 전체가 오류로 죽는 것이 최악이다 — 알림은 부가
+    // 기능인데 그 실패가 상단바를 망가뜨린다. 0015 적용 후 지워도 되는 분기다.
+    if (error?.code === '42703') {
+      ({ data, error } = await query('id, requirement_id, message, is_read, created_at'));
+    }
     if (error) throw error;
 
     // 뱃지 숫자는 목록에서 세지 않는다. 안 읽은 것이 상한을 넘으면 목록에

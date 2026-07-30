@@ -1,0 +1,12 @@
+-- 0015: 알림에 이동 경로 붙이기
+--
+-- 지금까지 알림은 전부 요구사항 하나에 매달려 있었고, 벨에서 누르면
+-- /requirements/{requirement_id} 로 갔다. 배치 대기(가입) 알림은 그 모양에
+-- 맞지 않는다 — 가리킬 요구사항이 없고, 가야 할 곳은 /admin/members 다.
+--
+-- requirement_id 는 이미 nullable 이라 스키마를 고칠 필요는 없었지만,
+-- "requirement_id 가 없으면 /admin/members" 같은 규칙을 화면에 심으면 다음
+-- 종류의 알림이 생기는 순간 틀린다. 갈 곳을 알림 자신이 들고 있게 한다.
+--
+-- 앱 내부 경로만 넣는다. 외부 URL 을 넣으면 알림이 열린 리다이렉터가 된다.
+alter table in_app_notifications add column if not exists link text;

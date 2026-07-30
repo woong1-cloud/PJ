@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { BellIcon } from 'lucide-react';
-import { relativeTime } from '@/lib/notifications';
+import { notificationHref, relativeTime } from '@/lib/notifications';
 
 // 60초. 웹소켓을 붙이지 않는다 — 알림은 "지금 당장"이 아니라 "놓치지 않는"
 // 것이 목적이라 이 정도면 충분하고, 연결 하나 없는 쪽이 훨씬 덜 깨진다.
@@ -48,10 +48,10 @@ export function NotificationBell() {
       setUnreadCount((c) => Math.max(c - 1, 0));
       markRead(notification.id);
     }
-    // requirement_id 는 nullable 이다. 갈 곳이 없으면 읽음 처리만 한다.
-    if (notification.requirement_id) {
-      router.push(`/requirements/${notification.requirement_id}`);
-    }
+    // 갈 곳은 알림 자신이 안다(link → requirement_id 순). 배치 대기처럼
+    // 요구사항이 없는 알림도 있고, 둘 다 없으면 읽음 처리만 한다.
+    const href = notificationHref(notification);
+    if (href) router.push(href);
   }
 
   function handleMarkAll() {

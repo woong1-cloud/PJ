@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { errorResponse, ApiError } from '@/lib/apiError';
 import { AFFILIATIONS, JOB_ROLES, isAllowedEmail } from '@/lib/signup';
+import { notifySignup } from '@/lib/notify';
 
 // 이 라우트는 로그인하지 않은 사람이 호출한다. 다른 모든 라우트와 달리
 // getSessionMember()가 없으므로 아래 입력 검증이 유일한 방어선이다.
@@ -67,16 +68,20 @@ export async function POST(request) {
     // 신청 브랜드가 실재하는 활성 브랜드인지 확인한다. 이 값으로 권한이
     // 생기지는 않지만, 검증 없이 넣으면 FK 위반이 500으로 튀어나온다.
     let requestedBrandId = null;
+    // 이름은 관리자 알림 문구에만 쓴다. 어느 브랜드 사람이 기다리는지가
+    // 배치 판단의 절반이라 id 만으로는 부족하다.
+    let requestedBrandName = null;
     if (wantsBrand) {
       const { data: brand, error: brandErr } = await supabase
         .from('brands')
-        .select('id')
+        .select('id, name')
         .eq('id', brandId)
         .eq('is_active', true)
         .maybeSingle();
       if (brandErr) throw brandErr;
       if (!brand) throw new ApiError(400, '근무 브랜드를 선택해 주세요.');
       requestedBrandId = brand.id;
+      requestedBrandName = brand.name;
     }
 
     // 이미 가입된 이메일인지 먼저 본다. auth 계정만 만들어 놓고 team_members
@@ -118,6 +123,18 @@ export async function POST(request) {
       await supabase.auth.admin.deleteUser(created.user.id).catch(() => {});
       throw insertError;
     }
+
+    // 배치 대기는 사람이 기다리는 대기열인데, 지금까지는 관리자가 /admin/members
+    // 를 열어봐야만 알 수 있었다. 가입은 드문 사건이라 더 잘 놓친다 — 매일
+    // 확인할 이유가 없는 화면이기 때문이다.
+    //
+    // 가입 자체는 이미 끝났으므로 알림 실패가 응답을 바꾸면 안 된다.
+    // notifySignup 은 throw 하지 않는다(lib/notify.js 규약).
+    await notifySignup({
+      name: name.trim(),
+      affiliation,
+      brandName: requestedBrandName,
+    });
 
     return Response.json({ ok: true }, { status: 201 });
   } catch (error) {
