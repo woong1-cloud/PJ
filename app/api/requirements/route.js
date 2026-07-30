@@ -2,7 +2,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { requireBrandAccess } from '@/lib/permissions';
 import { errorResponse, ApiError } from '@/lib/apiError';
 import { TIER_RANK } from '@/lib/tiers';
-import { INITIAL_STATUS, CLOSED_STATUSES } from '@/lib/statuses';
+import { INITIAL_STATUS, REVIEW_PENDING_STATUS, CLOSED_STATUSES } from '@/lib/statuses';
 import { CHANNELS, DEFAULT_CHANNEL } from '@/lib/channels';
 
 const BASE_COLUMNS =
@@ -23,6 +23,10 @@ export async function GET(request) {
 
     const status = searchParams.get('status');
     const assignee = searchParams.get('assignee');
+    // '내 요청만' 토글이 보내는 값. 화면은 자기 id 를 넣지만 서버는 같은
+    // 브랜드 안의 어떤 id 든 받는다 — 요청자 이름은 이미 목록에 다 보이므로
+    // 이 필터로 새로 새는 정보가 없다. 비공개 판정은 아래 조건이 그대로 한다.
+    const requester = searchParams.get('requester');
     const category = searchParams.get('category');
     const priority = searchParams.get('priority');
     const project = searchParams.get('project');
@@ -48,6 +52,7 @@ export async function GET(request) {
       if (!canSeeConfidential) query = query.eq('is_confidential', false);
       if (status) query = query.eq('status', status);
       if (assignee) query = query.eq('assignee', assignee);
+      if (requester) query = query.eq('requester', requester);
       if (category) query = query.eq('category', category);
       if (priority) query = query.eq('priority', priority);
       if (project) query = query.eq('project_id', project);
@@ -95,6 +100,7 @@ export async function POST(request) {
       note,
       isConfidential,
       channel,
+      submit,
     } = body;
 
     if (!brandId) throw new ApiError(400, 'brandId가 필요합니다.');
@@ -122,7 +128,18 @@ export async function POST(request) {
       to_be: toBe || null,
       note: note || null,
       is_confidential: canSetConfidential ? Boolean(isConfidential) : false,
-      status: INITIAL_STATUS,
+      // 등록하면서 바로 제출할 수 있다.
+      //
+      // 예전에는 무조건 INITIAL_STATUS('작성중')로 들어갔고, 거기서 검토대기로
+      // 올리는 길은 PATCH .../status 하나뿐인데 그건 3차 이상만 쓸 수 있었다.
+      // 브랜드 가입자의 기본 등급은 4차다 — 즉 요청자가 자기 요구사항을
+      // 제출할 방법이 없었고, 올린 건은 아무도 보지 않는 '작성중'에 머물렀다.
+      // 올린 사람은 접수됐다고 믿고 IT 는 존재를 몰랐다.
+      //
+      // 여기서 고르는 값은 두 개뿐이다(작성중/검토대기). 자기가 지금 만드는
+      // 건의 초기 상태를 정하는 것이라 등급을 더 볼 필요가 없다. 그 뒤의
+      // 진행(검토중·개발중·완료)은 여전히 3차 이상만 움직인다.
+      status: submit === true ? REVIEW_PENDING_STATUS : INITIAL_STATUS,
     };
 
     let { data, error } = await supabase
