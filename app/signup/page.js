@@ -108,9 +108,7 @@ export default function SignupPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-6">
       <div className="w-full max-w-sm">
-        {/* 가입 화면이 이 앱의 실제 대문이다. 처음 오는 사람만 보는 화면이라
-            약어 풀이와 설명을 여기서 다 보여준다. */}
-        <BrandHeader withAcronym withDescription />
+        <BrandHeader />
         <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
           <h1 className="text-xl font-semibold text-slate-900">가입</h1>
           <p className="mt-1 text-sm text-slate-500">
