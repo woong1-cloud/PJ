@@ -15,6 +15,15 @@ function ConfidentialBadge() {
 function Meta({ req }) {
   return (
     <span className="inline-flex items-center gap-2 text-xs text-slate-400">
+      {/* 프로젝트는 컬럼이 아니라 제목 아래 줄이다. 컬럼으로 만들면 이미 8개인
+          표에 9번째가 붙는데, 폭이 밀리는 건 결국 max-w-0 인 제목 칸이다.
+          프로젝트에 안 묶인 건도 많아서 담당자 컬럼을 뺐던 것과 같은 문제
+          (대부분 빈칸)가 반복된다. 여기 있으면 있는 줄에만 보인다. */}
+      {req.project?.name && (
+        <span className="max-w-[16rem] truncate text-slate-500" title={req.project.name}>
+          {req.project.name}
+        </span>
+      )}
       {req.is_confidential && <ConfidentialBadge />}
       {req.image_count > 0 && <span>📎 {req.image_count}</span>}
       {req.status === MERGED_STATUS && <span>→ 병합됨</span>}
