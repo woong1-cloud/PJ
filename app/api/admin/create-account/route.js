@@ -31,9 +31,17 @@ export async function POST(request) {
     });
     if (createError) throw new ApiError(400, createError.message);
 
+    // email 을 함께 적는다. auth.users 에만 두면 이 사람은 그 주소로
+    // 로그인하는데 알림 메일은 못 받는다 — lib/notify.js 의 loadEmails 가
+    // 보는 곳은 team_members.email 이다. 가입 라우트는 원래 둘 다 채우고
+    // 있었고 여기만 빠져 있었다(0016 이 기존 계정을 메운다).
     const { data: updated, error: updateError } = await supabase
       .from('team_members')
-      .update({ auth_user_id: created.user.id, must_change_password: true })
+      .update({
+        email: email.trim().toLowerCase(),
+        auth_user_id: created.user.id,
+        must_change_password: true,
+      })
       .eq('id', targetMemberId)
       .select()
       .maybeSingle();
