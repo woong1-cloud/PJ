@@ -335,20 +335,23 @@ export function RequirementDetail({ id }) {
         </div>
       )}
 
+      {/* 제목은 grid 밖이다. 모바일에서 메타(aside)를 본문 위로 올려야 하는데,
+          제목이 본문 안에 있으면 메타가 제목보다 위로 가 버린다. */}
+      <div className="flex items-start justify-between gap-3">
+        <h1 className="text-lg font-semibold text-slate-900">{r.title}</h1>
+        {canEdit && !showEditForm && (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="shrink-0 text-sm text-indigo-600 hover:underline"
+          >
+            수정
+          </button>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <div className="flex flex-col gap-4 md:col-span-2">
-          <div className="flex items-center justify-between">
-            <h1 className="text-lg font-semibold text-slate-900">{r.title}</h1>
-            {canEdit && !showEditForm && (
-              <button
-                type="button"
-                onClick={() => setEditing(true)}
-                className="text-sm text-indigo-600 hover:underline"
-              >
-                수정
-              </button>
-            )}
-          </div>
           {showEditForm ? (
             <RequirementEditForm
               requirement={r}
@@ -451,7 +454,11 @@ export function RequirementDetail({ id }) {
           </section>
         </div>
 
-        <aside className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm">
+        {/* 모바일에서는 본문 위로 올린다.
+            폰으로 상세를 여는 이유는 "내 요청 어디까지 왔나" 하나인데, 그대로
+            두면 As-Is·To-Be·비고·첨부를 다 지나야 상태와 담당자가 나온다.
+            데스크톱에서는 지금처럼 오른쪽 열이다. */}
+        <aside className="order-first flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm md:order-none">
           <div>
             <p className="text-slate-500">상태</p>
             {/* 보드 밖 상태(반려·취소·중복)일 때 BOARD_STATUSES 만 담은 Select 에
@@ -467,7 +474,7 @@ export function RequirementDetail({ id }) {
                     value={null}
                     onValueChange={changeStatus}
                   >
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className="h-11 w-full md:h-8">
                       <SelectValue placeholder="재개 — 상태 선택" />
                     </SelectTrigger>
                     <SelectContent>
@@ -486,7 +493,7 @@ export function RequirementDetail({ id }) {
                 value={r.status}
                 onValueChange={changeStatus}
               >
-                <SelectTrigger className="mt-1 w-full">
+                <SelectTrigger className="mt-1 h-11 w-full md:h-8">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -514,7 +521,8 @@ export function RequirementDetail({ id }) {
                   <button
                     type="button"
                     onClick={() => setApprovalOpen(true)}
-                    className="w-full rounded-lg bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-700"
+                    // 되돌리기 어려운 동작이다. 작으면 오히려 잘못 누른다.
+                    className="h-11 w-full rounded-lg bg-emerald-600 px-3 text-sm text-white hover:bg-emerald-700 md:h-8"
                   >
                     승인하고 완료
                   </button>
@@ -568,7 +576,7 @@ export function RequirementDetail({ id }) {
                 value={r.requirement_type ?? '__none__'}
                 onValueChange={changeType}
               >
-                <SelectTrigger className="mt-1 w-full">
+                <SelectTrigger className="mt-1 h-11 w-full md:h-8">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -599,7 +607,7 @@ export function RequirementDetail({ id }) {
                 value={r.assignee?.id ?? '__none__'}
                 onValueChange={changeAssignee}
               >
-                <SelectTrigger className="mt-1 w-full">
+                <SelectTrigger className="mt-1 h-11 w-full md:h-8">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -626,7 +634,7 @@ export function RequirementDetail({ id }) {
                 value={r.project_id ?? 'none'}
                 onValueChange={changeProject}
               >
-                <SelectTrigger className="mt-1 w-full">
+                <SelectTrigger className="mt-1 h-11 w-full md:h-8">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
