@@ -31,6 +31,7 @@ import { ApprovalDialog } from '@/components/ApprovalDialog';
 import { StartReviewDialog } from '@/components/StartReviewDialog';
 import { RedmineLinkSection } from '@/components/RedmineLinkSection';
 import { canDeleteRequirement } from '@/lib/deleteRequirement';
+import { REQUIREMENT_TYPES, TYPE_HINTS, UNTYPED_LABEL, typeLabel } from '@/lib/requirementTypes';
 import {
   Select,
   SelectContent,
@@ -101,6 +102,11 @@ export function RequirementDetail({ id }) {
     // my-brands가 아직 안 왔으면 편집 UI를 먼저 띄우지 않는다(깜빡임 + 오조작 방지).
     return canProcess({ isGlobalAdmin: false, tier });
   }, [identity, myBrands, requirementBrandId]);
+
+  // 유형은 3차 이상뿐 아니라 요청자 본인도 바꿀 수 있다. 서버의 PATCH .../[id]
+  // 규칙(canProcess || isOwner)과 같은 판정이라, 화면에 열어 두고 저장이 403 이
+  // 나거나 그 반대가 되는 일이 없다.
+  const typeEditable = processAllowed || data?.requirement?.requester?.id === identity.memberId;
 
   async function changeStatus(status) {
     setActionError('');
@@ -185,6 +191,27 @@ export function RequirementDetail({ id }) {
     }
     load();
     return true;
+  }
+
+  // 유형만 따로 보낸다. 수정 폼을 열면 전체 필드가 함께 나가서 활동 이력에
+  // "제목, 우선순위, 카테고리, 채널, 유형, As-Is, To-Be, 비고 수정" 이 남는다 —
+  // 실제로 바뀐 건 유형 하나인데도. 여기서는 한 필드만 보내므로 이력도 한 줄이다.
+  async function changeType(value) {
+    setActionError('');
+    const res = await fetch(`/api/requirements/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        brandId: requirementBrandId,
+        requirementType: value === '__none__' ? null : value,
+      }),
+    });
+    if (!res.ok) {
+      const d = await res.json();
+      setActionError(d.error ?? '유형 변경 실패');
+      return;
+    }
+    load();
   }
 
   async function changeAssignee(assignee) {
@@ -525,6 +552,42 @@ export function RequirementDetail({ id }) {
               onClose={closeRequirement}
             />
           )}
+          <div>
+            <p className="text-slate-500">유형</p>
+            {/* 담당자·프로젝트와 같은 인라인 Select 다. 유형만 '수정' 전체 폼을
+                열어야 했는데, 화면의 다른 값들은 전부 여기서 바로 바뀐다 —
+                하나만 다르게 동작하면 그게 불편으로 느껴진다.
+                요청자 본인도 바꿀 수 있다(서버 PATCH 규칙과 같다). 등록할 때
+                모르고 넘겼다가 나중에 "아 이건 오류였네" 하는 경우가 있다. */}
+            {typeEditable ? (
+              <Select
+                items={[
+                  { value: '__none__', label: UNTYPED_LABEL },
+                  ...REQUIREMENT_TYPES.map((t) => ({ value: t, label: t })),
+                ]}
+                value={r.requirement_type ?? '__none__'}
+                onValueChange={changeType}
+              >
+                <SelectTrigger className="mt-1 w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">{UNTYPED_LABEL}</SelectItem>
+                  {REQUIREMENT_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <p className="font-medium text-slate-900">{typeLabel(r.requirement_type)}</p>
+            )}
+            {r.requirement_type && (
+              <p className="mt-1 text-xs text-slate-400">{TYPE_HINTS[r.requirement_type]}</p>
+            )}
+          </div>
+
           <div>
             <p className="text-slate-500">담당자</p>
             {processAllowed ? (

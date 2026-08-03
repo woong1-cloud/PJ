@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -61,6 +61,19 @@ export function RequirementEditForm({ requirement, canSetConfidential, identity,
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  // 화면을 열었을 때의 값. 저장 시 무엇이 바뀌었는지 이것과 비교한다.
+  // form 과 같은 모양으로 한 번만 잡아 둔다(리렌더에 흔들리지 않게 ref).
+  const initialRef = useRef({
+    title: requirement.title ?? '',
+    priority: requirement.priority ?? null,
+    category: requirement.category?.id ?? null,
+    channel: requirement.channel ?? DEFAULT_CHANNEL,
+    requirementType: requirement.requirement_type ?? null,
+    asIs: requirement.as_is ?? '',
+    toBe: requirement.to_be ?? '',
+    note: requirement.note ?? '',
+    isConfidential: requirement.is_confidential ?? false,
+  });
 
   useEffect(() => {
     fetch(`/api/brand-categories?brandId=${identity.brandId}`)
@@ -78,21 +91,43 @@ export function RequirementEditForm({ requirement, canSetConfidential, identity,
     setSubmitting(true);
     setError('');
     try {
+      // 바뀐 필드만 보낸다.
+      //
+      // 예전에는 매번 전부 보냈는데, 서버는 undefined 가 아닌 값을 "바뀐 것"으로
+      // 보고 change_logs 에 적는다. 그래서 유형 하나만 고쳐도 활동 이력에
+      // "제목, 우선순위, 카테고리, 채널, 유형, As-Is, To-Be, 비고 수정" 이
+      // 남았다. 이력이 그런 식이면 나중에 아무도 읽지 않는다.
+      //
+      // 여는 시점의 값(initial)과 비교한다. 서버에 다시 묻지 않는 이유는,
+      // 여기서 알고 싶은 것이 "이 사람이 이 화면에서 무엇을 건드렸나"이기
+      // 때문이다.
+      const next = {
+        title: form.title,
+        priority: form.priority || null,
+        category: form.category === 'none' ? null : form.category,
+        channel: form.channel,
+        requirementType: form.requirementType || null,
+        asIs: form.asIs,
+        toBe: form.toBe,
+        note: form.note,
+        isConfidential: form.isConfidential,
+      };
+      const patch = { brandId: identity.brandId };
+      for (const [key, value] of Object.entries(next)) {
+        if (value !== initialRef.current[key]) patch[key] = value;
+      }
+
+      // 아무것도 안 바꾸고 저장을 누르면 서버가 '수정할 필드가 없습니다' 로
+      // 400 을 낸다. 그건 오류가 아니라 아무 일도 없는 것이므로 그냥 닫는다.
+      if (Object.keys(patch).length === 1) {
+        onCancel();
+        return;
+      }
+
       const res = await fetch(`/api/requirements/${requirement.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          brandId: identity.brandId,
-          title: form.title,
-          priority: form.priority || null,
-          category: form.category === 'none' ? null : form.category,
-          channel: form.channel,
-          requirementType: form.requirementType || null,
-          asIs: form.asIs,
-          toBe: form.toBe,
-          note: form.note,
-          isConfidential: form.isConfidential,
-        }),
+        body: JSON.stringify(patch),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? '수정에 실패했습니다.');
