@@ -270,26 +270,56 @@ export function RequirementList({
           </tbody>
         </table>
       </div>
+      {/* 모바일 카드. 줄마다 역할이 고정된 네 줄이다.
+          예전에는 마지막 한 줄에 값 예닐곱을 '·' 로 이어 붙였는데, 감기는
+          위치가 데이터마다 달라 카드마다 높이와 모양이 제각각이었다. 게다가
+          정작 담당자가 없었다 — 요청자가 폰을 꺼내 보는 이유는 "내 요청 어디까지
+          왔나" 하나인데 그 답이 화면에 없었던 셈이다.
+          네 줄 모두 항상 그린다. 넷째 줄의 요청자는 늘 있으므로 카드 높이가
+          완전히 균일해진다. */}
       <div className="flex flex-col gap-3 md:hidden">
         {requirements.map((req) => (
           <Link
             key={req.id}
             href={`/requirements/${req.id}`}
-            className={`rounded-lg border border-slate-200 bg-white p-3 shadow-sm ${
+            className={`block rounded-lg border border-slate-200 bg-white p-3 shadow-sm ${
               req.status === MERGED_STATUS ? 'opacity-60' : ''
             }`}
           >
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <StatusBadge status={req.status} />
-              <span className="text-xs text-slate-500">{req.request_date}</span>
+              <span className="shrink-0 text-xs">
+                <DateCell req={req} today={today} />
+              </span>
             </div>
-            <p className="mt-2 font-medium text-slate-900">{req.title}</p>
-            <p className="mt-1 flex items-center gap-2 text-xs text-slate-500">
-              {req.requirement_type ?? '미분류'} · {req.channel ?? '—'} ·{' '}
-              {req.category?.category_name ?? '미분류'} · {req.requester?.name ?? '—'}
-              <DateCell req={req} today={today} />
-              <Meta req={req} />
-            </p>
+
+            <p className="mt-2 line-clamp-2 font-medium text-slate-900">{req.title}</p>
+
+            {/* 왼쪽은 분류, 오른쪽은 사람. 담당자에 '담당' 라벨을 붙이는 이유는
+                표와 달리 카드에는 헤더가 없기 때문이다 — 이름만 떠 있으면 그게
+                담당자인지 요청자인지 알 수 없다. */}
+            <div className="mt-1.5 flex items-center justify-between gap-2 text-sm">
+              <span className="truncate text-slate-500">
+                {req.requirement_type ?? '미분류'} · {req.channel ?? '—'}
+              </span>
+              <span
+                className={`shrink-0 ${req.assignee?.name ? 'text-slate-700' : 'text-slate-400'}`}
+              >
+                담당 {req.assignee?.name ?? '미지정'}
+              </span>
+            </div>
+
+            {/* 카테고리는 뺐다 — 대부분 '미분류'라 자리만 먹는다. */}
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[11px] text-slate-400">
+              <span>{req.requester?.name ?? '—'} 요청</span>
+              {req.image_count > 0 && <span>📎 {req.image_count}</span>}
+              {req.project?.name && <span className="truncate">{req.project.name}</span>}
+              {redmineLinkState(req) === 'missing' && (
+                <span className="rounded bg-amber-50 px-1 text-amber-700">미연결</span>
+              )}
+              {req.is_confidential && <span className="text-rose-500">비공개</span>}
+              {req.status === MERGED_STATUS && <span>→ 병합됨</span>}
+            </div>
           </Link>
         ))}
       </div>
