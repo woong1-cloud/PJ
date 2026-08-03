@@ -32,6 +32,12 @@ export async function GET(request) {
     const project = searchParams.get('project');
     const channel = searchParams.get('channel');
     const q = searchParams.get('q');
+    // 대시보드 '손볼 것'에서 링크로만 들어오는 값. 필터바에는 노출하지 않는다 —
+    // 평소에 아무도 안 쓰는 셀렉트를 하나 더 만들 이유가 없다.
+    //
+    // assignee=none 처럼 기존 파라미터에 매직 문자열을 넣지 않는다. 그 자리는
+    // uuid 자리이고, 특수값을 섞으면 규칙이 두 가지가 된다.
+    const missing = searchParams.get('missing');
     // 이름은 'includeDone' 이지만 실제 의미는 "완료를 포함한 종결 상태 전체"다
     // (완료·반려·취소·중복). 목록 페이지와 보드가 이미 이 이름으로 쿼리를
     // 만들고 있어 지금 바꾸면 세 파일을 함께 고쳐야 하므로 이름은 둔다.
@@ -57,6 +63,8 @@ export async function GET(request) {
       if (priority) query = query.eq('priority', priority);
       if (project) query = query.eq('project_id', project);
       if (withChannel && channel) query = query.eq('channel', channel);
+      if (missing === 'assignee') query = query.is('assignee', null);
+      if (missing === 'expectedDate') query = query.is('expected_release_date', null);
       if (q && q.trim()) query = query.ilike('title', `%${q.trim()}%`);
       // 종결된 건(완료·반려·취소·중복)은 기본으로 숨긴다. 끝난 건이 목록 상단을
       // 차지하면 지금 해야 할 일이 보이지 않는다.

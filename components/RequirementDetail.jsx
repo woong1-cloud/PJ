@@ -11,6 +11,8 @@ import {
   REJECTED_STATUS,
   CANCELLED_STATUS,
   APPROVAL_PENDING_STATUS,
+  REVIEW_IN_PROGRESS_STATUS,
+  REVIEW_PENDING_STATUS,
 } from '@/lib/statuses';
 import { canApprove } from '@/lib/approval';
 import { statusStyle } from '@/lib/statusMeta';
@@ -25,6 +27,7 @@ import { StatusDurations } from '@/components/StatusDurations';
 import { ChecklistSection } from '@/components/ChecklistSection';
 import { RequirementDangerZone } from '@/components/RequirementDangerZone';
 import { ApprovalDialog } from '@/components/ApprovalDialog';
+import { StartReviewDialog } from '@/components/StartReviewDialog';
 import { canDeleteRequirement } from '@/lib/deleteRequirement';
 import {
   Select,
@@ -39,6 +42,8 @@ export function RequirementDetail({ id }) {
   const [editing, setEditing] = useState(false);
   // 승인 창 열림 여부. 완료로 가려는 모든 경로가 이 창을 지난다.
   const [approvalOpen, setApprovalOpen] = useState(false);
+  // 착수 창. 검토대기 → 검토중 으로 갈 때 담당자·예상일을 받는다.
+  const [startOpen, setStartOpen] = useState(false);
   const [data, setData] = useState(null);
   const [teamMembers, setTeamMembers] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -116,6 +121,15 @@ export function RequirementDetail({ id }) {
         return;
       }
       setApprovalOpen(true);
+      return;
+    }
+
+    // 보드와 같은 지점을 막는다. 여기만 열어 두면 상세 Select 가 우회로가 된다.
+    if (
+      data?.requirement?.status === REVIEW_PENDING_STATUS &&
+      status === REVIEW_IN_PROGRESS_STATUS
+    ) {
+      setStartOpen(true);
       return;
     }
 
@@ -589,6 +603,15 @@ export function RequirementDetail({ id }) {
         brandId={requirementBrandId}
         history={history}
         memberId={identity.memberId}
+      />
+
+      <StartReviewDialog
+        open={startOpen}
+        onOpenChange={setStartOpen}
+        requirement={r}
+        brandId={requirementBrandId}
+        teamMembers={teamMembers}
+        onStarted={load}
       />
 
       {/* 완료로 가는 두 입구(Select, 승인 버튼)가 같은 창을 연다. */}

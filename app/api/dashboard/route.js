@@ -2,7 +2,12 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { requireGlobalAdmin } from '@/lib/permissions';
 import { errorResponse } from '@/lib/apiError';
-import { computeDashboardStats } from '@/lib/dashboardStats';
+import {
+  computeActionItems,
+  computeAdoption,
+  computeDashboardStats,
+  computeStatusFlow,
+} from '@/lib/dashboardStats';
 import { computeProjectProgress, findProgressMismatches } from '@/lib/projectProgress';
 import { DEPLOY_PLANNED, DEPLOY_IN_PROGRESS, DEPLOY_DONE } from '@/lib/projectStatuses';
 
@@ -27,14 +32,26 @@ export async function GET(request) {
       const brandIds = brands.map((b) => b.id);
       const { data, error: reqError } = await supabase
         .from('requirements')
-        .select('id, brand_id, status, request_date, completed_at')
+        // assignee·expected_release_date 는 '손볼 것'이 쓴다. 두 값이 비어
+        // 있는 건이 지금 8/8 이고, 그게 이 화면이 가장 먼저 말해야 할 것이다.
+        .select('id, brand_id, status, request_date, completed_at, assignee, expected_release_date')
         .in('brand_id', brandIds);
       if (reqError) throw reqError;
       requirements = data ?? [];
     }
 
+    // 브랜드에 배치된 팀원 수. 도입 단계 판정과 '팀원 없는 브랜드'에 쓴다.
+    // 팀원이 0인 브랜드는 아무도 로그인할 수 없어서 가입 알림조차 오지 않는다.
+    const { data: roles, error: rolesError } = await supabase
+      .from('user_brand_roles')
+      .select('brand_id');
+    if (rolesError) throw rolesError;
+
     const today = new Date().toISOString().slice(0, 10);
     const stats = computeDashboardStats({ requirements, brands, periodDays, today });
+    const actionItems = computeActionItems({ requirements, brands, roles: roles ?? [] });
+    const adoption = computeAdoption({ brands, requirements, roles: roles ?? [] });
+    const statusFlow = computeStatusFlow(requirements);
 
     // ── 프로젝트 집계 ────────────────────────────────────────────────
     const { data: projects, error: projectsError } = await supabase
@@ -92,6 +109,9 @@ export async function GET(request) {
 
     return Response.json({
       ...stats,
+      actionItems,
+      adoption,
+      statusFlow,
       projectSummary,
       projects: projectsWithProgress,
       mismatches,

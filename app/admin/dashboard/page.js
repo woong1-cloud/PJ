@@ -7,6 +7,10 @@ import { useIdentity } from '@/components/IdentityProvider';
 import { isGlobalAdmin } from '@/lib/tiers';
 import { switchBrand } from '@/lib/identity';
 import { DEPLOY_DONE } from '@/lib/projectStatuses';
+import { DONE_STATUS } from '@/lib/statuses';
+import { DashboardActionItems } from '@/components/DashboardActionItems';
+import { DashboardAdoption } from '@/components/DashboardAdoption';
+import { DashboardFlow } from '@/components/DashboardFlow';
 
 const PERIODS = [
   { value: '7', label: '7일' },
@@ -58,6 +62,11 @@ export default function AdminDashboardPage() {
   if (loadError) return <p className="text-sm text-red-600">{loadError}</p>;
   if (!data) return <p className="text-sm text-slate-500">불러오는 중...</p>;
 
+  // 평균 표시 기준은 '선택 기간 완료'가 아니라 전체 완료 건수여야 한다.
+  // 7일 필터를 걸었다고 해서 지표가 사라지면 사용자는 기능이 고장난 줄 안다.
+  const completedTotal =
+    (data.statusFlow ?? []).find((f) => f.status === DONE_STATUS)?.count ?? 0;
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -77,6 +86,14 @@ export default function AdminDashboardPage() {
           ))}
         </div>
       </div>
+
+      {/* 손볼 것이 맨 위다. 아래는 전부 "어떻게 되고 있나"이고 이것만
+          "무엇을 해야 하나"이므로, 눈이 먼저 닿는 자리에 둔다. */}
+      <DashboardActionItems items={data.actionItems} />
+
+      <DashboardAdoption rows={data.adoption} />
+
+      <DashboardFlow flow={data.statusFlow} completedCount={completedTotal} />
 
       <div className="grid grid-cols-3 gap-3">
         <SummaryCard label="브랜드 수" value={data.overall.brandCount} />

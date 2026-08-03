@@ -30,6 +30,7 @@ export function useRequirementFilters() {
     query: appliedQuery,
     includeDone,
     mine,
+    missing,
   } = useMemo(() => parseFilterParams(new URLSearchParams(searchKey)), [searchKey]);
 
   // 입력창은 즉시 반응해야 하므로 로컬 상태로 둔다. 키 입력마다 주소를 바꾸면
@@ -116,6 +117,8 @@ export function useRequirementFilters() {
     appliedQuery,
     includeDone,
     mine,
+    // 대시보드 '손볼 것'에서 링크로만 들어온다. 필터바에는 칸이 없다.
+    missing,
     searchKey,
     setFilters,
     setQuery,

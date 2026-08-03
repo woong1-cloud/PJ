@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useIdentity } from '@/components/IdentityProvider';
 import { RequirementViewToggle } from '@/components/RequirementViewToggle';
 import { canProcess } from '@/lib/tiers';
@@ -57,6 +58,7 @@ function RequirementsView() {
     resetFilters,
     mine,
     setMine,
+    missing,
   } = useRequirementFilters();
   const { teamMembers, categories, projects } = useRequirementFilterOptions(identity.brandId);
 
@@ -67,6 +69,7 @@ function RequirementsView() {
     includeDone,
     mine,
     memberId: identity.memberId,
+    missing,
   });
   const currentKey = `${reloadToken}|${apiQuery}`;
   const loading = loadedKey !== currentKey;
@@ -141,6 +144,21 @@ function RequirementsView() {
         mine={mine}
         onMineChange={setMine}
       />
+
+      {/* missing 은 필터바에 칸이 없다(대시보드 '손볼 것' 링크로만 들어온다).
+          표시가 없으면 사용자는 목록이 왜 이것뿐인지 알 수 없어 화면이 고장난
+          줄 안다. '필터 초기화'도 이 값을 지우지 않으므로 빠져나갈 길을 준다. */}
+      {missing && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <span className="flex-1 break-keep">
+            {missing === 'assignee' ? '담당자가 없는 건' : '예상 배포일이 없는 건'}만 보고
+            있습니다.
+          </span>
+          <Link href="/requirements" className="whitespace-nowrap underline">
+            전체 보기
+          </Link>
+        </div>
+      )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
       {loading ? (

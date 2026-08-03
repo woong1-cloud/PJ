@@ -5,10 +5,11 @@ import { useRouter } from 'next/navigation';
 import { useIdentity } from '@/components/IdentityProvider';
 import { canProcess } from '@/lib/tiers';
 import { buildRequirementsQuery } from '@/lib/requirementFilters';
-import { DONE_STATUS } from '@/lib/statuses';
+import { DONE_STATUS, REVIEW_IN_PROGRESS_STATUS, REVIEW_PENDING_STATUS } from '@/lib/statuses';
 import { KanbanBoard } from '@/components/KanbanBoard';
 import { MergeDialog } from '@/components/MergeDialog';
 import { ApprovalDialog } from '@/components/ApprovalDialog';
+import { StartReviewDialog } from '@/components/StartReviewDialog';
 import { FilterBar } from '@/components/FilterBar';
 import { RequirementViewToggle } from '@/components/RequirementViewToggle';
 import {
@@ -35,6 +36,8 @@ function BoardView() {
   const [mergeSource, setMergeSource] = useState(null);
   // 완료로 드래그된 카드. 승인 창이 이 값을 보고 열린다.
   const [approvalTarget, setApprovalTarget] = useState(null);
+  // 검토대기 → 검토중 으로 드래그된 카드. 착수 창이 이 값을 보고 열린다.
+  const [startTarget, setStartTarget] = useState(null);
 
   // 목록과 같은 URL 파라미터를 읽는다. 목록에서 필터를 걸고 보드로 넘어오면
   // 그대로 이어진다.
@@ -92,6 +95,16 @@ function BoardView() {
       }
       setError('');
       setApprovalTarget(card);
+      return;
+    }
+
+    // 검토대기 → 검토중 은 IT가 그 건을 처음 손대는 순간이다. 담당자·예상일을
+    // 여기서 받지 않으면 아무도 나중에 채우지 않는다(배포 후 8/8 이 비어 있었다).
+    // 완료와 달리 낙관적 이동을 막지 않아도 되지만, 창을 먼저 띄우는 편이
+    // "옮겼는데 창이 뜬다"보다 자연스럽다.
+    if (card.status === REVIEW_PENDING_STATUS && newStatus === REVIEW_IN_PROGRESS_STATUS) {
+      setError('');
+      setStartTarget(card);
       return;
     }
 
@@ -157,6 +170,21 @@ function BoardView() {
           brandId={approvalTarget.brand_id ?? identity.brandId}
           onApproved={() => {
             setApprovalTarget(null);
+            load();
+          }}
+        />
+      )}
+      {startTarget && (
+        <StartReviewDialog
+          open
+          onOpenChange={(v) => {
+            if (!v) setStartTarget(null);
+          }}
+          requirement={startTarget}
+          brandId={startTarget.brand_id ?? identity.brandId}
+          teamMembers={teamMembers}
+          onStarted={() => {
+            setStartTarget(null);
             load();
           }}
         />
