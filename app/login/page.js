@@ -197,7 +197,7 @@ export default function LoginPage() {
                 onValueChange={setBrandId}
                 required
               >
-                <SelectTrigger id="brand" className="w-full">
+                <SelectTrigger id="brand" className="h-11 w-full md:h-8">
                   <SelectValue placeholder="선택하세요" />
                 </SelectTrigger>
                 <SelectContent>
@@ -209,7 +209,7 @@ export default function LoginPage() {
             </div>
             <button
               type="submit"
-              className="rounded-lg bg-indigo-600 p-2 text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+              className="h-11 rounded-lg bg-indigo-600 px-3 text-white transition-colors hover:bg-indigo-700 disabled:opacity-50 md:h-9"
               disabled={!brandId}
             >
               입장
@@ -231,6 +231,7 @@ export default function LoginPage() {
             <div className="flex flex-col gap-1">
               <Label htmlFor="email">이메일</Label>
               <Input
+                className="h-11 md:h-8"
                 id="email"
                 type="email"
                 autoComplete="email"
@@ -242,6 +243,7 @@ export default function LoginPage() {
             <div className="flex flex-col gap-1">
               <Label htmlFor="password">비밀번호</Label>
               <Input
+                className="h-11 md:h-8"
                 id="password"
                 type="password"
                 autoComplete="current-password"
@@ -252,7 +254,7 @@ export default function LoginPage() {
             </div>
             <button
               type="submit"
-              className="rounded-lg bg-indigo-600 p-2 text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+              className="h-11 rounded-lg bg-indigo-600 px-3 text-white transition-colors hover:bg-indigo-700 disabled:opacity-50 md:h-9"
               disabled={submitting}
             >
               {submitting ? '로그인 중...' : '로그인'}

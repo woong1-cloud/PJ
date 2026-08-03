@@ -119,6 +119,7 @@ export default function SignupPage() {
             <div className="flex flex-col gap-1">
               <Label htmlFor="name">이름</Label>
               <Input
+                className="h-11 md:h-8"
                 id="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -129,6 +130,7 @@ export default function SignupPage() {
             <div className="flex flex-col gap-1">
               <Label htmlFor="email">이메일</Label>
               <Input
+                className="h-11 md:h-8"
                 id="email"
                 type="email"
                 autoComplete="email"
@@ -141,6 +143,7 @@ export default function SignupPage() {
             <div className="flex flex-col gap-1">
               <Label htmlFor="password">비밀번호</Label>
               <Input
+                className="h-11 md:h-8"
                 id="password"
                 type="password"
                 autoComplete="new-password"
@@ -163,7 +166,7 @@ export default function SignupPage() {
                   if (v !== '브랜드') setBrandId(null);
                 }}
               >
-                <SelectTrigger id="affiliation" className="w-full">
+                <SelectTrigger id="affiliation" className="h-11 w-full md:h-8">
                   <SelectValue placeholder="선택하세요" />
                 </SelectTrigger>
                 <SelectContent>
@@ -182,7 +185,7 @@ export default function SignupPage() {
                 value={jobRole}
                 onValueChange={setJobRole}
               >
-                <SelectTrigger id="jobRole" className="w-full">
+                <SelectTrigger id="jobRole" className="h-11 w-full md:h-8">
                   <SelectValue placeholder="선택하세요" />
                 </SelectTrigger>
                 <SelectContent>
@@ -202,7 +205,7 @@ export default function SignupPage() {
                   value={brandId}
                   onValueChange={setBrandId}
                 >
-                  <SelectTrigger id="brand" className="w-full">
+                  <SelectTrigger id="brand" className="h-11 w-full md:h-8">
                     <SelectValue placeholder="선택하세요" />
                   </SelectTrigger>
                   <SelectContent>
@@ -217,7 +220,7 @@ export default function SignupPage() {
             )}
             <button
               type="submit"
-              className="rounded-lg bg-indigo-600 p-2 text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+              className="h-11 rounded-lg bg-indigo-600 px-3 text-white transition-colors hover:bg-indigo-700 disabled:opacity-50 md:h-9"
               disabled={submitting || !canSubmit}
             >
               {submitting ? '가입 중...' : '가입'}

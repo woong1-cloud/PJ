@@ -64,6 +64,7 @@ export default function ChangePasswordPage() {
           <div className="flex flex-col gap-1">
             <Label htmlFor="new-password">새 비밀번호</Label>
             <Input
+              className="h-11 md:h-8"
               id="new-password"
               type="password"
               autoComplete="new-password"
@@ -76,6 +77,7 @@ export default function ChangePasswordPage() {
           <div className="flex flex-col gap-1">
             <Label htmlFor="confirm-password">새 비밀번호 확인</Label>
             <Input
+              className="h-11 md:h-8"
               id="confirm-password"
               type="password"
               autoComplete="new-password"
@@ -87,7 +89,7 @@ export default function ChangePasswordPage() {
           </div>
           <button
             type="submit"
-            className="rounded-lg bg-indigo-600 p-2 text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+            className="h-11 rounded-lg bg-indigo-600 px-3 text-white transition-colors hover:bg-indigo-700 disabled:opacity-50 md:h-9"
             disabled={submitting}
           >
             {submitting ? '변경 중...' : '비밀번호 변경'}
