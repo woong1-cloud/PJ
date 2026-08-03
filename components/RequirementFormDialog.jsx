@@ -90,6 +90,8 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [imageFiles, setImageFiles] = useState([]);
+  // 모바일에서만 쓰인다. 데스크톱은 CSS 로 늘 펼쳐 두므로 이 값과 무관하다.
+  const [typeHelpOpen, setTypeHelpOpen] = useState(false);
 
   function updateField(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -216,8 +218,6 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
         {/* 엔터 키로 제출될 때도 '검토 요청'이 되게 둔다. 등록하러 들어온
             사람의 기본 의도는 제출이고, 임시저장은 명시적으로 누르는 행동이다. */}
         <form onSubmit={(e) => handleSubmit(e, true)} className="flex flex-col gap-4">
-          {error && <p className="text-sm text-red-600">{error}</p>}
-
           {/* 왼쪽 본문, 오른쪽 속성.
               상세 화면이 이미 같은 구조라(본문 왼쪽, 메타 오른쪽) 등록과 조회를
               한 번만 배우면 된다.
@@ -279,31 +279,74 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
             </div>
 
             <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="requirementType">유형</Label>
-                <Select
-                  items={REQUIREMENT_TYPES.map((t) => ({ value: t, label: t }))}
-                  value={form.requirementType || null}
-                  onValueChange={(value) => updateField('requirementType', value)}
-                >
-                  <SelectTrigger id="requirementType" className="w-full">
-                    <SelectValue placeholder="선택하세요" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {REQUIREMENT_TYPES.map((t) => (
-                      <SelectItem key={t} value={t}>{t}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {/* 등록하는 사람이 늘 판단할 수 있는 값이 아니다. 온라인 MD
-                    입장에서 "이게 신규 과제인지 기존 개선인지"가 애매한 경우가
-                    실제로 많고, 억지로 고르게 하면 아무거나 골라 데이터가 더
-                    더러워진다. 그래서 필수가 아니고, 그 사실과 네 값의 뜻을
-                    여기서 밝힌다. 비워 두면 IT 가 착수할 때 채운다. */}
-                {form.requirementType ? (
-                  <p className="text-xs text-slate-500">{TYPE_HINTS[form.requirementType]}</p>
-                ) : (
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 break-keep">
+              {/* 짧은 값은 둘씩 묶는다. 셀렉트 하나가 한 줄을 통째로 쓸 이유가
+                  없고, 그렇게 두면 폼이 세로로만 길어진다.
+                  필수인 채널이 맨 앞이다. 예전에는 유형이 먼저였는데 그건
+                  필수가 아니다 — 모바일에서 세로로 떨어질 때 필수값이 뒤에
+                  오면 스크롤 저 아래에서 처음 만나게 된다. */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="channel">
+                    채널 <span className="text-rose-500">*</span>
+                  </Label>
+                  <Select
+                    items={CHANNELS.map((c) => ({ value: c, label: c }))}
+                    value={form.channel || null}
+                    onValueChange={(value) => updateField('channel', value)}
+                  >
+                    <SelectTrigger id="channel" className="h-11 w-full md:h-8">
+                      <SelectValue placeholder="선택하세요" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CHANNELS.map((c) => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="requirementType">유형</Label>
+                  <Select
+                    items={REQUIREMENT_TYPES.map((t) => ({ value: t, label: t }))}
+                    value={form.requirementType || null}
+                    onValueChange={(value) => updateField('requirementType', value)}
+                  >
+                    <SelectTrigger id="requirementType" className="h-11 w-full md:h-8">
+                      <SelectValue placeholder="선택하세요" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {REQUIREMENT_TYPES.map((t) => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* 유형은 등록하는 사람이 늘 판단할 수 있는 값이 아니다. 온라인 MD
+                  입장에서 "이게 신규 과제인지 기존 개선인지"가 애매한 경우가
+                  실제로 많고, 억지로 고르게 하면 아무거나 골라 데이터가 더
+                  더러워진다. 그래서 필수가 아니고, 그 사실과 네 값의 뜻을
+                  여기서 밝힌다. 비워 두면 IT 가 착수할 때 채운다.
+
+                  안내 박스는 네 줄짜리라 모바일 화면의 삼분의 일을 먹는다.
+                  그래서 모바일에서는 접어 두고 버튼으로 편다. 데스크톱은 자리가
+                  있으므로 늘 펼친 채로 둔다 — 하이드레이션이 어긋나지 않게
+                  화면 폭을 자바스크립트로 재지 않고 CSS 로만 가른다. */}
+              {form.requirementType ? (
+                <p className="text-xs text-slate-500">{TYPE_HINTS[form.requirementType]}</p>
+              ) : (
+                <div className="flex flex-col gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setTypeHelpOpen((v) => !v)}
+                    className="self-start text-xs text-indigo-600 underline md:hidden"
+                  >
+                    {typeHelpOpen ? '유형 설명 접기' : '유형이 뭔가요?'}
+                  </button>
+                  <div
+                    className={`${typeHelpOpen ? 'block' : 'hidden'} rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs break-keep text-slate-500 md:block`}
+                  >
                     <p className="mb-1 text-slate-600">
                       모르겠으면 비워 두셔도 됩니다 — IT가 검토하며 정합니다.
                     </p>
@@ -315,11 +358,9 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
                       ))}
                     </ul>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
-              {/* 짧은 값은 둘씩 묶는다. 셀렉트 하나가 한 줄을 통째로 쓸 이유가
-                  없고, 그렇게 두면 폼이 세로로만 길어진다. */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
                   <Label htmlFor="priority">우선순위</Label>
@@ -330,28 +371,6 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <Label htmlFor="channel">
-                    채널 <span className="text-rose-500">*</span>
-                  </Label>
-                  <Select
-                    items={CHANNELS.map((c) => ({ value: c, label: c }))}
-                    value={form.channel || null}
-                    onValueChange={(value) => updateField('channel', value)}
-                  >
-                    <SelectTrigger id="channel" className="w-full">
-                      <SelectValue placeholder="선택하세요" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CHANNELS.map((c) => (
-                        <SelectItem key={c} value={c}>{c}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1">
                   <Label htmlFor="category">카테고리</Label>
                   <Select
                     items={[
@@ -361,7 +380,7 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
                     value={form.category}
                     onValueChange={(value) => updateField('category', value)}
                   >
-                    <SelectTrigger id="category" className="w-full">
+                    <SelectTrigger id="category" className="h-11 w-full md:h-8">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -372,37 +391,40 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
                   <Label htmlFor="requestDate">요청일</Label>
                   <Input
                     id="requestDate"
                     type="date"
+                    className="h-11 md:h-8"
                     value={form.requestDate}
                     onChange={(e) => updateField('requestDate', e.target.value)}
                   />
                 </div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="projectId">프로젝트</Label>
-                <Select
-                  items={[
-                    { value: 'none', label: '선택 안 함' },
-                    ...projects.map((p) => ({ value: p.id, label: p.name })),
-                  ]}
-                  value={form.projectId}
-                  onValueChange={(value) => updateField('projectId', value)}
-                >
-                  <SelectTrigger id="projectId" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">선택 안 함</SelectItem>
-                    {projects.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="projectId">프로젝트</Label>
+                  <Select
+                    items={[
+                      { value: 'none', label: '선택 안 함' },
+                      ...projects.map((p) => ({ value: p.id, label: p.name })),
+                    ]}
+                    value={form.projectId}
+                    onValueChange={(value) => updateField('projectId', value)}
+                  >
+                    <SelectTrigger id="projectId" className="h-11 w-full md:h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">선택 안 함</SelectItem>
+                      {projects.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
           </div>
@@ -416,6 +438,15 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
             <Label htmlFor="isConfidential">비공개 요구사항 (브랜드 관리자 이상만 조회 가능)</Label>
           </div>
 
+          {/* 에러는 버튼 바로 위다. 폼 맨 위에 두면 모바일에서 폼을 다 내려가
+              아래쪽 버튼을 눌렀을 때 메시지가 화면 밖에 뜬다 — 사용자 눈에는
+              버튼을 눌렀는데 아무 일도 안 일어난 것으로 보인다.
+              채널을 필수로 만들면서 이 경로가 새로 생겼다. 누른 사람의 눈은
+              버튼 근처에 있으므로 데스크톱에서도 이쪽이 맞다. */}
+          {error && (
+            <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
+          )}
+
           <DialogFooter className="flex-col items-stretch gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:items-center sm:justify-end">
             {/* 무엇이 달라지는지 한 줄로 적어 둔다. 버튼 이름만 보고
                 '임시저장'이 남에게 보이는지 아닌지 알 수 없다. */}
@@ -426,6 +457,7 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
               type="button"
               variant="outline"
               disabled={submitting}
+              className="h-11 w-full md:h-9 md:w-auto"
               onClick={(e) => handleSubmit(e, false)}
             >
               {submitting ? '저장 중...' : '임시저장'}
@@ -433,7 +465,7 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
             <Button
               type="submit"
               disabled={submitting}
-              className="bg-indigo-600 hover:bg-indigo-700"
+              className="h-11 w-full bg-indigo-600 hover:bg-indigo-700 md:h-9 md:w-auto"
             >
               {submitting ? '요청 중...' : '검토 요청'}
             </Button>

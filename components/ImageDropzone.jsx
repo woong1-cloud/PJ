@@ -95,7 +95,12 @@ export function ImageDropzone({ files, onAdd, onRemove }) {
           dragOver ? 'border-indigo-400 bg-indigo-50' : 'border-slate-300 text-slate-500'
         }`}
       >
-        <span>파일을 드래그하거나 클릭해서 선택 · 스크린샷은 Ctrl+V로 붙여넣기</span>
+        {/* 폰에는 드래그도 Ctrl+V 도 없다. 데스크톱 문구를 그대로 두면 있지도
+            않은 조작을 안내하는 셈이다. */}
+        <span className="md:hidden">눌러서 사진·파일 선택</span>
+        <span className="hidden md:inline">
+          파일을 드래그하거나 클릭해서 선택 · 스크린샷은 Ctrl+V로 붙여넣기
+        </span>
         {/* 무엇을 올릴 수 있는지 안 알려주면 사람들은 이미지만 되는 줄 알고
             기획서를 메일로 보낸다. 형식을 다 적으면 길어지니 대표만 적는다. */}
         <span className="mt-1 text-xs text-slate-400">
