@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import {
   Select,
   SelectContent,
@@ -37,6 +38,12 @@ export function FilterBar({
   mine = false,
   onMineChange,
 }) {
+  // 접힌 쪽에 값이 걸린 채로 닫혀 있으면 사용자는 목록이 왜 이것뿐인지 모른다.
+  // 그래서 값이 하나라도 있으면 처음부터 펼친 상태로 연다.
+  const HIDDEN_KEYS = ['assignee', 'category', 'channel', 'priority', 'project'];
+  const hiddenActiveCount = HIDDEN_KEYS.filter((k) => value[k]).length;
+  const [expanded, setExpanded] = useState(hiddenActiveCount > 0);
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       <input
@@ -62,6 +69,14 @@ export function FilterBar({
         current={value.type}
         onPick={(v) => onChange({ type: v })}
       />
+      {/* 여기부터는 접는다.
+          필터가 여덟 개인데 요구사항은 아직 아홉 건이다. 이 정도 규모에서는
+          아무도 필터를 안 쓰고, 늘 펼쳐 두면 검색창과 상태만 찾는 사람에게
+          나머지가 전부 소음이 된다.
+          어느 필터가 실제로 쓰이는지는 URL 파라미터를 보면 나온다 — 그때
+          기본 노출을 다시 정한다. 지금 정하면 그건 추측이다. */}
+      {expanded && (
+        <>
       <FilterSelect
         placeholder="담당자"
         options={teamMembers.map((m) => ({ value: m.id, label: m.name }))}
@@ -92,6 +107,18 @@ export function FilterBar({
         current={value.project}
         onPick={(v) => onChange({ project: v })}
       />
+        </>
+      )}
+
+      {/* 접힌 쪽에 값이 걸려 있으면 개수를 보여준다. 안 그러면 결과가 좁아진
+          이유가 화면 어디에도 없다 — 보이지 않는 필터가 제일 나쁘다. */}
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="text-xs text-slate-500 underline hover:text-slate-700"
+      >
+        {expanded ? '필터 접기' : `필터 더보기${hiddenActiveCount > 0 ? ` (${hiddenActiveCount})` : ''}`}
+      </button>
       {/* 라벨이 "종결 숨김"이므로 체크됨 = 숨김 = includeDone === false 다.
           숨기는 대상이 완료만이 아니라 반려·취소·중복까지이므로 라벨도 그렇게
           적는다 — "완료 숨김"이라고 써 두면 반려된 건이 사라진 이유를 알 수 없다.

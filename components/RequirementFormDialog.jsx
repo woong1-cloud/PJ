@@ -187,157 +187,197 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>새 요구사항 등록</DialogTitle>
         </DialogHeader>
         {/* 엔터 키로 제출될 때도 '검토 요청'이 되게 둔다. 등록하러 들어온
             사람의 기본 의도는 제출이고, 임시저장은 명시적으로 누르는 행동이다. */}
-        <form onSubmit={(e) => handleSubmit(e, true)} className="flex flex-col gap-3">
+        <form onSubmit={(e) => handleSubmit(e, true)} className="flex flex-col gap-4">
           {error && <p className="text-sm text-red-600">{error}</p>}
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="title">제목</Label>
-            <Input
-              id="title"
-              value={form.title}
-              onChange={(e) => updateField('title', e.target.value)}
-              required
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="priority">우선순위</Label>
-              <LevelSelect
-                id="priority"
-                value={form.priority}
-                onChange={(v) => updateField('priority', v)}
-              />
+
+          {/* 왼쪽 본문, 오른쪽 속성.
+              상세 화면이 이미 같은 구조라(본문 왼쪽, 메타 오른쪽) 등록과 조회를
+              한 번만 배우면 된다.
+              모바일에서는 한 열로 떨어져 예전과 똑같이 세로로 쌓인다 — 화면을
+              두 벌로 만들지 않는 이유가 이것이다. 필드가 늘 때 고칠 곳이 한
+              군데뿐이고, 한쪽만 고치는 사고가 나지 않는다. */}
+          <div className="grid gap-4 sm:grid-cols-[1.6fr_1fr]">
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="title">제목</Label>
+                <Input
+                  id="title"
+                  value={form.title}
+                  onChange={(e) => updateField('title', e.target.value)}
+                  required
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="asIs">As-Is</Label>
+                <Textarea
+                  id="asIs"
+                  rows={4}
+                  value={form.asIs}
+                  onChange={(e) => updateField('asIs', e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="toBe">To-Be</Label>
+                <Textarea
+                  id="toBe"
+                  rows={4}
+                  value={form.toBe}
+                  onChange={(e) => updateField('toBe', e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="note">비고</Label>
+                <Textarea
+                  id="note"
+                  rows={2}
+                  value={form.note}
+                  onChange={(e) => updateField('note', e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="requirementType">유형</Label>
+                <Select
+                  items={REQUIREMENT_TYPES.map((t) => ({ value: t, label: t }))}
+                  value={form.requirementType || null}
+                  onValueChange={(value) => updateField('requirementType', value)}
+                >
+                  <SelectTrigger id="requirementType" className="w-full">
+                    <SelectValue placeholder="선택하세요" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {REQUIREMENT_TYPES.map((t) => (
+                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {/* 등록하는 사람이 늘 판단할 수 있는 값이 아니다. 온라인 MD
+                    입장에서 "이게 신규 과제인지 기존 개선인지"가 애매한 경우가
+                    실제로 많고, 억지로 고르게 하면 아무거나 골라 데이터가 더
+                    더러워진다. 그래서 필수가 아니고, 그 사실과 네 값의 뜻을
+                    여기서 밝힌다. 비워 두면 IT 가 착수할 때 채운다. */}
+                {form.requirementType ? (
+                  <p className="text-xs text-slate-500">{TYPE_HINTS[form.requirementType]}</p>
+                ) : (
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 break-keep">
+                    <p className="mb-1 text-slate-600">
+                      모르겠으면 비워 두셔도 됩니다 — IT가 검토하며 정합니다.
+                    </p>
+                    <ul className="flex flex-col gap-0.5">
+                      {REQUIREMENT_TYPES.map((t) => (
+                        <li key={t}>
+                          <b className="text-slate-700">{t}</b> · {TYPE_HINTS[t]}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {/* 짧은 값은 둘씩 묶는다. 셀렉트 하나가 한 줄을 통째로 쓸 이유가
+                  없고, 그렇게 두면 폼이 세로로만 길어진다. */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="priority">우선순위</Label>
+                  <LevelSelect
+                    id="priority"
+                    value={form.priority}
+                    onChange={(v) => updateField('priority', v)}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="channel">채널</Label>
+                  <Select
+                    items={CHANNELS.map((c) => ({ value: c, label: c }))}
+                    value={form.channel}
+                    onValueChange={(value) => updateField('channel', value)}
+                  >
+                    <SelectTrigger id="channel" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CHANNELS.map((c) => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="category">카테고리</Label>
+                  <Select
+                    items={[
+                      { value: 'none', label: '선택 안 함' },
+                      ...categories.map((c) => ({ value: c.id, label: c.category_name })),
+                    ]}
+                    value={form.category}
+                    onValueChange={(value) => updateField('category', value)}
+                  >
+                    <SelectTrigger id="category" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">선택 안 함</SelectItem>
+                      {categories.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.category_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="requestDate">요청일</Label>
+                  <Input
+                    id="requestDate"
+                    type="date"
+                    value={form.requestDate}
+                    onChange={(e) => updateField('requestDate', e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="projectId">프로젝트</Label>
+                <Select
+                  items={[
+                    { value: 'none', label: '선택 안 함' },
+                    ...projects.map((p) => ({ value: p.id, label: p.name })),
+                  ]}
+                  value={form.projectId}
+                  onValueChange={(value) => updateField('projectId', value)}
+                >
+                  <SelectTrigger id="projectId" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">선택 안 함</SelectItem>
+                    {projects.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <Label>첨부</Label>
+                <ImageDropzone
+                  files={imageFiles}
+                  onAdd={(added) => setImageFiles((prev) => [...prev, ...added])}
+                  onRemove={(i) => setImageFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                />
+              </div>
             </div>
           </div>
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="requestDate">요청일</Label>
-            <Input
-              id="requestDate"
-              type="date"
-              value={form.requestDate}
-              onChange={(e) => updateField('requestDate', e.target.value)}
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="category">카테고리</Label>
-            <Select
-              items={[
-                { value: 'none', label: '선택 안 함' },
-                ...categories.map((c) => ({ value: c.id, label: c.category_name })),
-              ]}
-              value={form.category}
-              onValueChange={(value) => updateField('category', value)}
-            >
-              <SelectTrigger id="category" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">선택 안 함</SelectItem>
-                {categories.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.category_name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="requirementType">유형</Label>
-            <Select
-              items={REQUIREMENT_TYPES.map((t) => ({ value: t, label: t }))}
-              value={form.requirementType || null}
-              onValueChange={(value) => updateField('requirementType', value)}
-            >
-              <SelectTrigger id="requirementType" className="w-full">
-                <SelectValue placeholder="선택하세요" />
-              </SelectTrigger>
-              <SelectContent>
-                {REQUIREMENT_TYPES.map((t) => (
-                  <SelectItem key={t} value={t}>{t}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {/* 등록하는 사람이 늘 판단할 수 있는 값이 아니다. 온라인 MD 입장에서
-                "이게 신규 과제인지 기존 개선인지"가 애매한 경우가 실제로 많고,
-                그때 억지로 고르게 하면 아무거나 골라 데이터가 더러워진다.
-                그래서 필수가 아니고, 그 사실과 네 값의 뜻을 여기서 밝힌다.
-                비워 두면 IT 가 검토를 시작할 때 채운다(StartReviewDialog). */}
-            {form.requirementType ? (
-              <p className="text-xs text-slate-500">{TYPE_HINTS[form.requirementType]}</p>
-            ) : (
-              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 break-keep">
-                <p className="mb-1 text-slate-600">모르겠으면 비워 두셔도 됩니다 — IT가 검토하며 정합니다.</p>
-                <ul className="flex flex-col gap-0.5">
-                  {REQUIREMENT_TYPES.map((t) => (
-                    <li key={t}>
-                      <b className="text-slate-700">{t}</b> · {TYPE_HINTS[t]}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="channel">채널</Label>
-            <Select
-              items={CHANNELS.map((c) => ({ value: c, label: c }))}
-              value={form.channel}
-              onValueChange={(value) => updateField('channel', value)}
-            >
-              <SelectTrigger id="channel" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CHANNELS.map((c) => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="projectId">프로젝트</Label>
-            <Select
-              items={[
-                { value: 'none', label: '선택 안 함' },
-                ...projects.map((p) => ({ value: p.id, label: p.name })),
-              ]}
-              value={form.projectId}
-              onValueChange={(value) => updateField('projectId', value)}
-            >
-              <SelectTrigger id="projectId" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">선택 안 함</SelectItem>
-                {projects.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="asIs">As-Is</Label>
-            <Textarea id="asIs" value={form.asIs} onChange={(e) => updateField('asIs', e.target.value)} />
-          </div>
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="toBe">To-Be</Label>
-            <Textarea id="toBe" value={form.toBe} onChange={(e) => updateField('toBe', e.target.value)} />
-          </div>
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="note">비고</Label>
-            <Textarea id="note" value={form.note} onChange={(e) => updateField('note', e.target.value)} />
-          </div>
-          <div className="flex flex-col gap-1">
-            <Label>이미지 첨부</Label>
-            <ImageDropzone
-              files={imageFiles}
-              onAdd={(added) => setImageFiles((prev) => [...prev, ...added])}
-              onRemove={(i) => setImageFiles((prev) => prev.filter((_, idx) => idx !== i))}
-            />
-          </div>
+
           <div className="flex items-center gap-2">
             <Checkbox
               id="isConfidential"
@@ -346,7 +386,8 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
             />
             <Label htmlFor="isConfidential">비공개 요구사항 (브랜드 관리자 이상만 조회 가능)</Label>
           </div>
-          <DialogFooter className="flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-end">
+
+          <DialogFooter className="flex-col items-stretch gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:items-center sm:justify-end">
             {/* 무엇이 달라지는지 한 줄로 적어 둔다. 버튼 이름만 보고
                 '임시저장'이 남에게 보이는지 아닌지 알 수 없다. */}
             <p className="mr-auto text-xs text-slate-500">
