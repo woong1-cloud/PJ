@@ -4,11 +4,12 @@ import { errorResponse, ApiError } from '@/lib/apiError';
 import { TIER_RANK } from '@/lib/tiers';
 import { INITIAL_STATUS, REVIEW_PENDING_STATUS, CLOSED_STATUSES } from '@/lib/statuses';
 import { HANDOFF_STATUSES } from '@/lib/redmineLink';
+import { isValidType } from '@/lib/requirementTypes';
 import { CHANNELS, DEFAULT_CHANNEL } from '@/lib/channels';
 
 const BASE_COLUMNS =
   'id, priority, urgency, request_date, status, title, is_confidential, sprint_tag, duplicate_count, ' +
-  'completed_at, expected_release_date, redmine_url, ' +
+  'completed_at, expected_release_date, redmine_url, requirement_type, ' +
   'project_id, project:projects(id, name), ' +
   'requester:team_members!requirements_requester_fkey(id, name), ' +
   'assignee:team_members!requirements_assignee_fkey(id, name), ' +
@@ -28,6 +29,7 @@ export async function GET(request) {
     // 브랜드 안의 어떤 id 든 받는다 — 요청자 이름은 이미 목록에 다 보이므로
     // 이 필터로 새로 새는 정보가 없다. 비공개 판정은 아래 조건이 그대로 한다.
     const requester = searchParams.get('requester');
+    const type = searchParams.get('type');
     const category = searchParams.get('category');
     const priority = searchParams.get('priority');
     const project = searchParams.get('project');
@@ -60,6 +62,7 @@ export async function GET(request) {
       if (status) query = query.eq('status', status);
       if (assignee) query = query.eq('assignee', assignee);
       if (requester) query = query.eq('requester', requester);
+      if (type) query = query.eq('requirement_type', type);
       if (category) query = query.eq('category', category);
       if (priority) query = query.eq('priority', priority);
       if (project) query = query.eq('project_id', project);
@@ -116,6 +119,7 @@ export async function POST(request) {
       note,
       isConfidential,
       channel,
+      requirementType,
       submit,
     } = body;
 
@@ -125,6 +129,11 @@ export async function POST(request) {
     // 브랜드마다 다른 이름으로 흩어진다.
     if (channel && !CHANNELS.includes(channel)) {
       throw new ApiError(400, '유효하지 않은 채널입니다.');
+    }
+    // 화면에서 필수로 받지만 서버가 관문이다. 자유 입력을 허용하면 유형별
+    // 집계가 브랜드마다 다른 이름으로 흩어진다(채널과 같은 이유).
+    if (requirementType && !isValidType(requirementType)) {
+      throw new ApiError(400, '유효하지 않은 요구사항 유형입니다.');
     }
 
     const { memberId, isGlobalAdmin, tier } = await requireBrandAccess(brandId, '4차');
@@ -144,6 +153,8 @@ export async function POST(request) {
       to_be: toBe || null,
       note: note || null,
       is_confidential: canSetConfidential ? Boolean(isConfidential) : false,
+      // 0019 이전 건은 null(미분류)이다. 새로 등록되는 건은 화면이 필수로 받는다.
+      requirement_type: requirementType || null,
       // 등록하면서 바로 제출할 수 있다.
       //
       // 예전에는 무조건 INITIAL_STATUS('작성중')로 들어갔고, 거기서 검토대기로

@@ -20,6 +20,7 @@ import { canSubmitForReview } from '@/lib/submitRequirement';
 import { isOverdue, toLocalDateString } from '@/lib/overdue';
 import { Badge } from '@/components/ui/badge';
 import { ImageDropzone } from '@/components/ImageDropzone';
+import { isImageType } from '@/lib/imageUpload';
 import { RequirementEditForm } from '@/components/RequirementEditForm';
 import { RequirementLinks } from '@/components/RequirementLinks';
 import { ActivityFeed } from '@/components/ActivityFeed';
@@ -255,6 +256,10 @@ export function RequirementDetail({ id }) {
 
   const { requirement: r, history, duplicates, mergedInto, images, statusDurations, commentCount } =
     data;
+  // 이미지와 문서는 보여주는 방식이 다르다. 한 테이블(requirement_images)을
+  // 공유하므로 content_type 으로 여기서 가른다.
+  const pics = (images ?? []).filter((f) => isImageType(f.content_type));
+  const docs = (images ?? []).filter((f) => !isImageType(f.content_type));
 
   const canEdit =
     (processAllowed || r.requester?.id === identity.memberId) &&
@@ -348,10 +353,40 @@ export function RequirementDetail({ id }) {
           <RequirementLinks requirementId={id} brandId={requirementBrandId} />
 
           <section className="rounded-lg border border-slate-200 bg-white p-4">
-            <h2 className="mb-2 text-sm font-medium text-slate-500">이미지</h2>
-            {images.length === 0 && <p className="text-sm text-slate-400">첨부된 이미지가 없습니다.</p>}
+            <h2 className="mb-2 text-sm font-medium text-slate-500">첨부</h2>
+            {images.length === 0 && <p className="text-sm text-slate-400">첨부된 파일이 없습니다.</p>}
+
+            {/* 문서는 썸네일을 만들 수 없다. 이미지 격자에 회색 네모로 섞어 두면
+                무슨 파일인지 알 수 없으므로, 파일명이 보이는 목록으로 따로 뺀다. */}
+            {docs.length > 0 && (
+              <ul className="mb-3 flex flex-col gap-1">
+                {docs.map((f) => (
+                  <li key={f.id} className="flex items-center gap-2 text-sm">
+                    <a
+                      href={f.signedUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      download={f.file_name ?? undefined}
+                      className="flex-1 truncate text-indigo-600 hover:underline"
+                      title={f.file_name ?? ''}
+                    >
+                      {f.file_name || '이름 없는 파일'}
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => deleteImage(f.id)}
+                      className="shrink-0 text-xs text-slate-400 hover:text-red-600"
+                      aria-label={`${f.file_name ?? '파일'} 삭제`}
+                    >
+                      삭제
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {images.map((img) => (
+              {pics.map((img) => (
                 <div key={img.id} className="relative">
                   <a href={img.signedUrl} target="_blank" rel="noreferrer">
                     <img

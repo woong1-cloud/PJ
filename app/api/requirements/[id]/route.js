@@ -4,6 +4,7 @@ import { errorResponse, ApiError } from '@/lib/apiError';
 import { TIER_RANK } from '@/lib/tiers';
 import { DONE_STATUS, MERGED_STATUS } from '@/lib/statuses';
 import { CHANNELS, DEFAULT_CHANNEL } from '@/lib/channels';
+import { isValidType } from '@/lib/requirementTypes';
 import { toSignedImageList, IMAGE_BUCKET } from '@/lib/storage';
 import { computeStatusDurations } from '@/lib/statusDurations';
 
@@ -60,7 +61,7 @@ export async function GET(request, { params }) {
 
     const { data: imageRows, error: imgError } = await supabase
       .from('requirement_images')
-      .select('id, storage_path, content_type, sort_order')
+      .select('id, storage_path, content_type, file_name, sort_order')
       .eq('requirement_id', id)
       .order('sort_order', { ascending: true });
     if (imgError) throw imgError;
@@ -102,11 +103,14 @@ export async function PATCH(request, { params }) {
   try {
     const { id } = await params;
     const body = await request.json();
-    const { brandId, title, priority, urgency, category, asIs, toBe, note, isConfidential, channel } =
+    const { brandId, title, priority, urgency, category, asIs, toBe, note, isConfidential, channel, requirementType } =
       body;
     if (!brandId) throw new ApiError(400, 'brandId가 필요합니다.');
     if (channel && !CHANNELS.includes(channel)) {
       throw new ApiError(400, '유효하지 않은 채널입니다.');
+    }
+    if (requirementType && !isValidType(requirementType)) {
+      throw new ApiError(400, '유효하지 않은 요구사항 유형입니다.');
     }
 
     const { memberId, tier, isGlobalAdmin } = await requireBrandAccess(brandId, '4차');
@@ -140,6 +144,7 @@ export async function PATCH(request, { params }) {
       toBe: 'To-Be',
       note: '비고',
       isConfidential: '비공개여부',
+      requirementType: '유형',
     };
     const updates = {};
     const changedFields = [];
@@ -176,6 +181,10 @@ export async function PATCH(request, { params }) {
     if (note !== undefined) {
       updates.note = note || null;
       changedFields.push(FIELD_LABELS.note);
+    }
+    if (requirementType !== undefined) {
+      updates.requirement_type = requirementType || null;
+      changedFields.push(FIELD_LABELS.requirementType);
     }
     if (isConfidential !== undefined && canProcess) {
       updates.is_confidential = Boolean(isConfidential);

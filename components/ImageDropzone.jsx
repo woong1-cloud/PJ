@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ALLOWED_IMAGE_TYPES } from '@/lib/imageUpload';
+import { ALLOWED_ATTACHMENT_TYPES, ALLOWED_IMAGE_TYPES } from '@/lib/imageUpload';
 
 // props:
 //  - files: File[] (부모 소유)
@@ -50,8 +50,10 @@ export function ImageDropzone({ files, onAdd, onRemove }) {
   }, []);
 
   function acceptFiles(list) {
-    const imgs = Array.from(list).filter((f) => ALLOWED_IMAGE_TYPES.includes(f.type));
-    if (imgs.length) onAdd(imgs);
+    // 이미지뿐 아니라 문서도 받는다. 서버가 같은 목록으로 다시 판정하므로
+    // 여기서 거르는 것은 "고를 수 없는 파일을 담지 않는다"는 편의일 뿐이다.
+    const accepted = Array.from(list).filter((f) => ALLOWED_ATTACHMENT_TYPES.includes(f.type));
+    if (accepted.length) onAdd(accepted);
   }
 
   useEffect(() => {
@@ -61,6 +63,8 @@ export function ImageDropzone({ files, onAdd, onRemove }) {
       for (const item of items) {
         if (item.kind === 'file') {
           const file = item.getAsFile();
+          // 붙여넣기는 화면 캡처가 대부분이라 이미지만 받는다. 문서를
+          // 클립보드로 붙여넣는 경로는 브라우저마다 제각각이라 믿을 수 없다.
           if (file && ALLOWED_IMAGE_TYPES.includes(file.type)) imgs.push(file);
         }
       }
@@ -91,11 +95,11 @@ export function ImageDropzone({ files, onAdd, onRemove }) {
           dragOver ? 'border-indigo-400 bg-indigo-50' : 'border-slate-300 text-slate-500'
         }`}
       >
-        이미지를 드래그하거나 클릭해서 선택 · 스크린샷은 Ctrl+V로 붙여넣기
+        파일을 드래그하거나 클릭해서 선택 · 스크린샷은 Ctrl+V로 붙여넣기
         <input
           ref={inputRef}
           type="file"
-          accept="image/*"
+          accept={ALLOWED_ATTACHMENT_TYPES.join(',')}
           multiple
           className="hidden"
           onChange={(e) => {

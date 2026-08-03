@@ -10,6 +10,7 @@ import {
 import { CHANNELS } from '@/lib/channels';
 import { hasActiveFilters } from '@/lib/requirementFilters';
 import { REQUIREMENT_STATUSES } from '@/lib/statuses';
+import { REQUIREMENT_TYPES } from '@/lib/requirementTypes';
 
 const PRIORITIES = ['상', '중', '하'];
 
@@ -17,7 +18,7 @@ const PRIORITIES = ['상', '중', '하'];
 // 이 컴포넌트는 그리기만 한다.
 //
 // props: teamMembers[], categories[], projects[],
-//        value{status,assignee,category,channel,priority,project},
+//        value{status,type,assignee,category,channel,priority,project},
 //        onChange(patch), query, onQueryChange, onReset,
 //        includeDone, onIncludeDoneChange, showIncludeDone, mine, onMineChange
 export function FilterBar({
@@ -54,6 +55,12 @@ export function FilterBar({
         options={REQUIREMENT_STATUSES.map((s) => ({ value: s, label: s }))}
         current={value.status}
         onPick={(v) => onChange({ status: v })}
+      />
+      <FilterSelect
+        placeholder="유형"
+        options={REQUIREMENT_TYPES.map((t) => ({ value: t, label: t }))}
+        current={value.type}
+        onPick={(v) => onChange({ type: v })}
       />
       <FilterSelect
         placeholder="담당자"

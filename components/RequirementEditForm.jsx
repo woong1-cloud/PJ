@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { CHANNELS, DEFAULT_CHANNEL } from '@/lib/channels';
+import { REQUIREMENT_TYPES } from '@/lib/requirementTypes';
 
 const LEVELS = ['상', '중', '하'];
 const LEVEL_STYLE = {
@@ -50,6 +51,9 @@ export function RequirementEditForm({ requirement, canSetConfidential, identity,
     category: requirement.category?.id ?? 'none',
     // 0009 이전에 만들어진 건은 channel 이 비어 있다. 기본값으로 채운다.
     channel: requirement.channel ?? DEFAULT_CHANNEL,
+    // 0019 이전 건은 null(미분류)이다. 수정 화면에서 채울 수 있게 열어 둔다 —
+    // 9건뿐이라 손으로 채우는 편이 임의 분류보다 정확하다.
+    requirementType: requirement.requirement_type ?? '',
     asIs: requirement.as_is ?? '',
     toBe: requirement.to_be ?? '',
     note: requirement.note ?? '',
@@ -83,6 +87,7 @@ export function RequirementEditForm({ requirement, canSetConfidential, identity,
           priority: form.priority || null,
           category: form.category === 'none' ? null : form.category,
           channel: form.channel,
+          requirementType: form.requirementType || null,
           asIs: form.asIs,
           toBe: form.toBe,
           note: form.note,
@@ -133,6 +138,25 @@ export function RequirementEditForm({ requirement, canSetConfidential, identity,
             {categories.map((c) => (
               <SelectItem key={c.id} value={c.id}>
                 {c.category_name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex flex-col gap-1">
+        <Label htmlFor="edit-type">유형</Label>
+        <Select
+          items={REQUIREMENT_TYPES.map((t) => ({ value: t, label: t }))}
+          value={form.requirementType || null}
+          onValueChange={(value) => updateField('requirementType', value)}
+        >
+          <SelectTrigger id="edit-type" className="w-full">
+            <SelectValue placeholder="미분류" />
+          </SelectTrigger>
+          <SelectContent>
+            {REQUIREMENT_TYPES.map((t) => (
+              <SelectItem key={t} value={t}>
+                {t}
               </SelectItem>
             ))}
           </SelectContent>

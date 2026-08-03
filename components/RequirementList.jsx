@@ -25,6 +25,11 @@ function Meta({ req }) {
           {req.project.name}
         </span>
       )}
+      {/* 유형은 목록에서 가장 먼저 읽히는 축이다 — '오류'가 섞여 있는지가
+          훑을 때 제일 궁금하다. 미분류(0019 이전 건)는 아무것도 안 그린다. */}
+      {req.requirement_type && (
+        <span className="rounded bg-slate-100 px-1.5 text-slate-600">{req.requirement_type}</span>
+      )}
       {req.is_confidential && <ConfidentialBadge />}
       {req.image_count > 0 && <span>📎 {req.image_count}</span>}
       {/* 레드마인 인계 상태. 'none'(아직 넘길 단계 아님)이면 아무것도 안 그린다 —

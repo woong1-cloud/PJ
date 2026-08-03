@@ -7,7 +7,7 @@ import { uploadImage, toSignedImageList } from '@/lib/storage';
 async function loadImageList(supabase, requirementId) {
   const { data, error } = await supabase
     .from('requirement_images')
-    .select('id, storage_path, content_type, sort_order')
+    .select('id, storage_path, content_type, file_name, sort_order')
     .eq('requirement_id', requirementId)
     .order('sort_order', { ascending: true });
   if (error) throw error;
@@ -21,7 +21,7 @@ export async function POST(request, { params }) {
     const brandId = form.get('brandId');
     const files = form.getAll('files').filter((f) => typeof f === 'object' && f.size !== undefined);
     if (!brandId) throw new ApiError(400, 'brandId가 필요합니다.');
-    if (files.length === 0) throw new ApiError(400, '업로드할 이미지가 없습니다.');
+    if (files.length === 0) throw new ApiError(400, '업로드할 파일이 없습니다.');
 
     const { memberId } = await requireBrandAccess(brandId, '4차');
 
@@ -58,6 +58,9 @@ export async function POST(request, { params }) {
         brand_id: brandId,
         storage_path: path,
         content_type: file.type,
+        // 원본 파일명. 이미지는 썸네일이면 되지만 PDF·엑셀은 이 값이 없으면
+        // 화면에 보여줄 것이 없다(저장 경로는 uuid 다).
+        file_name: file.name ?? null,
         byte_size: file.size,
         sort_order: nextSort,
         uploaded_by: memberId,

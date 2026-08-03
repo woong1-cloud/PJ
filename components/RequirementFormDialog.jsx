@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/select';
 import { ImageDropzone } from '@/components/ImageDropzone';
 import { CHANNELS, DEFAULT_CHANNEL } from '@/lib/channels';
+import { REQUIREMENT_TYPES, TYPE_HINTS } from '@/lib/requirementTypes';
 
 const LEVELS = ['상', '중', '하'];
 const LEVEL_STYLE = {
@@ -63,6 +64,9 @@ function emptyForm() {
     category: 'none',
     // 채널은 '선택 안 함'이 없다. 비워두면 채널별 집계에서 그만큼이 샌다.
     channel: DEFAULT_CHANNEL,
+    // 유형은 기본값을 두지 않는다. '신규'를 미리 박아 두면 오류 신고까지
+    // 신규로 들어오고, 그 순간 이 값은 집계에 쓸 수 없게 된다.
+    requirementType: '',
     projectId: 'none',
     asIs: '',
     toBe: '',
@@ -115,6 +119,7 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
           requestDate: form.requestDate,
           category: form.category === 'none' ? null : form.category,
           channel: form.channel,
+          requirementType: form.requirementType,
           asIs: form.asIs,
           toBe: form.toBe,
           note: form.note,
@@ -238,6 +243,29 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="requirementType">유형</Label>
+            <Select
+              items={REQUIREMENT_TYPES.map((t) => ({ value: t, label: t }))}
+              value={form.requirementType || null}
+              onValueChange={(value) => updateField('requirementType', value)}
+            >
+              <SelectTrigger id="requirementType" className="w-full">
+                <SelectValue placeholder="선택하세요" />
+              </SelectTrigger>
+              <SelectContent>
+                {REQUIREMENT_TYPES.map((t) => (
+                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {/* 고르기 전에는 무엇을 고르는 건지 알기 어렵다. 고르면 그 뜻만 남긴다. */}
+            <p className="text-xs text-slate-400">
+              {form.requirementType
+                ? TYPE_HINTS[form.requirementType]
+                : '신규 · 개선 · 오류 · 문의 중 하나'}
+            </p>
           </div>
           <div className="flex flex-col gap-1">
             <Label htmlFor="channel">채널</Label>
