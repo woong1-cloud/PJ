@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useIdentity } from '@/components/IdentityProvider';
 import { canProcess } from '@/lib/tiers';
 import { buildRequirementsQuery } from '@/lib/requirementFilters';
+import { DONE_STATUS } from '@/lib/statuses';
 import { KanbanBoard } from '@/components/KanbanBoard';
 import { MergeDialog } from '@/components/MergeDialog';
+import { ApprovalDialog } from '@/components/ApprovalDialog';
 import { FilterBar } from '@/components/FilterBar';
 import { RequirementViewToggle } from '@/components/RequirementViewToggle';
 import {
@@ -31,6 +33,8 @@ function BoardView() {
   const [reqs, setReqs] = useState([]);
   const [error, setError] = useState('');
   const [mergeSource, setMergeSource] = useState(null);
+  // 완료로 드래그된 카드. 승인 창이 이 값을 보고 열린다.
+  const [approvalTarget, setApprovalTarget] = useState(null);
 
   // 목록과 같은 URL 파라미터를 읽는다. 목록에서 필터를 걸고 보드로 넘어오면
   // 그대로 이어진다.
@@ -74,6 +78,23 @@ function BoardView() {
   }, [processAllowed, load]);
 
   async function handleStatusChange(card, newStatus) {
+    // 완료만 다르게 다룬다. 카드를 먼저 옮겨 놓고 창을 닫으면 되돌리는 순간이
+    // 깜빡여서 승인이 된 건지 만 건지 헷갈린다. 이 전환만 "성공한 뒤에
+    // 움직인다" — 낙관적 갱신을 하지 않는 유일한 경우다.
+    if (newStatus === DONE_STATUS) {
+      // 담당자 본인이면 창을 띄우지 않는다. 적게 한 다음 거절하는 것은 시간
+      // 낭비다. 서버도 같은 판정을 다시 하므로 여기는 안내일 뿐이다.
+      if (card.assignee?.id && card.assignee.id === identity.memberId) {
+        setError(
+          '담당자 본인은 승인할 수 없습니다. 브랜드 또는 본부의 다른 분께 확인을 요청해 주세요.'
+        );
+        return;
+      }
+      setError('');
+      setApprovalTarget(card);
+      return;
+    }
+
     const prevStatus = card.status;
     setReqs((prev) => prev.map((r) => (r.id === card.id ? { ...r, status: newStatus } : r)));
 
@@ -122,6 +143,20 @@ function BoardView() {
           onClose={() => setMergeSource(null)}
           onMerged={() => {
             setMergeSource(null);
+            load();
+          }}
+        />
+      )}
+      {approvalTarget && (
+        <ApprovalDialog
+          open
+          onOpenChange={(v) => {
+            if (!v) setApprovalTarget(null);
+          }}
+          requirement={approvalTarget}
+          brandId={approvalTarget.brand_id ?? identity.brandId}
+          onApproved={() => {
+            setApprovalTarget(null);
             load();
           }}
         />

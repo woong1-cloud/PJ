@@ -1,7 +1,7 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { requireBrandAccess } from '@/lib/permissions';
 import { errorResponse, ApiError } from '@/lib/apiError';
-import { BOARD_STATUSES, MERGED_STATUS } from '@/lib/statuses';
+import { DIRECT_STATUSES, MERGED_STATUS, DONE_STATUS } from '@/lib/statuses';
 import { computeCompletedAt } from '@/lib/completedAt';
 import { notifyStatusChange } from '@/lib/notify';
 
@@ -14,7 +14,12 @@ export async function PATCH(request, { params }) {
     if (status === MERGED_STATUS) {
       throw new ApiError(400, "'중복'은 중복처리로만 설정할 수 있습니다.");
     }
-    if (!BOARD_STATUSES.includes(status)) {
+    // 완료를 여기서 막는 것이 v1.4 의 핵심이다. 화면이 승인 창을 띄우게
+    // 되어 있지만, 서버가 관문이어야 그 화면을 우회해도 막힌다.
+    if (status === DONE_STATUS) {
+      throw new ApiError(400, '완료는 승인 절차로만 처리할 수 있습니다.');
+    }
+    if (!DIRECT_STATUSES.includes(status)) {
       throw new ApiError(400, '유효하지 않은 상태입니다.');
     }
 

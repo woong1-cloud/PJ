@@ -49,6 +49,22 @@ export function StatusGuide() {
         </tbody>
       </table>
 
+      <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm break-keep text-slate-600">
+        <h3 className="mb-1 font-medium text-slate-900">최종 승인</h3>
+        <p>
+          완료로 넘기려면 승인이 필요합니다. 그 요구사항을 볼 수 있는 사람이면
+          브랜드·본부 누구든 한 명이 승인하면 되고, 순서는 없습니다.
+        </p>
+        <p className="mt-1">
+          다만 <b>담당자 본인은 승인할 수 없습니다.</b> 만든 사람이 스스로 확인하면
+          점검이 되지 않기 때문입니다.
+        </p>
+        <p className="mt-1">
+          승인할 때 무엇을 확인했는지 적습니다. QA중·승인대기를 건너뛰고 바로 완료로
+          보낼 수도 있지만, 건너뛴 사실은 상태 이력에 남습니다.
+        </p>
+      </div>
+
       <p className="text-xs text-slate-400">
         중복은 직접 지정할 수 없고 중복처리를 통해서만 만들어집니다.
       </p>

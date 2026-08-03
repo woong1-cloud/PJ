@@ -10,7 +10,9 @@ import {
   MERGED_STATUS,
   REJECTED_STATUS,
   CANCELLED_STATUS,
+  APPROVAL_PENDING_STATUS,
 } from '@/lib/statuses';
+import { canApprove } from '@/lib/approval';
 import { statusStyle } from '@/lib/statusMeta';
 import { canSubmitForReview } from '@/lib/submitRequirement';
 import { isOverdue, toLocalDateString } from '@/lib/overdue';
@@ -22,6 +24,7 @@ import { ActivityFeed } from '@/components/ActivityFeed';
 import { StatusDurations } from '@/components/StatusDurations';
 import { ChecklistSection } from '@/components/ChecklistSection';
 import { RequirementDangerZone } from '@/components/RequirementDangerZone';
+import { ApprovalDialog } from '@/components/ApprovalDialog';
 import { canDeleteRequirement } from '@/lib/deleteRequirement';
 import {
   Select,
@@ -34,6 +37,8 @@ import {
 export function RequirementDetail({ id }) {
   const { identity } = useIdentity();
   const [editing, setEditing] = useState(false);
+  // 승인 창 열림 여부. 완료로 가려는 모든 경로가 이 창을 지난다.
+  const [approvalOpen, setApprovalOpen] = useState(false);
   const [data, setData] = useState(null);
   const [teamMembers, setTeamMembers] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -92,6 +97,28 @@ export function RequirementDetail({ id }) {
 
   async function changeStatus(status) {
     setActionError('');
+    // 완료는 상태 변경 API 가 받지 않는다. 보드와 같은 창을 띄운다 —
+    // 보드만 막아 두면 이 Select 가 우회로가 된다.
+    //
+    // 상세 API 는 assignee 를 { id, name } 으로 조인해 내려주는데 canApprove 는
+    // id 문자열을 본다. 객체를 그대로 넘기면 {...} === 'm1' 이 항상 거짓이라
+    // 담당자 본인 판정이 조용히 통과한다.
+    if (status === DONE_STATUS) {
+      const verdict = canApprove({
+        requirement: {
+          status: data?.requirement?.status,
+          assignee: data?.requirement?.assignee?.id ?? null,
+        },
+        actor: { memberId: identity.memberId, isGlobalAdmin: isGlobalAdmin(identity) },
+      });
+      if (!verdict.allowed) {
+        setActionError(verdict.reason);
+        return;
+      }
+      setApprovalOpen(true);
+      return;
+    }
+
     const res = await fetch(`/api/requirements/${id}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -396,6 +423,29 @@ export function RequirementDetail({ id }) {
             ) : (
               <p className="font-medium text-slate-900">{r.status}</p>
             )}
+
+            {/* 위 상태 Select 는 3차 이상에게만 보인다. 그런데 승인은 4차도 할
+                수 있어야 하므로, 이 버튼이 없으면 요청한 브랜드 담당자가 자기
+                건을 확인할 방법이 아예 없다. 3차 이상에게도 함께 보여준다 —
+                승인대기에서 할 일은 Select 를 뒤지는 게 아니라 이 버튼이다. */}
+            {r.status === APPROVAL_PENDING_STATUS &&
+              canApprove({
+                requirement: { status: r.status, assignee: r.assignee?.id ?? null },
+                actor: { memberId: identity.memberId, isGlobalAdmin: isGlobalAdmin(identity) },
+              }).allowed && (
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setApprovalOpen(true)}
+                    className="w-full rounded-lg bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-700"
+                  >
+                    승인하고 완료
+                  </button>
+                  <p className="mt-1 text-xs text-slate-500">
+                    무엇을 확인했는지 적으면 완료로 넘어갑니다.
+                  </p>
+                </div>
+              )}
             {/* 4차 요청자에게 보이는 유일한 제출 수단이다. 3차 이상은 위 Select
                 로 바로 옮길 수 있으므로 중복해서 보여주지 않는다.
                 이 버튼이 없던 동안 4차가 올린 건은 '작성중'에 머물렀고,
@@ -539,6 +589,15 @@ export function RequirementDetail({ id }) {
         brandId={requirementBrandId}
         history={history}
         memberId={identity.memberId}
+      />
+
+      {/* 완료로 가는 두 입구(Select, 승인 버튼)가 같은 창을 연다. */}
+      <ApprovalDialog
+        open={approvalOpen}
+        onOpenChange={setApprovalOpen}
+        requirement={r}
+        brandId={requirementBrandId}
+        onApproved={load}
       />
 
       {/* 영구 삭제는 화면 맨 아래, 전체 관리자에게만. 서버도 같은 판정을 다시 한다. */}
