@@ -25,11 +25,6 @@ function Meta({ req }) {
           {req.project.name}
         </span>
       )}
-      {/* 유형은 목록에서 가장 먼저 읽히는 축이다 — '오류'가 섞여 있는지가
-          훑을 때 제일 궁금하다. 미분류(0019 이전 건)는 아무것도 안 그린다. */}
-      {req.requirement_type && (
-        <span className="rounded bg-slate-100 px-1.5 text-slate-600">{req.requirement_type}</span>
-      )}
       {req.is_confidential && <ConfidentialBadge />}
       {req.image_count > 0 && <span>📎 {req.image_count}</span>}
       {/* 레드마인 인계 상태. 'none'(아직 넘길 단계 아님)이면 아무것도 안 그린다 —
@@ -98,6 +93,10 @@ export function RequirementList({ requirements, sort, onSort, today, onMerge }) 
                   '미분류 · 공통' 처럼 붙여봤더니 한 덩어리로 읽혀서 아무도
                   채널로 인식하지 못했다. */}
               <th className="w-20 px-3 py-2">채널</th>
+              {/* 유형은 값이 2글자 고정이라 좁은 칸에 딱 맞는다. 제목 아래
+                  줄에 배지로 두면 프로젝트명·첨부 표시와 섞여 눈에 안 든다 —
+                  짧은 고정값은 컬럼, 긴 자유값은 제목 아래가 기준이다. */}
+              <th className="w-16 px-3 py-2">유형</th>
               <SortableTh label="상태" sortKey="status" sort={sort} onSort={onSort} className="w-24" />
               <th className="px-3 py-2">제목</th>
               <th className="w-28 px-3 py-2">카테고리</th>
@@ -134,6 +133,11 @@ export function RequirementList({ requirements, sort, onSort, today, onMerge }) 
                 }`}
               >
                 <td className="px-3 py-2 text-slate-500">{req.channel ?? '—'}</td>
+                {/* 0019 이전 건은 값이 없다. 빈칸으로 두면 화면이 깨진 것처럼
+                    보이므로 '—' 를 찍는다 — 다른 미지정 칸(예상·완료)과 같은 표기다. */}
+                <td className="px-3 py-2 text-slate-500">
+                  {req.requirement_type ?? <span className="text-slate-300">—</span>}
+                </td>
                 <td className="px-3 py-2">
                   <StatusBadge status={req.status} />
                 </td>
@@ -194,7 +198,8 @@ export function RequirementList({ requirements, sort, onSort, today, onMerge }) 
             </div>
             <p className="mt-2 font-medium text-slate-900">{req.title}</p>
             <p className="mt-1 flex items-center gap-2 text-xs text-slate-500">
-              {req.channel ?? '—'} · {req.category?.category_name ?? '미분류'} · {req.requester?.name ?? '—'}
+              {req.requirement_type ?? '미분류'} · {req.channel ?? '—'} ·{' '}
+              {req.category?.category_name ?? '미분류'} · {req.requester?.name ?? '—'}
               <DateCell req={req} today={today} />
               <Meta req={req} />
             </p>

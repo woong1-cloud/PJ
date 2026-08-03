@@ -47,6 +47,13 @@ export function RequirementCard({
             {req.brand_name}
           </span>
         )}
+        {/* 보드에서도 유형이 보여야 한다. 카드에 상태는 컬럼이 대신하므로
+            남는 정보 중 훑을 때 가장 먼저 궁금한 것이 유형이다. */}
+        {req.requirement_type && (
+          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600">
+            {req.requirement_type}
+          </span>
+        )}
         {req.priority && PRIORITY_STYLE[req.priority] && (
           <span className={`rounded px-1.5 py-0.5 text-[11px] ${PRIORITY_STYLE[req.priority]}`}>
             {req.priority}

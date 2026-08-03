@@ -260,12 +260,25 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
                 ))}
               </SelectContent>
             </Select>
-            {/* 고르기 전에는 무엇을 고르는 건지 알기 어렵다. 고르면 그 뜻만 남긴다. */}
-            <p className="text-xs text-slate-400">
-              {form.requirementType
-                ? TYPE_HINTS[form.requirementType]
-                : '신규 · 개선 · 오류 · 문의 중 하나'}
-            </p>
+            {/* 등록하는 사람이 늘 판단할 수 있는 값이 아니다. 온라인 MD 입장에서
+                "이게 신규 과제인지 기존 개선인지"가 애매한 경우가 실제로 많고,
+                그때 억지로 고르게 하면 아무거나 골라 데이터가 더러워진다.
+                그래서 필수가 아니고, 그 사실과 네 값의 뜻을 여기서 밝힌다.
+                비워 두면 IT 가 검토를 시작할 때 채운다(StartReviewDialog). */}
+            {form.requirementType ? (
+              <p className="text-xs text-slate-500">{TYPE_HINTS[form.requirementType]}</p>
+            ) : (
+              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 break-keep">
+                <p className="mb-1 text-slate-600">모르겠으면 비워 두셔도 됩니다 — IT가 검토하며 정합니다.</p>
+                <ul className="flex flex-col gap-0.5">
+                  {REQUIREMENT_TYPES.map((t) => (
+                    <li key={t}>
+                      <b className="text-slate-700">{t}</b> · {TYPE_HINTS[t]}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
           <div className="flex flex-col gap-1">
             <Label htmlFor="channel">채널</Label>

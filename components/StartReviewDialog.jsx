@@ -17,8 +17,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { REVIEW_IN_PROGRESS_STATUS } from '@/lib/statuses';
+import { REQUIREMENT_TYPES, TYPE_HINTS } from '@/lib/requirementTypes';
 
-// 착수 창 — 검토대기에서 검토중으로 옮길 때 담당자와 예상 배포일을 묻는다.
+// 착수 창 — 검토대기에서 검토중으로 옮길 때 담당자·예상 배포일을 묻고,
+// 유형이 비어 있으면 그것까지 함께 받는다.
 //
 // 이 순간인 이유: 등록 시점에는 브랜드가 두 값을 알 수 없다. IT가 정하는
 // 값이고, IT가 그 건을 처음 손대는 순간이 여기다. 실제로 배포 후 데이터를
@@ -29,7 +31,7 @@ import { REVIEW_IN_PROGRESS_STATUS } from '@/lib/statuses';
 // 아예 안 옮기고 그냥 일해 버린다 — 그러면 보드가 현실과 어긋나고, 그게 이런
 // 툴이 죽는 가장 흔한 방식이다. 막지 않되 기본값을 채우는 쪽으로 둔다.
 //
-// 새 라우트를 만들지 않는다. 이미 있는 셋을 순서대로 부르고, 상태를 마지막에
+// 새 라우트를 만들지 않는다. 이미 있는 것들을 순서대로 부르고, 상태를 마지막에
 // 보낸다 — 앞의 둘이 실패하면 카드가 움직이지 않아서 다시 시도할 수 있다.
 // 상태를 먼저 보내면 "옮겨는 갔는데 값은 안 들어간" 상태가 조용히 남는다.
 //
@@ -43,6 +45,10 @@ export function StartReviewDialog({
   onStarted,
 }) {
   const [assignee, setAssignee] = useState(null);
+  // 유형은 등록하는 브랜드가 판단하기 어려울 수 있어 필수가 아니다. 비어 있는
+  // 채로 넘어온 건은 IT 가 검토를 시작하는 이 순간에 채운다 — 담당자·예상일과
+  // 같은 자리다. 이미 값이 있으면 묻지 않는다(브랜드의 판단을 덮지 않는다).
+  const [requirementType, setRequirementType] = useState(null);
   const [expectedDate, setExpectedDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -52,10 +58,13 @@ export function StartReviewDialog({
     setWasOpen(open);
     if (open) {
       setAssignee(null);
+      setRequirementType(null);
       setExpectedDate('');
       setError('');
     }
   }
+
+  const needsType = !requirement?.requirement_type;
 
   async function send(url, method, body) {
     const res = await fetch(url, {
@@ -77,6 +86,12 @@ export function StartReviewDialog({
         await send(`/api/requirements/${requirement.id}/assignee`, 'PATCH', {
           brandId,
           assignee,
+        });
+      }
+      if (requirementType) {
+        await send(`/api/requirements/${requirement.id}`, 'PATCH', {
+          brandId,
+          requirementType,
         });
       }
       if (expectedDate) {
@@ -130,6 +145,35 @@ export function StartReviewDialog({
               </SelectContent>
             </Select>
           </div>
+
+          {/* 등록할 때 비워 두고 온 건에만 묻는다. 값이 있으면 이 칸이 아예
+              안 보이므로 창이 그만큼 짧아진다. */}
+          {needsType && (
+            <div className="flex flex-col gap-1">
+              <label className="text-slate-600" htmlFor="start-type">
+                유형
+              </label>
+              <Select
+                items={REQUIREMENT_TYPES.map((t) => ({ value: t, label: t }))}
+                value={requirementType}
+                onValueChange={setRequirementType}
+              >
+                <SelectTrigger id="start-type" className="w-full">
+                  <SelectValue placeholder="선택하세요" />
+                </SelectTrigger>
+                <SelectContent>
+                  {REQUIREMENT_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-400">
+                {requirementType ? TYPE_HINTS[requirementType] : '등록할 때 비어 있던 값입니다'}
+              </p>
+            </div>
+          )}
 
           <div className="flex flex-col gap-1">
             <label className="text-slate-600" htmlFor="start-date">
