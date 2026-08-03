@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ImageDropzone } from '@/components/ImageDropzone';
-import { CHANNELS, DEFAULT_CHANNEL } from '@/lib/channels';
+import { CHANNELS } from '@/lib/channels';
 import { REQUIREMENT_TYPES, TYPE_HINTS } from '@/lib/requirementTypes';
 
 const LEVELS = ['상', '중', '하'];
@@ -31,6 +31,8 @@ const LEVEL_STYLE = {
   하: { on: 'border-slate-300 bg-slate-100 text-slate-600', off: 'border-slate-200 text-slate-400 hover:bg-slate-50' },
 };
 
+// 버튼 높이를 h-8 로 고정한다. 옆 칸의 Select 트리거·Input 이 h-8 인데 py 로
+// 잡으면 34px 이 되어 2px 어긋나고, 나란히 둔 두 칸의 밑선이 안 맞는다.
 function LevelSelect({ id, value, onChange }) {
   return (
     <div id={id} className="flex gap-1.5">
@@ -39,7 +41,7 @@ function LevelSelect({ id, value, onChange }) {
           key={level}
           type="button"
           onClick={() => onChange(value === level ? '' : level)}
-          className={`flex-1 rounded-lg border px-2 py-1.5 text-sm transition-colors ${
+          className={`h-8 flex-1 rounded-lg border px-2 text-sm transition-colors ${
             value === level ? LEVEL_STYLE[level].on : LEVEL_STYLE[level].off
           }`}
         >
@@ -62,8 +64,16 @@ function emptyForm() {
     priority: '',
     requestDate: todayLocal(),
     category: 'none',
-    // 채널은 '선택 안 함'이 없다. 비워두면 채널별 집계에서 그만큼이 샌다.
-    channel: DEFAULT_CHANNEL,
+    // 채널은 기본값을 두지 않는다.
+    //
+    // 예전에는 '공통'이 미리 박혀 있었다. 아무도 안 건드리면 전부 공통이
+    // 되는데, 그게 그럴듯한 값이라 틀린 줄도 모른다 — 유형처럼 빈칸으로
+    // 보이면 눈에 띄지만, '공통'은 누군가 고른 값처럼 보인다.
+    //
+    // 그래서 유형과 반대로 필수로 받는다. 유형은 등록하는 사람이 판단하지
+    // 못할 수 있는 값이고, 채널("내가 어디에 대해 요청하는가")은 모를 수가
+    // 없는 값이다. 모르는 값은 비워 두게 하고, 아는 값은 받아 낸다.
+    channel: '',
     // 유형은 기본값을 두지 않는다. '신규'를 미리 박아 두면 오류 신고까지
     // 신규로 들어오고, 그 순간 이 값은 집계에 쓸 수 없게 된다.
     requirementType: '',
@@ -106,6 +116,18 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
   // 나중에 붙이거나 내용을 더 다듬으려는 경우가 실제로 있다. 그래서 둘 다 둔다.
   async function handleSubmit(event, submitForReview) {
     event.preventDefault();
+
+    // 임시저장에도 똑같이 건다. 초안이라고 봐주면 그 초안이 그대로 제출되고,
+    // 서버의 기본값(공통)이 조용히 채워진다 — 막으려던 그 일이다.
+    //
+    // 제목의 required 는 브라우저가 봐 주지만 그건 type="submit" 일 때뿐이고,
+    // 임시저장은 type="button" 이라 검사가 돌지 않는다. 채널은 Select 라
+    // 어느 쪽이든 브라우저가 봐 주지 않으므로 여기서 직접 본다.
+    if (!form.channel) {
+      setError('채널을 선택해 주세요.');
+      return;
+    }
+
     setSubmitting(true);
     setError('');
     try {
@@ -235,9 +257,23 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
                 <Label htmlFor="note">비고</Label>
                 <Textarea
                   id="note"
-                  rows={2}
+                  rows={3}
                   value={form.note}
                   onChange={(e) => updateField('note', e.target.value)}
+                />
+              </div>
+
+              {/* 첨부는 속성이 아니라 내용이다. 기획서와 스크린샷은 요구사항의
+                  일부지 메타데이터가 아니므로 본문 쪽에 둔다.
+                  실용적인 이유도 있다 — 파일을 넷다섯 붙이면 썸네일이 격자로
+                  깔리는데, 오른쪽 좁은 칸에서는 그게 답답하다. 그리고 오른쪽만
+                  길어져 왼쪽 아래가 비던 것도 이걸로 메워진다. */}
+              <div className="flex flex-col gap-1">
+                <Label>첨부</Label>
+                <ImageDropzone
+                  files={imageFiles}
+                  onAdd={(added) => setImageFiles((prev) => [...prev, ...added])}
+                  onRemove={(i) => setImageFiles((prev) => prev.filter((_, idx) => idx !== i))}
                 />
               </div>
             </div>
@@ -294,14 +330,16 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <Label htmlFor="channel">채널</Label>
+                  <Label htmlFor="channel">
+                    채널 <span className="text-rose-500">*</span>
+                  </Label>
                   <Select
                     items={CHANNELS.map((c) => ({ value: c, label: c }))}
-                    value={form.channel}
+                    value={form.channel || null}
                     onValueChange={(value) => updateField('channel', value)}
                   >
                     <SelectTrigger id="channel" className="w-full">
-                      <SelectValue />
+                      <SelectValue placeholder="선택하세요" />
                     </SelectTrigger>
                     <SelectContent>
                       {CHANNELS.map((c) => (
@@ -365,15 +403,6 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <Label>첨부</Label>
-                <ImageDropzone
-                  files={imageFiles}
-                  onAdd={(added) => setImageFiles((prev) => [...prev, ...added])}
-                  onRemove={(i) => setImageFiles((prev) => prev.filter((_, idx) => idx !== i))}
-                />
               </div>
             </div>
           </div>

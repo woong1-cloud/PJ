@@ -47,21 +47,46 @@ function Meta({ req }) {
 //
 // 상세의 Select 컴포넌트를 쓰지 않고 기본 select 를 쓴다 — 표 안에 40px 짜리
 // 트리거가 줄마다 들어가면 행 높이가 두 배가 되고, 훑는 화면이 아니게 된다.
+//
+// 평소에는 그냥 글자로 보이고, 마우스를 올렸을 때만 편집 가능한 칸처럼
+// 보인다. 이유가 둘이다.
+//
+// 첫째, 브라우저가 그리는 화살표를 지운다(appearance-none). 유형 칸은 폭이
+// 좁은데 화살표가 16px 을 먹어서 '신규' 와 겹쳤다. 폭을 늘려 피하는 대신
+// 화살표를 없애면 애초에 겹칠 것이 없다.
+//
+// 둘째, 목록은 열에 아홉은 읽는 화면이다. 줄마다 테두리와 화살표가 서 있으면
+// 표가 아니라 폼으로 읽힌다. 편집은 손을 뻗은 순간에만 보이면 된다.
+//
+// 이 표는 md 이상에서만 그려지므로(모바일은 카드) hover 가 없는 환경은
+// 신경 쓰지 않아도 된다. 모바일에서는 상세 화면에서 같은 값을 바꾼다.
+// focus-within 을 같이 두는 이유는 키보드로 탭해 온 사람에게도 같은 표시가
+// 필요하기 때문이다.
 function CellSelect({ value, options, onChange, placeholder }) {
   return (
-    <select
-      value={value ?? ''}
-      onChange={(e) => onChange(e.target.value)}
-      onClick={(e) => e.stopPropagation()}
-      className="w-full rounded border-0 bg-transparent px-0 py-0.5 text-sm text-slate-600 hover:bg-slate-100 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-300"
-    >
-      <option value="">{placeholder}</option>
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-    </select>
+    <div className="group/cell relative -mx-1 rounded transition-colors hover:bg-white hover:ring-1 hover:ring-slate-300 focus-within:bg-white focus-within:ring-1 focus-within:ring-indigo-400">
+      {/* pr-4 는 화살표가 없을 때도 자리를 비워 둔다. 안 그러면 마우스를
+          올리는 순간 글자가 왼쪽으로 밀려 칸이 덜컹인다. */}
+      <select
+        value={value ?? ''}
+        onChange={(e) => onChange(e.target.value)}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full cursor-pointer appearance-none rounded border-0 bg-transparent px-1 py-0.5 pr-4 text-sm text-slate-600 focus:outline-none"
+      >
+        <option value="">{placeholder}</option>
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <span
+        aria-hidden
+        className="pointer-events-none absolute top-1/2 right-1 -translate-y-1/2 text-[10px] text-slate-400 opacity-0 transition-opacity group-hover/cell:opacity-100 group-focus-within/cell:opacity-100"
+      >
+        ▾
+      </span>
+    </div>
   );
 }
 
@@ -133,7 +158,7 @@ export function RequirementList({
               {/* 유형은 값이 2글자 고정이라 좁은 칸에 딱 맞는다. 제목 아래
                   줄에 배지로 두면 프로젝트명·첨부 표시와 섞여 눈에 안 든다 —
                   짧은 고정값은 컬럼, 긴 자유값은 제목 아래가 기준이다. */}
-              <th className="w-16 px-3 py-2">유형</th>
+              <th className="w-20 px-3 py-2">유형</th>
               <SortableTh label="상태" sortKey="status" sort={sort} onSort={onSort} className="w-24" />
               <th className="px-3 py-2">제목</th>
               <th className="w-28 px-3 py-2">카테고리</th>
@@ -206,10 +231,13 @@ export function RequirementList({
                   {req.priority ?? '—'}
                 </td>
                 <td className="px-3 py-2 text-slate-600">
+                  {/* 유형 칸과 같은 '—' 를 쓴다. 같은 표에서 빈 값을 한 칸은
+                      '—', 옆 칸은 '미지정' 으로 적으면 두 표기가 다른 뜻인
+                      줄 알고 읽게 된다. */}
                   {onPatch ? (
                     <CellSelect
                       value={req.assignee?.id}
-                      placeholder="미지정"
+                      placeholder="—"
                       options={teamMembers.map((m) => ({ value: m.id, label: m.name }))}
                       onChange={(v) => onPatch(req.id, { assignee: v || null })}
                     />
