@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-export function BrandSwitcher() {
+export function BrandSwitcher({ readOnly = false }) {
   const { identity } = useIdentity();
   const globalAdmin = isGlobalAdmin(identity);
   const [brands, setBrands] = useState([]);
@@ -40,7 +40,12 @@ export function BrandSwitcher() {
   }
 
   // 오갈 곳이 없으면 드롭다운을 띄울 이유가 없다.
-  if (brands.length <= 1) {
+  //
+  // readOnly 는 모바일 상단바가 쓴다. 폰에서 브랜드를 바꾸는 사람은 전체
+  // 관리자뿐이고 그 사람은 데스크톱에서 일한다. 다만 어느 브랜드를 보고
+  // 있는지는 반드시 보여야 한다 — 모르는 채로 요구사항을 올리는 것이 가장
+  // 위험하다. 그래서 전환만 막고 표시는 남긴다.
+  if (readOnly || brands.length <= 1) {
     return <span className="text-sm font-medium text-slate-900">{current?.name ?? ''}</span>;
   }
 
