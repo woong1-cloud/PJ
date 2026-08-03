@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { requirementsToCsv, csvFileName } from '@/lib/csv';
 import { useIdentity } from '@/components/IdentityProvider';
 import { RequirementViewToggle } from '@/components/RequirementViewToggle';
 import { canProcess } from '@/lib/tiers';
@@ -115,12 +116,41 @@ function RequirementsView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiQuery, reloadToken]);
 
+  // 화면에 보이는 목록을 그대로 CSV 로 내려받는다. 필터·정렬이 이미 적용된
+  // sortedRequirements 를 쓰는 것이 요점이다 — "지금 보고 있는 것"과 파일이
+  // 어긋나면 사람들은 파일을 믿지 않는다.
+  function downloadCsv() {
+    const csv = requirementsToCsv(sortedRequirements);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    // 브랜드 이름은 넣지 않는다. identity 에 없어서 얻으려면 요청이 하나 더
+    // 필요한데, 파일명 하나를 위해 왕복을 추가할 이유가 없다. 브랜드를 바꿔
+    // 가며 두 번 받으면 브라우저가 (1) 을 붙인다. csvFileName 은 브랜드를
+    // 받도록 열어 뒀으니, 나중에 브랜드를 이미 들고 있는 화면이 생기면 넘긴다.
+    a.download = csvFileName(null, today);
+    a.click();
+    // 안 풀어주면 페이지가 살아 있는 동안 blob 이 메모리에 남는다.
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold text-slate-900">요구사항 목록</h1>
         <div className="flex items-center gap-2">
           {processAllowed && <RequirementViewToggle current="list" />}
+          {/* 지금 화면에 보이는 것을 그대로 내려받는다. 서버에 다시 물으면
+              필터가 어긋날 수 있고, 사용자는 "화면과 다른 파일"을 받는다. */}
+          <button
+            type="button"
+            onClick={downloadCsv}
+            disabled={sortedRequirements.length === 0}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-40"
+          >
+            CSV
+          </button>
           <button
             onClick={() => setDialogOpen(true)}
             className="rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white transition-colors hover:bg-indigo-700"
