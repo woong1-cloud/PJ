@@ -3,11 +3,12 @@ import { requireBrandAccess } from '@/lib/permissions';
 import { errorResponse, ApiError } from '@/lib/apiError';
 import { TIER_RANK } from '@/lib/tiers';
 import { INITIAL_STATUS, REVIEW_PENDING_STATUS, CLOSED_STATUSES } from '@/lib/statuses';
+import { HANDOFF_STATUSES } from '@/lib/redmineLink';
 import { CHANNELS, DEFAULT_CHANNEL } from '@/lib/channels';
 
 const BASE_COLUMNS =
   'id, priority, urgency, request_date, status, title, is_confidential, sprint_tag, duplicate_count, ' +
-  'completed_at, expected_release_date, ' +
+  'completed_at, expected_release_date, redmine_url, ' +
   'project_id, project:projects(id, name), ' +
   'requester:team_members!requirements_requester_fkey(id, name), ' +
   'assignee:team_members!requirements_assignee_fkey(id, name), ' +
@@ -65,6 +66,13 @@ export async function GET(request) {
       if (withChannel && channel) query = query.eq('channel', channel);
       if (missing === 'assignee') query = query.is('assignee', null);
       if (missing === 'expectedDate') query = query.is('expected_release_date', null);
+      // 이것만 조건이 둘이다. '레드마인 미연결'은 컬럼이 비었다는 뜻이 아니라
+      // "넘어갔어야 하는데 안 넘어갔다"는 뜻이라, 상태 조건이 함께 붙어야
+      // 파라미터 이름과 결과가 일치한다. 작성중 건까지 잡아오면 대시보드
+      // 숫자와 목록 건수가 어긋난다.
+      if (missing === 'redmine') {
+        query = query.is('redmine_url', null).in('status', HANDOFF_STATUSES);
+      }
       if (q && q.trim()) query = query.ilike('title', `%${q.trim()}%`);
       // 종결된 건(완료·반려·취소·중복)은 기본으로 숨긴다. 끝난 건이 목록 상단을
       // 차지하면 지금 해야 할 일이 보이지 않는다.

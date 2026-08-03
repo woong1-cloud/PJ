@@ -28,6 +28,7 @@ import { ChecklistSection } from '@/components/ChecklistSection';
 import { RequirementDangerZone } from '@/components/RequirementDangerZone';
 import { ApprovalDialog } from '@/components/ApprovalDialog';
 import { StartReviewDialog } from '@/components/StartReviewDialog';
+import { RedmineLinkSection } from '@/components/RedmineLinkSection';
 import { canDeleteRequirement } from '@/lib/deleteRequirement';
 import {
   Select,
@@ -571,6 +572,14 @@ export function RequirementDetail({ id }) {
               <MetaRow label="요청일" value={r.request_date ?? '-'} />
             </div>
           </div>
+
+          <RedmineLinkSection
+            requirementId={id}
+            brandId={requirementBrandId}
+            requirement={r}
+            canEdit={processAllowed}
+            onSaved={load}
+          />
           {r.is_confidential && <p className="text-rose-600">비공개</p>}
         </aside>
       </div>

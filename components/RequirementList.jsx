@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { DONE_STATUS, MERGED_STATUS } from '@/lib/statuses';
 import { statusStyle } from '@/lib/statusMeta';
 import { isOverdue } from '@/lib/overdue';
+import { redmineLinkState } from '@/lib/redmineLink';
 
 function StatusBadge({ status }) {
   return <Badge className={statusStyle(status)}>{status}</Badge>;
@@ -26,6 +27,13 @@ function Meta({ req }) {
       )}
       {req.is_confidential && <ConfidentialBadge />}
       {req.image_count > 0 && <span>📎 {req.image_count}</span>}
+      {/* 레드마인 인계 상태. 'none'(아직 넘길 단계 아님)이면 아무것도 안 그린다 —
+          작성중·검토대기에까지 배지를 깔면 목록 전체가 배지밭이 되고, 정작
+          봐야 할 개발중 건에서 눈에 안 들어온다. */}
+      {redmineLinkState(req) === 'linked' && <span className="text-slate-500">↗ 레드마인</span>}
+      {redmineLinkState(req) === 'missing' && (
+        <span className="rounded bg-amber-50 px-1.5 text-amber-700">미연결</span>
+      )}
       {req.status === MERGED_STATUS && <span>→ 병합됨</span>}
     </span>
   );

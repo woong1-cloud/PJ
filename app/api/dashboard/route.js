@@ -34,7 +34,7 @@ export async function GET(request) {
         .from('requirements')
         // assignee·expected_release_date 는 '손볼 것'이 쓴다. 두 값이 비어
         // 있는 건이 지금 8/8 이고, 그게 이 화면이 가장 먼저 말해야 할 것이다.
-        .select('id, brand_id, status, request_date, completed_at, assignee, expected_release_date')
+        .select('id, brand_id, status, request_date, completed_at, assignee, expected_release_date, redmine_url')
         .in('brand_id', brandIds);
       if (reqError) throw reqError;
       requirements = data ?? [];
