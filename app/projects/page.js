@@ -129,7 +129,7 @@ export default function ProjectsPage() {
       ) : view === 'roadmap' ? (
         <RoadmapView projects={projects} />
       ) : (
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full min-w-[36rem] text-sm">
           <thead>
             <tr className="border-b border-slate-200 text-left text-slate-500">
               <th className="py-2">프로젝트</th>
@@ -142,7 +142,7 @@ export default function ProjectsPage() {
               <ProjectRow key={p.id} project={p} scope={scope} brandId={identity.brandId} />
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
 
       <ProjectFormDialog

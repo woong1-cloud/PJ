@@ -29,7 +29,7 @@ export function PendingMembersSection({ members, onAssign }) {
             아직 어느 브랜드에도 배치되지 않은 팀원입니다. 아래 소속·직무·신청 브랜드는 본인이
             적은 내용이라 그대로 권한이 되지는 않습니다 — 확인 후 배치해 주세요.
           </p>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full min-w-[36rem] text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-left text-slate-500">
                 <th className="py-2">이름</th>
@@ -66,7 +66,7 @@ export function PendingMembersSection({ members, onAssign }) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </>
       )}
     </section>

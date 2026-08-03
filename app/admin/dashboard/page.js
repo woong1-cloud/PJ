@@ -164,7 +164,7 @@ export default function AdminDashboardPage() {
         {data.projects.length === 0 ? (
           <p className="text-sm text-slate-500">등록된 프로젝트가 없습니다.</p>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full min-w-[36rem] text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-left text-slate-500">
                 <th className="py-2">프로젝트</th>
@@ -196,7 +196,7 @@ export default function AdminDashboardPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </section>
 

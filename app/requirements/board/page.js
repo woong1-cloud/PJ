@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useIdentity } from '@/components/IdentityProvider';
 import { canProcess } from '@/lib/tiers';
 import { buildRequirementsQuery } from '@/lib/requirementFilters';
@@ -132,6 +133,21 @@ function BoardView() {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* 보드는 컬럼 일곱 개(1260px)에 카드를 끌어 옮기는 화면이라 폰에서는
+          드래그가 스크롤 제스처와 충돌해 사실상 다룰 수 없다.
+          모바일에서는 뷰 토글도 감췄으므로 여기 도달하는 것은 주소를 직접 연
+          경우뿐이다. 대체 보드를 만들지 않고 빠져나갈 길만 준다. */}
+      <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm md:hidden">
+        <p className="font-medium text-slate-900">보드는 PC에서 사용해 주세요</p>
+        <p className="mt-1 break-keep text-slate-500">
+          컬럼이 일곱 개이고 카드를 끌어 옮기는 화면이라 폰에서는 다루기 어렵습니다.
+        </p>
+        <Link href="/requirements" className="mt-3 inline-block text-indigo-600 underline">
+          목록으로 보기
+        </Link>
+      </div>
+
+      <div className="hidden flex-col gap-4 md:flex">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold text-slate-900">요구사항 보드</h1>
         <RequirementViewToggle current="board" />
@@ -158,6 +174,7 @@ function BoardView() {
         onMerge={setMergeSource}
         today={today}
       />
+      </div>
       {mergeSource && (
         <MergeDialog
           source={mergeSource}

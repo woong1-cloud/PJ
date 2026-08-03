@@ -76,7 +76,7 @@ export function BrandListSection({ brands, teamMembers, identity, onCreate, onEd
           + 새 브랜드
         </button>
       </div>
-      <table className="w-full text-sm">
+      <div className="overflow-x-auto"><table className="w-full min-w-[36rem] text-sm">
         <thead>
           <tr className="border-b border-slate-200 text-left text-slate-500">
             <th className="py-2">이름</th>
@@ -197,7 +197,7 @@ export function BrandListSection({ brands, teamMembers, identity, onCreate, onEd
             );
           })}
         </tbody>
-      </table>
+      </table></div>
 
       {/* brands 를 넘기지 않으므로 다이얼로그에 브랜드 선택은 뜨지 않는다 —
           지금 펼쳐 둔 브랜드에 그대로 배치된다. */}

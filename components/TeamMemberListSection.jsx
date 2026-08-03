@@ -32,7 +32,7 @@ export function TeamMemberListSection({
           + 새 직원
         </button>
       </div>
-      <table className="w-full text-sm">
+      <div className="overflow-x-auto"><table className="w-full min-w-[36rem] text-sm">
         <thead>
           <tr className="border-b border-slate-200 text-left text-slate-500">
             <th className="py-2">이름</th>
@@ -147,7 +147,7 @@ export function TeamMemberListSection({
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
     </section>
   );
 }

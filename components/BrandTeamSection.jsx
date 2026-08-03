@@ -66,7 +66,7 @@ export function BrandTeamSection({ members, teamMembers, identity, onChanged }) 
         </button>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <table className="w-full text-sm">
+      <div className="overflow-x-auto"><table className="w-full min-w-[36rem] text-sm">
         <thead>
           <tr className="border-b border-slate-200 text-left text-slate-500">
             <th className="py-2">이름</th>
@@ -123,7 +123,7 @@ export function BrandTeamSection({ members, teamMembers, identity, onChanged }) 
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
 
       <BrandTeamAssignDialog
         open={assignOpen}
