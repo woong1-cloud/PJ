@@ -28,7 +28,21 @@ export function StatusGuide() {
         ))}
       </div>
 
-      <table className="w-full text-sm">
+      {/* 모바일에서는 표 대신 항목 목록으로 떨어뜨린다. 세 칸짜리 표를 375px
+          에 밀어 넣으면 '뜻'과 '다음 행동'이 각각 한 글자씩 감긴다.
+          이 화면은 권한이 가장 낮은 요청자가 가장 자주 보는 곳이다.
+          데이터는 같은 STATUS_GUIDE 하나에서 온다 — 복제하지 않는다. */}
+      <div className="flex flex-col gap-2 md:hidden">
+        {STATUS_GUIDE.map((row) => (
+          <div key={row.status} className="rounded-lg border border-slate-200 bg-white p-3">
+            <Badge className={row.style}>{row.status}</Badge>
+            <p className="mt-1.5 text-sm break-keep text-slate-600">{row.meaning}</p>
+            <p className="mt-1 text-xs break-keep text-slate-500">다음 · {row.next}</p>
+          </div>
+        ))}
+      </div>
+
+      <table className="hidden w-full text-sm md:table">
         <thead>
           <tr className="border-b border-slate-200 text-left text-slate-500">
             <th className="w-24 py-2">상태</th>

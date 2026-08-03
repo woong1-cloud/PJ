@@ -89,7 +89,10 @@ export function NotificationBell() {
             onClick={() => setOpen(false)}
             aria-label="알림 닫기"
           />
-          <div className="absolute right-0 top-9 z-20 w-80 rounded-lg border border-slate-200 bg-white shadow-lg">
+          {/* 320px 고정이면 375px 화면에 겨우 들어가고 그보다 좁은 폰에서는
+              넘친다. 화면 폭에서 좌우 여백만 뺀 값을 상한으로 두되, 넓은
+              화면에서는 예전 폭(320px)을 넘지 않게 한다. */}
+          <div className="absolute right-0 top-11 z-20 w-[calc(100vw-2rem)] max-w-80 rounded-lg border border-slate-200 bg-white shadow-lg md:top-9">
             <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
               <span className="text-sm font-medium text-slate-900">알림</span>
               {unreadCount > 0 && (

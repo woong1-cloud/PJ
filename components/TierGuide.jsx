@@ -23,7 +23,21 @@ export function TierGuide() {
         </p>
       </div>
 
-      <table className="w-full text-sm">
+      {/* 모바일에서는 표 대신 항목 목록으로. '할 수 있는 일' 이 한 문장이라
+          375px 표에서는 서너 글자씩 감긴다. 데이터는 같은 TIER_ROWS 에서 온다. */}
+      <div className="flex flex-col gap-2 md:hidden">
+        {TIER_ROWS.map((row) => (
+          <div key={row.tier} className="rounded-lg border border-slate-200 bg-white p-3">
+            <p>
+              <span className="font-medium text-slate-900">{TIER_LABELS[row.tier]}</span>
+              <span className="ml-1.5 text-xs text-slate-400">{row.tier}</span>
+            </p>
+            <p className="mt-1 text-sm break-keep text-slate-600">{row.can}</p>
+          </div>
+        ))}
+      </div>
+
+      <table className="hidden w-full text-sm md:table">
         <thead>
           <tr className="border-b border-slate-200 text-left text-slate-500">
             <th className="w-32 py-2">등급</th>
