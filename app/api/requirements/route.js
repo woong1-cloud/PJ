@@ -17,6 +17,11 @@ const BASE_COLUMNS =
   'requirement_images(count)';
 const CHANNEL_COLUMNS = `${BASE_COLUMNS}, channel`;
 
+// 본문(As-Is·To-Be·비고)은 기본 조회에 넣지 않는다. 목록 화면은 제목만
+// 보여주는데 본문까지 실어 나르면 건수가 늘수록 그대로 낭비가 된다.
+// CSV 내보내기처럼 본문이 필요한 호출만 detail=true 로 요청한다.
+const DETAIL_SUFFIX = ', as_is, to_be, note';
+
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -45,6 +50,8 @@ export async function GET(request) {
     // (완료·반려·취소·중복). 목록 페이지와 보드가 이미 이 이름으로 쿼리를
     // 만들고 있어 지금 바꾸면 세 파일을 함께 고쳐야 하므로 이름은 둔다.
     const includeDone = searchParams.get('includeDone') === 'true';
+    // CSV 내보내기 전용. 화면 목록은 본문을 쓰지 않는다.
+    const detail = searchParams.get('detail') === 'true';
 
     const { tier, isGlobalAdmin } = await requireBrandAccess(brandId, '4차');
     const canSeeConfidential = isGlobalAdmin || TIER_RANK[tier] >= TIER_RANK['3차'];
@@ -83,14 +90,18 @@ export async function GET(request) {
       return query;
     }
 
-    let { data, error } = await build(CHANNEL_COLUMNS, { withChannel: true });
+    const columns = detail ? CHANNEL_COLUMNS + DETAIL_SUFFIX : CHANNEL_COLUMNS;
+    let { data, error } = await build(columns, { withChannel: true });
     // 42703 = undefined_column. 마이그레이션 0009 미적용 DB다. 이 목록은
     // 목록 페이지·보드·병합 다이얼로그가 모두 의존하므로, 새 컬럼 하나 때문에
     // 전부 500이 되면 안 된다. 물러날 때는 채널 필터도 함께 뺀다 — 없는
     // 컬럼으로는 거를 수 없기 때문이다(그 사이 채널 필터는 무시된다).
     // 0009 적용 후 지워도 되는 분기다.
     if (error?.code === '42703') {
-      ({ data, error } = await build(BASE_COLUMNS, { withChannel: false }));
+      ({ data, error } = await build(
+        detail ? BASE_COLUMNS + DETAIL_SUFFIX : BASE_COLUMNS,
+        { withChannel: false }
+      ));
     }
     if (error) throw error;
 

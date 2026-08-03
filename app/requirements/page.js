@@ -36,6 +36,8 @@ function RequirementsView() {
   const [mergeSource, setMergeSource] = useState(null);
   const [requirements, setRequirements] = useState([]);
   const [dialogOpen, setDialogOpen] = useState(false);
+  // CSV 는 본문을 받으러 한 번 더 다녀오므로 버튼이 응답해야 한다.
+  const [csvBusy, setCsvBusy] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
   const [sort, setSort] = useState({ key: 'request_date', dir: 'desc' });
   // 오늘 날짜는 렌더마다 새로 만들면 불필요한 재계산이 생기므로 한 번만 잡는다.
@@ -116,11 +118,32 @@ function RequirementsView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiQuery, reloadToken]);
 
-  // 화면에 보이는 목록을 그대로 CSV 로 내려받는다. 필터·정렬이 이미 적용된
-  // sortedRequirements 를 쓰는 것이 요점이다 — "지금 보고 있는 것"과 파일이
-  // 어긋나면 사람들은 파일을 믿지 않는다.
-  function downloadCsv() {
-    const csv = requirementsToCsv(sortedRequirements);
+  // CSV 는 본문(As-Is·To-Be·비고)까지 담는다. 제목만으로는 "우리가 뭘
+  // 요청했는지"를 알 수 없어서, 정리해 공유하는 문서로 쓸 수가 없다.
+  //
+  // 그런데 본문을 목록 조회에 늘 실으면 CSV 를 안 누르는 대부분의 화면
+  // 로딩까지 무거워진다. 그래서 누를 때 detail=true 로 한 번 더 받는다.
+  //
+  // 같은 apiQuery 에 detail 만 덧붙이므로 필터·정렬 조건은 화면과 동일하다.
+  // 정렬은 서버가 아니라 화면이 하므로 여기서 다시 적용한다.
+  async function downloadCsv() {
+    setCsvBusy(true);
+    setError('');
+    let rows = sortedRequirements;
+    try {
+      const res = await fetch(`/api/requirements?${apiQuery}&detail=true`);
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error ?? '내보내기에 실패했습니다.');
+      rows = sortRequirements(d.requirements ?? [], sort.key, sort.dir);
+    } catch (e) {
+      // 본문을 못 받아도 화면에 있는 것으로 내려준다 — 빈손으로 돌려보내는
+      // 것보다 낫다. 그 경우 본문 칸만 비어 있다.
+      setError(`${e.message} 본문 없이 내려받습니다.`);
+    } finally {
+      setCsvBusy(false);
+    }
+
+    const csv = requirementsToCsv(rows);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -146,10 +169,10 @@ function RequirementsView() {
           <button
             type="button"
             onClick={downloadCsv}
-            disabled={sortedRequirements.length === 0}
+            disabled={csvBusy || sortedRequirements.length === 0}
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-40"
           >
-            CSV
+            {csvBusy ? '준비 중...' : 'CSV'}
           </button>
           <button
             onClick={() => setDialogOpen(true)}
