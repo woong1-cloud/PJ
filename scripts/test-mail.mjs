@@ -46,7 +46,10 @@ console.log(`${host}:${port} 에 ${user} 로 접속합니다...`);
 // Gmail 은 인증한 계정과 다른 From 주소를 거부하거나 조용히 자기 주소로
 // 바꾼다. 후자가 더 나쁘다 — 발송은 성공했다고 나오는데 받는 쪽에는 엉뚱한
 // 주소가 찍혀서, 원인을 찾는 데 한참 걸린다. 보내기 전에 걸러 준다.
-const fromAddress = (env.SMTP_FROM || user).match(/<([^>]+)>/)?.[1] ?? env.SMTP_FROM ?? user;
+// || 를 쓴다. SMTP_FROM 이 빈 문자열이면 ?? 는 안 걸려서 fromAddress 가 ''
+// 이 되고, 아래 비교가 엉뚱한 오류 메시지를 낸다(lib/mailer.js 의 같은 주석 참조).
+const from = env.SMTP_FROM || user;
+const fromAddress = from.match(/<([^>]+)>/)?.[1] || from;
 if (host.includes('gmail') && fromAddress.toLowerCase() !== user.toLowerCase()) {
   console.error(`SMTP_FROM 의 주소(${fromAddress})가 SMTP_USER(${user})와 다릅니다.`);
   console.error('Gmail 은 인증한 계정 주소로만 보낼 수 있습니다. <> 안을 SMTP_USER 와 같게 맞춰 주세요.');
