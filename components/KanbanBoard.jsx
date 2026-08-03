@@ -55,6 +55,9 @@ export function KanbanBoard({
   canDragCard = () => true,
   canOpenCard = () => true,
   showBrandBadge = false,
+  // 지연 판정 기준일. 카드마다 new Date() 를 부르면 자정을 넘길 때 카드끼리
+  // 판정이 갈릴 수 있어 위에서 한 번 잡아 내려보낸다(목록과 같은 방식).
+  today,
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -102,6 +105,7 @@ export function KanbanBoard({
                 draggable={canDragCard(req)}
                 canOpen={canOpenCard(req)}
                 showBrandBadge={showBrandBadge}
+                today={today}
               />
             ))}
           </Column>

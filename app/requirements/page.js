@@ -118,6 +118,35 @@ function RequirementsView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiQuery, reloadToken]);
 
+  // 목록에서 값을 바로 바꾼다.
+  //
+  // 담당자 없는 6건을 채우려고 6번 들어갔다 나오는 것이 지금 가장 자주 하는
+  // 일이면서 가장 느리다. 여기서 바꾸면 한 번에 끝난다.
+  //
+  // 담당자와 유형은 서로 다른 라우트를 쓴다 — 담당자는 알림을 보내야 해서
+  // 전용 라우트가 있고(PATCH .../assignee), 유형은 내용 수정이다.
+  //
+  // 낙관적 갱신을 하지 않는다. 셀렉트는 고른 값이 바로 화면에 남아 있어서
+  // 사용자가 이미 반영된 것으로 본다. 실패하면 배너가 뜨고 다시 불러오므로
+  // 값이 원래대로 돌아간다 — 그때 무엇이 안 됐는지가 분명하다.
+  async function patchRequirement(id, patch) {
+    setError('');
+    const url =
+      'assignee' in patch
+        ? `/api/requirements/${id}/assignee`
+        : `/api/requirements/${id}`;
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brandId: identity.brandId, ...patch }),
+    });
+    if (!res.ok) {
+      const d = await res.json();
+      setError(d.error ?? '변경에 실패했습니다.');
+    }
+    setReloadToken((t) => t + 1);
+  }
+
   // CSV 는 본문(As-Is·To-Be·비고)까지 담는다. 제목만으로는 "우리가 뭘
   // 요청했는지"를 알 수 없어서, 정리해 공유하는 문서로 쓸 수가 없다.
   //
@@ -223,6 +252,8 @@ function RequirementsView() {
           onSort={handleSort}
           today={today}
           onMerge={processAllowed ? setMergeSource : undefined}
+          teamMembers={teamMembers}
+          onPatch={processAllowed ? patchRequirement : undefined}
         />
       )}
       {/* 보드와 같은 다이얼로그를 그대로 쓴다. 병합 규칙이 두 곳에 갈리면

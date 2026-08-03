@@ -4,6 +4,7 @@ import { DONE_STATUS, MERGED_STATUS } from '@/lib/statuses';
 import { statusStyle } from '@/lib/statusMeta';
 import { isOverdue } from '@/lib/overdue';
 import { redmineLinkState } from '@/lib/redmineLink';
+import { REQUIREMENT_TYPES } from '@/lib/requirementTypes';
 
 function StatusBadge({ status }) {
   return <Badge className={statusStyle(status)}>{status}</Badge>;
@@ -36,6 +37,31 @@ function Meta({ req }) {
       )}
       {req.status === MERGED_STATUS && <span>→ 병합됨</span>}
     </span>
+  );
+}
+
+// 표 안에서 쓰는 작은 셀렉트.
+//
+// 목록에서 값을 바꾸지 못하면 담당자 없는 6건을 채우려고 6번 들어갔다 나와야
+// 한다. 그게 지금 이 툴에서 가장 자주 하는 일인데 가장 느리다.
+//
+// 상세의 Select 컴포넌트를 쓰지 않고 기본 select 를 쓴다 — 표 안에 40px 짜리
+// 트리거가 줄마다 들어가면 행 높이가 두 배가 되고, 훑는 화면이 아니게 된다.
+function CellSelect({ value, options, onChange, placeholder }) {
+  return (
+    <select
+      value={value ?? ''}
+      onChange={(e) => onChange(e.target.value)}
+      onClick={(e) => e.stopPropagation()}
+      className="w-full rounded border-0 bg-transparent px-0 py-0.5 text-sm text-slate-600 hover:bg-slate-100 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-300"
+    >
+      <option value="">{placeholder}</option>
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -72,12 +98,23 @@ function SortableTh({ label, sortKey, sort, onSort, className = '' }) {
   );
 }
 
-// props: requirements, sort, onSort, today, onMerge
+// props: requirements, sort, onSort, today, onMerge, teamMembers, onPatch
+//
+// onPatch(id, patch) 를 주면 유형·담당자 칸이 편집 가능해진다. 3차 미만에게는
+// 주지 않는다 — 서버가 어차피 막지만, 눌러서 403 을 받는 길을 만들지 않는다.
 //
 // onMerge 를 주면 중복처리 열이 생긴다. 목록이 기본 뷰인데 중복처리가 보드에만
 // 있어서, 목록으로 훑다가 같은 요청 둘을 발견하면 보드로 옮겨 가야 했다.
 // 3차 미만에게는 주지 않는다(병합은 IT 판단이다).
-export function RequirementList({ requirements, sort, onSort, today, onMerge }) {
+export function RequirementList({
+  requirements,
+  sort,
+  onSort,
+  today,
+  onMerge,
+  teamMembers = [],
+  onPatch,
+}) {
   if (requirements.length === 0) {
     return <p className="text-sm text-slate-500">등록된 요구사항이 없습니다.</p>;
   }
@@ -101,9 +138,10 @@ export function RequirementList({ requirements, sort, onSort, today, onMerge }) 
               <th className="px-3 py-2">제목</th>
               <th className="w-28 px-3 py-2">카테고리</th>
               <SortableTh label="우선" sortKey="priority" sort={sort} onSort={onSort} className="w-16" />
-              {/* 담당자는 뺐다. 배정 전인 건이 대부분이라 거의 비어 있었고,
-                  화살표로 둘을 묶으니 좁은 칸에서 두 줄로 깨졌다.
-                  누가 들고 있는지는 상세에서 본다. */}
+              {/* 담당자를 되살렸다. 예전에 뺀 이유가 "배정 전인 건이 대부분이라
+                  거의 비어 있다"였는데, 지금은 그게 정확히 문제다 — 비어 있으니
+                  채워야 하고, 채우는 자리가 목록에 있어야 빠르다. */}
+              <th className="w-24 px-3 py-2">담당자</th>
               <th className="w-20 px-3 py-2">요청자</th>
               {/* 기본 정렬 기준이라 헤더가 있어야 한다. 다른 컬럼으로 정렬한 뒤
                   요청일 순서로 되돌아갈 방법이 없으면 정렬이 막다른 길이 된다. */}
@@ -136,7 +174,16 @@ export function RequirementList({ requirements, sort, onSort, today, onMerge }) 
                 {/* 0019 이전 건은 값이 없다. 빈칸으로 두면 화면이 깨진 것처럼
                     보이므로 '—' 를 찍는다 — 다른 미지정 칸(예상·완료)과 같은 표기다. */}
                 <td className="px-3 py-2 text-slate-500">
-                  {req.requirement_type ?? <span className="text-slate-300">—</span>}
+                  {onPatch ? (
+                    <CellSelect
+                      value={req.requirement_type}
+                      placeholder="—"
+                      options={REQUIREMENT_TYPES.map((t) => ({ value: t, label: t }))}
+                      onChange={(v) => onPatch(req.id, { requirementType: v || null })}
+                    />
+                  ) : (
+                    (req.requirement_type ?? <span className="text-slate-300">—</span>)
+                  )}
                 </td>
                 <td className="px-3 py-2">
                   <StatusBadge status={req.status} />
@@ -157,6 +204,18 @@ export function RequirementList({ requirements, sort, onSort, today, onMerge }) 
                 </td>
                 <td className={`px-3 py-2 ${PRIORITY_STYLES[req.priority] ?? 'text-slate-400'}`}>
                   {req.priority ?? '—'}
+                </td>
+                <td className="px-3 py-2 text-slate-600">
+                  {onPatch ? (
+                    <CellSelect
+                      value={req.assignee?.id}
+                      placeholder="미지정"
+                      options={teamMembers.map((m) => ({ value: m.id, label: m.name }))}
+                      onChange={(v) => onPatch(req.id, { assignee: v || null })}
+                    />
+                  ) : (
+                    (req.assignee?.name ?? <span className="text-slate-300">—</span>)
+                  )}
                 </td>
                 <td className="px-3 py-2 text-slate-600">{req.requester?.name ?? '—'}</td>
                 <td className="px-3 py-2 text-xs text-slate-500">{req.request_date}</td>

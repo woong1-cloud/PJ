@@ -6,6 +6,7 @@ import { useIdentity } from '@/components/IdentityProvider';
 import { canProcess } from '@/lib/tiers';
 import { buildRequirementsQuery } from '@/lib/requirementFilters';
 import { DONE_STATUS, REVIEW_IN_PROGRESS_STATUS, REVIEW_PENDING_STATUS } from '@/lib/statuses';
+import { toLocalDateString } from '@/lib/overdue';
 import { KanbanBoard } from '@/components/KanbanBoard';
 import { MergeDialog } from '@/components/MergeDialog';
 import { ApprovalDialog } from '@/components/ApprovalDialog';
@@ -33,6 +34,8 @@ function BoardView() {
 
   const [reqs, setReqs] = useState([]);
   const [error, setError] = useState('');
+  // 목록과 같은 지연 판정을 쓰기 위한 '오늘'. 마운트 시점에 한 번만 잡는다.
+  const [today] = useState(() => toLocalDateString(new Date()));
   const [mergeSource, setMergeSource] = useState(null);
   // 완료로 드래그된 카드. 승인 창이 이 값을 보고 열린다.
   const [approvalTarget, setApprovalTarget] = useState(null);
@@ -149,7 +152,12 @@ function BoardView() {
       />
 
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <KanbanBoard requirements={reqs} onStatusChange={handleStatusChange} onMerge={setMergeSource} />
+      <KanbanBoard
+        requirements={reqs}
+        onStatusChange={handleStatusChange}
+        onMerge={setMergeSource}
+        today={today}
+      />
       {mergeSource && (
         <MergeDialog
           source={mergeSource}

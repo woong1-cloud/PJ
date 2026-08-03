@@ -4,6 +4,7 @@ import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { useRouter } from 'next/navigation';
 import { DONE_STATUS } from '@/lib/statuses';
+import { isOverdue } from '@/lib/overdue';
 
 const PRIORITY_STYLE = {
   상: 'bg-rose-50 text-rose-600',
@@ -24,6 +25,8 @@ export function RequirementCard({
   onMerge,
   draggable = true,
   showBrandBadge = false,
+  // 목록과 같은 지연 판정을 쓰기 위한 '오늘'. 보드 페이지가 한 번 잡아 넘긴다.
+  today,
   canOpen = true,
 }) {
   const router = useRouter();
@@ -89,7 +92,26 @@ export function RequirementCard({
       )}
 
       <div className="mt-2 flex items-center justify-between">
-        <span className="text-[11px] text-slate-400">{req.category?.category_name ?? '-'}</span>
+        {/* 카테고리 자리에 예상일을 함께 둔다. 카드에서 가장 중요한 신호는
+            "이 건이 늦었나"이고, 지금은 그게 목록에만 보였다.
+            예상일이 없으면 아무것도 안 그린다 — 지금 대부분이 미정이라
+            '미정' 을 다 찍으면 카드마다 회색 글자만 늘고 정작 지연 건이
+            눈에 안 든다. 미정 건은 대시보드 '손볼 것'이 따로 센다. */}
+        <span className="flex items-center gap-1.5 text-[11px] text-slate-400">
+          <span>{req.category?.category_name ?? '-'}</span>
+          {req.expected_release_date && (
+            <span
+              className={
+                isOverdue(req.expected_release_date, req.status, today)
+                  ? 'font-medium text-rose-600'
+                  : 'text-slate-500'
+              }
+            >
+              {isOverdue(req.expected_release_date, req.status, today) ? '⚠ ' : ''}
+              {req.expected_release_date.slice(5)}
+            </span>
+          )}
+        </span>
         <div className="flex items-center gap-1.5">
           {draggable && (
             <button
