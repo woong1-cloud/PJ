@@ -13,6 +13,7 @@ import { RequirementList } from '@/components/RequirementList';
 import { RequirementFormDialog } from '@/components/RequirementFormDialog';
 import { FilterBar } from '@/components/FilterBar';
 import { MergeDialog } from '@/components/MergeDialog';
+import { NewRequirementFab } from '@/components/NewRequirementFab';
 import {
   useRequirementFilters,
   useRequirementFilterOptions,
@@ -188,8 +189,15 @@ function RequirementsView() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
+    // pb-20 은 플로팅 등록 버튼이 마지막 카드를 가리지 않게 하는 자리다.
+    <div className="flex flex-col gap-4 pb-20 md:pb-0">
+      {/* 헤더 줄은 모바일에서 통째로 없앤다.
+          '+ 새 요구사항'은 플로팅 버튼으로 갔으니 중복이고, CSV 는 폰에서
+          받아도 열 데가 없다. 목록/보드 토글은 보드가 폰에서 못 쓰는 화면이라
+          갈 길을 만들 이유가 없다. 제목은 상단바에 '모아 · 브랜드명'이 있고
+          요청자에게 화면이 사실상 하나라 자명하다.
+          그렇게 세로 40px 를 벌면 첫 화면에 카드가 한 장 더 들어온다. */}
+      <div className="hidden items-center justify-between md:flex">
         <h1 className="text-lg font-semibold text-slate-900">요구사항 목록</h1>
         <div className="flex items-center gap-2">
           {processAllowed && <RequirementViewToggle current="list" />}
@@ -276,6 +284,8 @@ function RequirementsView() {
         identity={identity}
         onCreated={refreshRequirements}
       />
+      {/* 모바일에서만 뜬다(md:hidden). 헤더의 '+ 새 요구사항'을 대신한다. */}
+      <NewRequirementFab onClick={() => setDialogOpen(true)} />
     </div>
   );
 }
