@@ -38,7 +38,7 @@ export function TierBody() {
       </ul>
 
       <p className="text-xs break-keep text-slate-400">
-        메뉴나 버튼이 보이지 않는다면 그 브랜드에서의 등급이 낮기 때문입니다. 브랜드 관리자에게
+        메뉴나 버튼이 보이지 않는다면 그 브랜드에서의 등급이 낮기 때문입니다. 실무 관리자에게
         문의하세요.
       </p>
     </div>

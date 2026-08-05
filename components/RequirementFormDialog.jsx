@@ -561,7 +561,7 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
               checked={form.isConfidential}
               onCheckedChange={(checked) => updateField('isConfidential', Boolean(checked))}
             />
-            <Label htmlFor="isConfidential">비공개 요구사항 (브랜드 관리자 이상만 조회 가능)</Label>
+            <Label htmlFor="isConfidential">비공개 요구사항 (실무 관리자 이상만 조회 가능)</Label>
           </div>
 
           {/* 에러는 버튼 바로 위다. 폼 맨 위에 두면 모바일에서 폼을 다 내려가

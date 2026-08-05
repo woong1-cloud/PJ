@@ -235,7 +235,7 @@ export function RequirementEditForm({ requirement, canSetConfidential, identity,
             checked={form.isConfidential}
             onCheckedChange={(checked) => updateField('isConfidential', Boolean(checked))}
           />
-          <Label htmlFor="edit-isConfidential">비공개 요구사항 (브랜드 관리자 이상만 조회 가능)</Label>
+          <Label htmlFor="edit-isConfidential">비공개 요구사항 (실무 관리자 이상만 조회 가능)</Label>
         </div>
       )}
       <div className="flex justify-end gap-2">
