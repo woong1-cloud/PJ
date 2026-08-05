@@ -5,7 +5,10 @@ import { errorResponse } from '@/lib/apiError';
 // 가입 때 본인이 적은 값들. 배치 대기 화면에서 "내가 뭘로 신청했더라"를
 // 답해 주는 용도다. 권한 판단에는 쓰지 않는다.
 const BASE_COLUMNS = 'id, name, must_change_password';
-const SIGNUP_COLUMNS = `${BASE_COLUMNS}, affiliation, job_role, requested_brand:brands!team_members_requested_brand_id_fkey(name)`;
+// onboarded_at(0020)을 BASE 가 아니라 이쪽에 둔다. BASE 는 마이그레이션이 안
+// 돌아간 DB 를 위한 최후의 보루라, 여기에 새 컬럼을 넣으면 폴백까지 같이
+// 죽어서 아무도 로그인하지 못한다.
+const SIGNUP_COLUMNS = `${BASE_COLUMNS}, affiliation, job_role, onboarded_at, requested_brand:brands!team_members_requested_brand_id_fkey(name)`;
 
 export async function GET() {
   try {
@@ -40,6 +43,8 @@ export async function GET() {
       affiliation: member.affiliation ?? null,
       jobRole: member.job_role ?? null,
       requestedBrandName: member.requested_brand?.name ?? null,
+      // null 이면 첫 로그인 안내를 아직 안 본 것이다.
+      onboardedAt: member.onboarded_at ?? null,
     });
   } catch (error) {
     return errorResponse(error);

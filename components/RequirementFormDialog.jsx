@@ -341,6 +341,10 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
                   평소에는 한 줄로 접어 둔다. 필드가 이미 열한 개인데 링크를
                   늘 펼쳐 두면 안 쓰는 사람에게는 소음이다. */}
               <div className="flex flex-col gap-2">
+                {/* 라벨이 이 줄의 존재 이유다. 폼의 다른 필드에는 전부 라벨이
+                    있는데 여기만 없어서, 두 칸이 무슨 묶음인지 모른 채 '이름'만
+                    보였다. 첨부 드롭존 바로 아래라 첨부의 일부로 읽히기까지 했다. */}
+                <Label>참고 링크</Label>
                 {links.map((link, i) => (
                   <div
                     key={`${link.url}-${i}`}
@@ -361,26 +365,30 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
                   </div>
                 ))}
 
+                {/* 주소가 앞이다. 필수인 쪽이 먼저 와야 한다 — 선택 항목인
+                    이름이 앞에 있으니 "먼저 이름부터 지어야 하나?" 로 읽혔다. */}
                 <div className="flex flex-col gap-1.5 sm:flex-row">
-                  <Input
-                    value={linkLabel}
-                    onChange={(e) => setLinkLabel(e.target.value)}
-                    placeholder="이름 (선택)"
-                    className="h-11 sm:h-8 sm:w-32"
-                  />
                   <Input
                     value={linkUrl}
                     onChange={(e) => setLinkUrl(e.target.value)}
                     // 엔터가 폼 전체를 제출하면 링크만 넣으려던 사람이 요구사항을
-                    // 올려 버린다. 여기서는 엔터가 '링크 추가'다.
+                    // 올려 버린다. 여기서는 엔터가 '추가'다.
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
                         addLink();
                       }
                     }}
-                    placeholder="참고 링크 (시안·대시보드·문서 주소)"
+                    placeholder="https://..."
                     className="h-11 sm:h-8 sm:flex-1"
+                  />
+                  <Input
+                    value={linkLabel}
+                    onChange={(e) => setLinkLabel(e.target.value)}
+                    // 무엇을 적는 칸인지 예시 하나로 드러낸다. '이름 (선택)'은
+                    // 무엇의 이름인지 알 수 없다.
+                    placeholder="예) 기획안"
+                    className="h-11 sm:h-8 sm:w-28"
                   />
                   <Button
                     type="button"
@@ -389,7 +397,7 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
                     disabled={!linkUrl.trim()}
                     className="h-11 sm:h-8"
                   >
-                    링크 추가
+                    추가
                   </Button>
                 </div>
                 {linkError && <p className="text-xs text-red-600">{linkError}</p>}

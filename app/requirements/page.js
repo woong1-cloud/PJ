@@ -309,6 +309,10 @@ function RequirementsView() {
           onMerge={processAllowed ? setMergeSource : undefined}
           teamMembers={teamMembers}
           onPatch={processAllowed ? patchRequirement : undefined}
+          // missing 도 조건이다. 대시보드 '손볼 것'에서 넘어와 0건이면 그건
+          // 아직 아무것도 없는 게 아니라 그 조건에 걸리는 게 없는 것이다.
+          filtered={hasActiveFilters({ filters, query, mine }) || Boolean(missing)}
+          onCreate={() => setDialogOpen(true)}
         />
       )}
       {/* 보드와 같은 다이얼로그를 그대로 쓴다. 병합 규칙이 두 곳에 갈리면
