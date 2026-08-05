@@ -1,15 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { FilterSheet } from '@/components/FilterSheet';
-import { buildFilterFields, PRIMARY_FILTER_KEYS } from '@/lib/filterFields';
+import { FilterSelect } from '@/components/FilterSelect';
+import { ActiveFilterChips } from '@/components/ActiveFilterChips';
+import { activeFilterChips, buildFilterFields, PRIMARY_FILTER_KEYS } from '@/lib/filterFields';
 import { countActiveFilters, hasActiveFilters } from '@/lib/requirementFilters';
 
 // 목록과 보드가 함께 쓴다. 필터 값 자체는 URL 이 들고 있고(useRequirementFilters)
@@ -51,6 +46,17 @@ export function FilterBar({
 
   // 모바일 버튼에 붙는 숫자. 시트 안에 든 것이 몇 개인지 보여준다.
   const mobileActiveCount = countActiveFilters({ filters: value, mine, includeDone });
+
+  // 칩은 데스크톱·모바일 공용이다. 접힌 필터와 시트 안 필터를 똑같이 드러내야
+  // 하므로 한쪽에만 두면 다른 쪽이 다시 "몇 개인지만 아는" 상태로 남는다.
+  const chips = activeFilterChips({ fields, filters: value, mine, includeDone });
+
+  // 체크박스 둘은 fields 밖이라 따로 푼다.
+  function removeChip(key) {
+    if (key === 'mine') return onMineChange?.(false);
+    if (key === 'includeDone') return onIncludeDoneChange?.(false);
+    return onChange({ [key]: '' });
+  }
 
   return (
     <>
@@ -95,7 +101,7 @@ export function FilterBar({
         {primary.map((field) => (
           <FilterSelect
             key={field.key}
-            placeholder={field.label}
+            label={field.label}
             options={field.options}
             current={value[field.key]}
             onPick={(picked) => onChange({ [field.key]: picked })}
@@ -111,7 +117,7 @@ export function FilterBar({
           secondary.map((field) => (
             <FilterSelect
               key={field.key}
-              placeholder={field.label}
+              label={field.label}
               options={field.options}
               current={value[field.key]}
               onPick={(picked) => onChange({ [field.key]: picked })}
@@ -180,6 +186,12 @@ export function FilterBar({
         )}
       </div>
 
+      {/* 걸린 필터를 이름과 값으로 드러낸다. 없으면 아무것도 안 그린다.
+          '필터 초기화'와 역할이 겹치지 않는다 — 저쪽은 검색어까지 한 번에
+          지우는 것이고, 이쪽은 하나만 떼는 것이다. 잘못 고른 필터 하나 때문에
+          상태·채널까지 날리는 것은 되돌리기가 아니다. */}
+      <ActiveFilterChips chips={chips} onRemove={removeChip} />
+
       <FilterSheet
         open={sheetOpen}
         onOpenChange={setSheetOpen}
@@ -199,19 +211,3 @@ export function FilterBar({
   );
 }
 
-function FilterSelect({ placeholder, options, current, onPick }) {
-  return (
-    <Select items={options} value={current || null} onValueChange={onPick}>
-      <SelectTrigger className="h-8 w-32 text-xs">
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent>
-        {options.map((o) => (
-          <SelectItem key={o.value} value={o.value}>
-            {o.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}

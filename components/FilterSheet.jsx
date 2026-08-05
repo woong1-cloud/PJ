@@ -9,13 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { FilterSelect } from '@/components/FilterSelect';
 import { buildFilterFields } from '@/lib/filterFields';
 
 // 모바일 필터 시트.
@@ -53,39 +47,19 @@ export function FilterSheet({
         </DialogHeader>
 
         <div className="flex flex-col gap-3">
+          {/* 셀렉트 자체가 '전체'로 되돌릴 수 있으므로 필드마다 따로 '지우기'
+              버튼을 두지 않는다. 시트 밖에 칩도 있어서, 버튼까지 두면 한 값을
+              푸는 길이 셋이 된다. */}
           {fields.map((field) => (
             <div key={field.key} className="flex flex-col gap-1">
-              <div className="flex items-center justify-between">
-                <Label htmlFor={`filter-sheet-${field.key}`}>{field.label}</Label>
-                {/* 셀렉트만으로는 고른 값을 되돌릴 수 없다(빈 항목이 없다).
-                    데스크톱에는 '필터 초기화'가 있지만 그건 전부를 지운다 —
-                    하나만 풀고 싶은 경우가 훨씬 흔하다. */}
-                {value[field.key] && (
-                  <button
-                    type="button"
-                    onClick={() => onChange({ [field.key]: '' })}
-                    className="text-xs text-slate-500 underline hover:text-slate-700"
-                  >
-                    지우기
-                  </button>
-                )}
-              </div>
-              <Select
-                items={field.options}
-                value={value[field.key] || null}
-                onValueChange={(picked) => onChange({ [field.key]: picked })}
-              >
-                <SelectTrigger id={`filter-sheet-${field.key}`} className="h-11 w-full text-sm">
-                  <SelectValue placeholder="전체" />
-                </SelectTrigger>
-                <SelectContent>
-                  {field.options.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label htmlFor={`filter-sheet-${field.key}`}>{field.label}</Label>
+              <FilterSelect
+                label="전체"
+                options={field.options}
+                current={value[field.key]}
+                onPick={(picked) => onChange({ [field.key]: picked })}
+                className="h-11 w-full text-sm"
+              />
             </div>
           ))}
 
