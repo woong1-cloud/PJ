@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/select';
 import { ImageDropzone } from '@/components/ImageDropzone';
 import { CHANNELS } from '@/lib/channels';
+import { normalizeUrl } from '@/lib/links';
 import { REQUIREMENT_TYPES, TYPE_HINTS } from '@/lib/requirementTypes';
 
 const LEVELS = ['상', '중', '하'];
@@ -92,6 +93,24 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
   const [imageFiles, setImageFiles] = useState([]);
   // 모바일에서만 쓰인다. 데스크톱은 CSS 로 늘 펼쳐 두므로 이 값과 무관하다.
   const [typeHelpOpen, setTypeHelpOpen] = useState(false);
+  // 참고 링크. 요구사항이 만들어진 뒤에 붙이므로 이미지와 같은 방식으로
+  // 여기 모아 뒀다가 등록 후에 보낸다.
+  const [links, setLinks] = useState([]);
+  const [linkLabel, setLinkLabel] = useState('');
+  const [linkUrl, setLinkUrl] = useState('');
+  const [linkError, setLinkError] = useState('');
+
+  function addLink() {
+    const normalized = normalizeUrl(linkUrl);
+    if (!normalized) {
+      setLinkError('http 또는 https 주소만 넣을 수 있습니다.');
+      return;
+    }
+    setLinks((prev) => [...prev, { label: linkLabel.trim(), url: normalized }]);
+    setLinkLabel('');
+    setLinkUrl('');
+    setLinkError('');
+  }
 
   function updateField(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -103,6 +122,10 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
     if (!next) {
       setForm(emptyForm());
       setImageFiles([]);
+      setLinks([]);
+      setLinkLabel('');
+      setLinkUrl('');
+      setLinkError('');
       setError('');
     }
     onOpenChange(next);
@@ -194,8 +217,24 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
         }
       }
 
+      // 링크도 요구사항이 만들어진 뒤에 붙는다. 이미지와 같이 실패해도 본문은
+      // 이미 저장된 상태라 경고만 모은다 — 상세 화면에서 다시 붙일 수 있다.
+      if (links.length > 0 && created?.id) {
+        const failed = [];
+        for (const link of links) {
+          const res = await fetch(`/api/requirements/${created.id}/links`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ brandId: identity.brandId, label: link.label, url: link.url }),
+          });
+          if (!res.ok) failed.push(link.label || link.url);
+        }
+        if (failed.length > 0) warnings.push(`링크 저장에 실패했습니다(${failed.join(', ')})`);
+      }
+
       setForm(emptyForm());
       setImageFiles([]);
+      setLinks([]);
       onCreated();
       if (warnings.length > 0) {
         setError(`요구사항은 등록됐지만 ${warnings.join(' / ')}`);
@@ -228,15 +267,17 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
             <div className="flex flex-col gap-3">
               <div className="flex flex-col gap-1">
                 <Label htmlFor="title">제목</Label>
-                {/* 플레이스홀더는 설명이 아니라 예시다.
-                    "여기에 현재 문제를 적으세요"는 아무도 안 읽지만, 잘 쓴 문장
-                    하나는 그대로 따라 쓴다. 실제로 올라온 건들을 보면 본문
-                    품질이 들쭉날쭉한데, 갈리는 지점은 '영향을 적었는가' 하나다.
-                    한 글자 치는 순간 사라지므로 처음 쓰는 사람만 가르치고
-                    나머지를 방해하지 않는다. */}
+                {/* 플레이스홀더는 설명이 아니라 예시다. "여기에 현재 문제를
+                    적으세요"는 아무도 안 읽지만, 잘 쓴 문장 하나는 따라 쓴다.
+                    실제로 올라온 건들을 보면 본문 품질이 갈리는 지점은
+                    '영향을 적었는가' 하나다.
+
+                    다만 여러 줄짜리 완성된 문장을 넣었더니 이미 작성된 초안처럼
+                    보였다. 그래서 '예)' 를 붙이고 한 줄로 줄인다 — 예시라는 것이
+                    글자 자체로 드러나야 한다. */}
                 <Input
                   id="title"
-                  placeholder="상세페이지에 배송 예정일 노출"
+                  placeholder="예) 상세페이지에 배송 예정일 노출"
                   value={form.title}
                   onChange={(e) => updateField('title', e.target.value)}
                   required
@@ -244,15 +285,12 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
               </div>
               <div className="flex flex-col gap-1">
                 <Label htmlFor="asIs">As-Is</Label>
-                {/* 둘째 줄이 핵심이다. "무엇이 안 된다"만 쓰면 IT 가 우선순위를
+                {/* 뒷부분이 핵심이다. "무엇이 안 된다"만 쓰면 IT 가 우선순위를
                     매길 수 없다. 예시에 영향이 숫자로 들어가 있으면 따라 쓴다. */}
                 <Textarea
                   id="asIs"
                   rows={4}
-                  placeholder={
-                    '지금은 상세페이지에 배송 안내가 없습니다.\n' +
-                    '"언제 받나요" CS 문의가 하루 20건쯤 들어오고, 장바구니에서 이탈합니다.'
-                  }
+                  placeholder={'예) 배송 안내가 없어 "언제 받나요" 문의가 하루 20건씩 들어옵니다'}
                   value={form.asIs}
                   onChange={(e) => updateField('asIs', e.target.value)}
                 />
@@ -262,20 +300,20 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
                 <Textarea
                   id="toBe"
                   rows={4}
-                  placeholder={
-                    '가격 아래에 "내일(화) 도착 예정"을 노출해 주세요.\n' +
-                    '재고가 없으면 문구를 숨깁니다.'
-                  }
+                  placeholder={'예) 가격 아래에 "내일(화) 도착 예정" 노출, 재고 없으면 숨김'}
                   value={form.toBe}
                   onChange={(e) => updateField('toBe', e.target.value)}
                 />
               </div>
               <div className="flex flex-col gap-1">
                 <Label htmlFor="note">비고</Label>
+                {/* 링크를 여기 적으라고 안내하지 않는다. 참고 링크는 아래에
+                    자기 자리가 있다 — 비고에 주소를 적으면 클릭이 안 되고 어떤
+                    것이 시안이고 어떤 것이 지표인지 알 수 없다. */}
                 <Textarea
                   id="note"
                   rows={3}
-                  placeholder="9월 프로모션 전에 필요합니다. 기획안: (링크)"
+                  placeholder="예) 9월 프로모션 전에 필요합니다"
                   value={form.note}
                   onChange={(e) => updateField('note', e.target.value)}
                 />
@@ -293,6 +331,68 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
                   onAdd={(added) => setImageFiles((prev) => [...prev, ...added])}
                   onRemove={(i) => setImageFiles((prev) => prev.filter((_, idx) => idx !== i))}
                 />
+              </div>
+
+              {/* 참고 링크. 예전에는 상세 화면에 들어가야만 붙일 수 있었는데,
+                  실제 데이터를 보면 아무도 나중에 돌아오지 않는다(첨부 0건,
+                  코멘트 1건). 시안·대시보드 주소를 손에 들고 있는 시점은
+                  등록할 때뿐이라 그 자리에 둔다.
+
+                  평소에는 한 줄로 접어 둔다. 필드가 이미 열한 개인데 링크를
+                  늘 펼쳐 두면 안 쓰는 사람에게는 소음이다. */}
+              <div className="flex flex-col gap-2">
+                {links.map((link, i) => (
+                  <div
+                    key={`${link.url}-${i}`}
+                    className="flex items-center gap-2 text-sm text-slate-600"
+                  >
+                    <span className="shrink-0 text-slate-400">🔗</span>
+                    <span className="min-w-0 flex-1 truncate" title={link.url}>
+                      {link.label || link.url}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setLinks((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="shrink-0 text-xs text-slate-400 hover:text-slate-600"
+                      aria-label="링크 빼기"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+
+                <div className="flex flex-col gap-1.5 sm:flex-row">
+                  <Input
+                    value={linkLabel}
+                    onChange={(e) => setLinkLabel(e.target.value)}
+                    placeholder="이름 (선택)"
+                    className="h-11 sm:h-8 sm:w-32"
+                  />
+                  <Input
+                    value={linkUrl}
+                    onChange={(e) => setLinkUrl(e.target.value)}
+                    // 엔터가 폼 전체를 제출하면 링크만 넣으려던 사람이 요구사항을
+                    // 올려 버린다. 여기서는 엔터가 '링크 추가'다.
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addLink();
+                      }
+                    }}
+                    placeholder="참고 링크 (시안·대시보드·문서 주소)"
+                    className="h-11 sm:h-8 sm:flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={addLink}
+                    disabled={!linkUrl.trim()}
+                    className="h-11 sm:h-8"
+                  >
+                    링크 추가
+                  </Button>
+                </div>
+                {linkError && <p className="text-xs text-red-600">{linkError}</p>}
               </div>
             </div>
 
