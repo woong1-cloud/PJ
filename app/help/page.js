@@ -1,6 +1,20 @@
-import { StatusGuide } from '@/components/StatusGuide';
-import { TierGuide } from '@/components/TierGuide';
-import { ACRONYM, APP_NAME, DESCRIPTION, TAGLINE } from '@/lib/branding';
+import { HelpSection } from '@/components/help/HelpSection';
+import { HelpToc } from '@/components/help/HelpToc';
+import { AboutBody } from '@/components/help/AboutBody';
+import { StatusBody } from '@/components/help/StatusBody';
+import { TierBody } from '@/components/help/TierBody';
+import { HELP_SECTIONS } from '@/lib/helpSections';
+import { APP_NAME } from '@/lib/branding';
+
+// 섹션 본문은 여기에 없다. 이 파일은 목차와 껍데기만 그린다.
+//
+// 내용을 더할 때 하는 일은 둘이다 — lib/helpSections.js 에 항목 한 줄을 넣고,
+// 본문 컴포넌트를 하나 만들어 아래 BODIES 에 연결한다. 목차는 저절로 늘어난다.
+const BODIES = {
+  about: AboutBody,
+  status: StatusBody,
+  tier: TierBody,
+};
 
 // 로그인한 사람이면 누구나 볼 수 있다.
 //
@@ -10,30 +24,35 @@ import { ACRONYM, APP_NAME, DESCRIPTION, TAGLINE } from '@/lib/branding';
 // 설명이 보이던 셈이라 이리로 옮겼다.
 export default function HelpPage() {
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-8 break-keep">
-      <h1 className="text-lg font-semibold text-slate-900">도움말</h1>
+    <div className="mx-auto flex max-w-5xl flex-col gap-5 break-keep">
+      <header>
+        <h1 className="text-xl font-semibold text-slate-900">도움말</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          {APP_NAME}를 어떻게 쓰는 곳인지, 상태와 권한이 무슨 뜻인지 모았습니다.
+        </p>
+      </header>
 
-      {/* 이 앱이 무엇인지부터 적는다. 가입 화면에서 한 번 읽고 지나간 설명을
-          다시 찾을 곳이 여기밖에 없다 — 로그인 화면은 매일 보는 곳이라
-          같은 글을 계속 두지 않았다. */}
-      <section className="rounded-lg border border-slate-200 bg-white p-5">
-        <h2 className="text-base font-semibold text-slate-900">{APP_NAME}</h2>
-        <p className="mt-0.5 text-[11px] uppercase tracking-[0.12em] text-slate-400">{ACRONYM}</p>
-        <p className="mt-2 text-sm text-slate-600">{TAGLINE}</p>
-        <ul className="mt-3 flex flex-col gap-1.5 text-sm leading-relaxed text-slate-500">
-          {DESCRIPTION.map((line) => (
-            <li key={line} className="flex gap-1.5">
-              <span aria-hidden className="select-none text-slate-300">
-                ·
-              </span>
-              <span>{line}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-8">
+        <HelpToc sections={HELP_SECTIONS} />
 
-      <StatusGuide />
-      <TierGuide />
+        {/* min-w-0 이 없으면 안쪽의 긴 문장이 flex 아이템을 밀어 목차를 찌그러뜨린다. */}
+        <div className="flex min-w-0 flex-1 flex-col gap-5">
+          {HELP_SECTIONS.map((section) => {
+            const Body = BODIES[section.id];
+            if (!Body) return null;
+            return (
+              <HelpSection
+                key={section.id}
+                id={section.id}
+                title={section.title}
+                summary={section.summary}
+              >
+                <Body />
+              </HelpSection>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
