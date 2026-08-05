@@ -30,6 +30,7 @@ import { RequirementDangerZone } from '@/components/RequirementDangerZone';
 import { ApprovalDialog } from '@/components/ApprovalDialog';
 import { StartReviewDialog } from '@/components/StartReviewDialog';
 import { RedmineLinkSection } from '@/components/RedmineLinkSection';
+import { HelpHint } from '@/components/HelpHint';
 import { canDeleteRequirement } from '@/lib/deleteRequirement';
 import { REQUIREMENT_TYPES, TYPE_HINTS, UNTYPED_LABEL, typeLabel } from '@/lib/requirementTypes';
 import {
@@ -460,7 +461,10 @@ export function RequirementDetail({ id }) {
             데스크톱에서는 지금처럼 오른쪽 열이다. */}
         <aside className="order-first flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm md:order-none">
           <div>
-            <p className="text-slate-500">상태</p>
+            <p className="flex items-center gap-1.5 text-slate-500">
+              상태
+              <HelpHint anchor="status" label="상태" />
+            </p>
             {/* 보드 밖 상태(반려·취소·중복)일 때 BOARD_STATUSES 만 담은 Select 에
                 그 값을 넣으면 트리거가 빈 칸이 된다. 뱃지로 보여주고, 재개는
                 별도 Select 로 분리한다 — "지금 반려 상태"와 "어디로 되돌릴까"는
