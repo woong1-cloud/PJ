@@ -8,12 +8,13 @@ import { RequirementViewToggle } from '@/components/RequirementViewToggle';
 import { canProcess } from '@/lib/tiers';
 import { sortRequirements, DEFAULT_SORT_DIR } from '@/lib/sortRequirements';
 import { toLocalDateString } from '@/lib/overdue';
-import { buildRequirementsQuery } from '@/lib/requirementFilters';
+import { buildRequirementsQuery, hasActiveFilters } from '@/lib/requirementFilters';
 import { RequirementList } from '@/components/RequirementList';
 import { RequirementFormDialog } from '@/components/RequirementFormDialog';
 import { FilterBar } from '@/components/FilterBar';
 import { MergeDialog } from '@/components/MergeDialog';
 import { NewRequirementFab } from '@/components/NewRequirementFab';
+import { useFilterMemory } from '@/components/useFilterMemory';
 import {
   useRequirementFilters,
   useRequirementFilterOptions,
@@ -63,8 +64,22 @@ function RequirementsView() {
     mine,
     setMine,
     missing,
+    searchKey,
   } = useRequirementFilters();
   const { teamMembers, categories, projects } = useRequirementFilterOptions(identity.brandId);
+
+  // 마지막으로 보던 조건을 되살린다. 주소에 조건이 있으면(공유 링크·대시보드
+  // 링크) 되살리지 않는다 — 링크가 항상 이긴다.
+  const { restored, dismissRestored } = useFilterMemory({
+    brandId: identity.brandId,
+    searchKey,
+    filters,
+    mine,
+    includeDone,
+    sort,
+    setFilters,
+    setSort,
+  });
 
   const apiQuery = buildRequirementsQuery({
     brandId: identity.brandId,
@@ -220,20 +235,52 @@ function RequirementsView() {
         </div>
       </div>
 
+      {/* 필터를 건드리는 모든 입구에서 '지난번 조건' 안내를 내린다. 그대로 두면
+          초기화 뒤에 새로 건 필터에까지 그 문구가 붙어 거짓말이 된다. */}
       <FilterBar
         teamMembers={teamMembers}
         categories={categories}
         projects={projects}
         value={filters}
-        onChange={setFilters}
+        onChange={(patch) => {
+          dismissRestored();
+          setFilters(patch);
+        }}
         query={query}
         onQueryChange={setQuery}
-        onReset={resetFilters}
+        onReset={() => {
+          dismissRestored();
+          resetFilters();
+        }}
         includeDone={includeDone}
-        onIncludeDoneChange={setIncludeDone}
+        onIncludeDoneChange={(v) => {
+          dismissRestored();
+          setIncludeDone(v);
+        }}
         mine={mine}
-        onMineChange={setMine}
+        onMineChange={(v) => {
+          dismissRestored();
+          setMine(v);
+        }}
       />
+
+      {/* 되살렸을 때만 뜬다.
+          칩만으로도 무엇이 걸렸는지는 보이지만, "내가 방금 건 것"과 "저장돼
+          있던 것"은 다르다. 어제 걸어 둔 필터를 잊은 채 오늘 들어와 "요구사항이
+          세 건뿐이네?" 하는 것을 막는 게 이 한 줄이다.
+          필터가 없어지면(초기화·전체 보기) 조건이 거짓이 되어 저절로 사라진다. */}
+      {restored && hasActiveFilters({ filters, query, mine }) && (
+        <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+          <span className="flex-1 break-keep">지난번에 보던 조건으로 열었습니다.</span>
+          <button
+            type="button"
+            onClick={resetFilters}
+            className="shrink-0 whitespace-nowrap underline hover:text-slate-900"
+          >
+            전체 보기
+          </button>
+        </div>
+      )}
 
       {/* missing 은 필터바에 칸이 없다(대시보드 '손볼 것' 링크로만 들어온다).
           표시가 없으면 사용자는 목록이 왜 이것뿐인지 알 수 없어 화면이 고장난

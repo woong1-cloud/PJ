@@ -228,8 +228,15 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
             <div className="flex flex-col gap-3">
               <div className="flex flex-col gap-1">
                 <Label htmlFor="title">제목</Label>
+                {/* 플레이스홀더는 설명이 아니라 예시다.
+                    "여기에 현재 문제를 적으세요"는 아무도 안 읽지만, 잘 쓴 문장
+                    하나는 그대로 따라 쓴다. 실제로 올라온 건들을 보면 본문
+                    품질이 들쭉날쭉한데, 갈리는 지점은 '영향을 적었는가' 하나다.
+                    한 글자 치는 순간 사라지므로 처음 쓰는 사람만 가르치고
+                    나머지를 방해하지 않는다. */}
                 <Input
                   id="title"
+                  placeholder="상세페이지에 배송 예정일 노출"
                   value={form.title}
                   onChange={(e) => updateField('title', e.target.value)}
                   required
@@ -237,9 +244,15 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
               </div>
               <div className="flex flex-col gap-1">
                 <Label htmlFor="asIs">As-Is</Label>
+                {/* 둘째 줄이 핵심이다. "무엇이 안 된다"만 쓰면 IT 가 우선순위를
+                    매길 수 없다. 예시에 영향이 숫자로 들어가 있으면 따라 쓴다. */}
                 <Textarea
                   id="asIs"
                   rows={4}
+                  placeholder={
+                    '지금은 상세페이지에 배송 안내가 없습니다.\n' +
+                    '"언제 받나요" CS 문의가 하루 20건쯤 들어오고, 장바구니에서 이탈합니다.'
+                  }
                   value={form.asIs}
                   onChange={(e) => updateField('asIs', e.target.value)}
                 />
@@ -249,6 +262,10 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
                 <Textarea
                   id="toBe"
                   rows={4}
+                  placeholder={
+                    '가격 아래에 "내일(화) 도착 예정"을 노출해 주세요.\n' +
+                    '재고가 없으면 문구를 숨깁니다.'
+                  }
                   value={form.toBe}
                   onChange={(e) => updateField('toBe', e.target.value)}
                 />
@@ -258,6 +275,7 @@ export function RequirementFormDialog({ open, onOpenChange, categories, projects
                 <Textarea
                   id="note"
                   rows={3}
+                  placeholder="9월 프로모션 전에 필요합니다. 기획안: (링크)"
                   value={form.note}
                   onChange={(e) => updateField('note', e.target.value)}
                 />
