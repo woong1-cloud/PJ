@@ -18,6 +18,13 @@ export default function SignupPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // 확인 칸.
+  //
+  // 다른 서비스보다 이쪽이 더 중요하다. MOA 에는 '비밀번호 찾기'가 없고,
+  // 재설정은 전체 관리자만 할 수 있다(/api/admin/reset-password). 가입하면서
+  // 오타를 내면 본인이 할 수 있는 일이 없다 — 게다가 가입 직후에는 배치 대기라
+  // "내가 틀린 건지 승인이 안 난 건지"조차 구분되지 않는다.
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [affiliation, setAffiliation] = useState(null);
   const [jobRole, setJobRole] = useState(null);
   const [brandId, setBrandId] = useState(null);
@@ -101,6 +108,9 @@ export default function SignupPage() {
     name.trim() &&
     email.trim() &&
     password.length >= 8 &&
+    // 일치 여부를 여기 안 넣으면 확인 칸이 그냥 장식이 된다 — 안 맞아도 가입이
+    // 그대로 된다.
+    password === confirmPassword &&
     affiliation &&
     jobRole &&
     (!needsBrand || brandId);
@@ -153,6 +163,26 @@ export default function SignupPage() {
                 required
               />
               <p className="text-xs text-slate-500">8자 이상</p>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="confirm-password">비밀번호 확인</Label>
+              <Input
+                className="h-11 md:h-8"
+                id="confirm-password"
+                type="password"
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+              />
+              {/* 오류를 칸 바로 아래에 붙인다. 이 폼은 세로로 길어서(이름·이메일·
+                  비밀번호·확인·소속·직무·브랜드) 위쪽 에러 자리에 띄우면 아래
+                  버튼을 누른 사람에게는 화면 밖이다 — 등록 폼에서 이미 겪었다.
+                  아직 다 치지 않았을 때는 조용히 있는다. 한 글자 칠 때마다
+                  빨간 글씨가 뜨면 맞게 치고 있는 사람을 계속 혼낸다. */}
+              {confirmPassword && password !== confirmPassword && (
+                <p className="text-xs text-red-600">비밀번호가 일치하지 않습니다.</p>
+              )}
             </div>
             <div className="flex flex-col gap-1">
               <Label htmlFor="affiliation">소속</Label>
