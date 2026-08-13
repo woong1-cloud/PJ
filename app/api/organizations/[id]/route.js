@@ -24,7 +24,7 @@ export async function PATCH(request, { params }) {
       updates.name = String(name).trim();
     }
     // brandId 는 null 을 명시적으로 넣을 수 있어야 한다. 브랜드였던 조직을
-    // 본부·팀으로 되돌리는 길이 없으면 잘못 만든 조직을 고칠 수 없다.
+    // 본부으로 되돌리는 길이 없으면 잘못 만든 조직을 고칠 수 없다.
     if (brandId !== undefined) updates.brand_id = brandId || null;
     if (defaultTier !== undefined) {
       if (defaultTier && !Object.prototype.hasOwnProperty.call(TIER_RANK, defaultTier)) {

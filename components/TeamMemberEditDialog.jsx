@@ -142,7 +142,7 @@ export function TeamMemberEditDialog({ open, onOpenChange, member, onSaved }) {
                 )}
                 {teamOrgs.length > 0 && (
                   <SelectGroup>
-                    <SelectLabel>본부·팀</SelectLabel>
+                    <SelectLabel>본부</SelectLabel>
                     {teamOrgs.map((o) => (
                       <SelectItem key={o.id} value={o.id}>
                         {o.name}

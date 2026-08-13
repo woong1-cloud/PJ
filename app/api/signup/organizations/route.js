@@ -9,7 +9,7 @@ import { errorResponse } from '@/lib/apiError';
 // 없다. 필요 없는 것을 내보내지 않는 것이 이 라우트의 요점이다.
 //
 // brand_id 는 내려보낸다 — 값 자체는 비밀이 아니고(브랜드 목록은 이미
-// /api/signup/brands 로 공개돼 있다), 화면이 브랜드/본부·팀 그룹을 가르는
+// /api/signup/brands 로 공개돼 있다), 화면이 브랜드/본부 그룹을 가르는
 // 데 필요하다.
 export async function GET() {
   try {

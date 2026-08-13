@@ -17,8 +17,7 @@ const TIERS = ['1차', '2차', '3차', '4차'];
 // 셀렉트에서 "정하지 않음"을 고를 수 있어야 한다. 빈 문자열은 base-ui 가
 // "선택 안 됨"과 구분하지 못해 항목이 늘 선택된 것처럼 보인다
 // (lib/filterFields.js 의 CLEAR_FILTER_VALUE 와 같은 이유).
-const NO_TIER = '__none__';
-const NO_BRAND = '__none__';
+const NONE = '__none__';
 
 // 조직 관리. 전체관리자 전용 화면에만 얹는다.
 //
@@ -28,12 +27,19 @@ const NO_BRAND = '__none__';
 export function OrganizationSettings() {
   const [organizations, setOrganizations] = useState([]);
   const [brands, setBrands] = useState([]);
-  const [name, setName] = useState('');
-  const [brandId, setBrandId] = useState(NO_BRAND);
-  const [defaultTier, setDefaultTier] = useState(NO_TIER);
-  const [viewAll, setViewAll] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+
+  // 추가 폼
+  const [name, setName] = useState('');
+  const [brandId, setBrandId] = useState(NONE);
+  const [defaultTier, setDefaultTier] = useState(NONE);
+  const [viewAll, setViewAll] = useState(false);
+
+  // 수정 중인 행. id 하나만 들고 있으면 한 번에 한 줄만 열린다 — 여러 줄을
+  // 동시에 열어 두면 어느 것을 저장했는지 헷갈린다.
+  const [editingId, setEditingId] = useState(null);
+  const [draft, setDraft] = useState({ name: '', brandId: NONE, defaultTier: NONE });
 
   const load = useCallback(() => {
     Promise.all([
@@ -49,29 +55,35 @@ export function OrganizationSettings() {
 
   useEffect(load, [load]);
 
+  async function send(url, method, body) {
+    setError('');
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      setError(d.error ?? '변경하지 못했습니다.');
+      return false;
+    }
+    return true;
+  }
+
   async function create() {
     if (!name.trim()) return;
     setBusy(true);
-    setError('');
-    const res = await fetch('/api/organizations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name,
-        brandId: brandId === NO_BRAND ? null : brandId,
-        defaultTier: defaultTier === NO_TIER ? null : defaultTier,
-        defaultViewAllProjects: viewAll,
-      }),
+    const ok = await send('/api/organizations', 'POST', {
+      name,
+      brandId: brandId === NONE ? null : brandId,
+      defaultTier: defaultTier === NONE ? null : defaultTier,
+      defaultViewAllProjects: viewAll,
     });
     setBusy(false);
-    if (!res.ok) {
-      const d = await res.json();
-      setError(d.error ?? '추가하지 못했습니다.');
-      return;
-    }
+    if (!ok) return;
     setName('');
-    setBrandId(NO_BRAND);
-    setDefaultTier(NO_TIER);
+    setBrandId(NONE);
+    setDefaultTier(NONE);
     setViewAll(false);
     load();
   }
@@ -80,18 +92,42 @@ export function OrganizationSettings() {
   // 사용자가 이미 반영된 것으로 보는데, 실패했으면 그건 거짓말이다.
   // 다시 불러오면 값이 원래대로 돌아가고 배너가 이유를 말한다.
   async function patch(id, updates) {
-    setError('');
-    const res = await fetch(`/api/organizations/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
-    });
-    if (!res.ok) {
-      const d = await res.json();
-      setError(d.error ?? '변경하지 못했습니다.');
-    }
+    await send(`/api/organizations/${id}`, 'PATCH', updates);
     load();
   }
+
+  function startEdit(o) {
+    setEditingId(o.id);
+    setDraft({
+      name: o.name,
+      brandId: o.brand_id ?? NONE,
+      defaultTier: o.default_tier ?? NONE,
+    });
+    setError('');
+  }
+
+  async function saveEdit() {
+    if (!draft.name.trim()) return;
+    setBusy(true);
+    const ok = await send(`/api/organizations/${editingId}`, 'PATCH', {
+      name: draft.name,
+      brandId: draft.brandId === NONE ? null : draft.brandId,
+      defaultTier: draft.defaultTier === NONE ? null : draft.defaultTier,
+    });
+    setBusy(false);
+    if (!ok) return;
+    setEditingId(null);
+    load();
+  }
+
+  const brandItems = [
+    { value: NONE, label: '없음 (본부)' },
+    ...brands.map((b) => ({ value: b.id, label: b.name })),
+  ];
+  const tierItems = [
+    { value: NONE, label: '정하지 않음' },
+    ...TIERS.map((t) => ({ value: t, label: TIER_LABELS[t] })),
+  ];
 
   return (
     <div className="flex flex-col gap-4">
@@ -111,48 +147,30 @@ export function OrganizationSettings() {
           </div>
           <div className="flex flex-col gap-1">
             <Label htmlFor="org-brand">연결 브랜드</Label>
-            <Select
-              items={[
-                { value: NO_BRAND, label: '없음 (본부·팀)' },
-                ...brands.map((b) => ({ value: b.id, label: b.name })),
-              ]}
-              value={brandId}
-              onValueChange={setBrandId}
-            >
+            <Select items={brandItems} value={brandId} onValueChange={setBrandId}>
               <SelectTrigger id="org-brand" className="h-9 w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={NO_BRAND}>없음 (본부·팀)</SelectItem>
-                {brands.map((b) => (
-                  <SelectItem key={b.id} value={b.id}>
-                    {b.name}
+                {brandItems.map((b) => (
+                  <SelectItem key={b.value} value={b.value}>
+                    {b.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-slate-500">
-              연결하면 배치 화면이 그 브랜드를 미리 채웁니다
-            </p>
+            <p className="text-xs text-slate-500">연결하면 배치 화면이 그 브랜드를 미리 채웁니다</p>
           </div>
           <div className="flex flex-col gap-1">
             <Label htmlFor="org-tier">기본 등급</Label>
-            <Select
-              items={[
-                { value: NO_TIER, label: '정하지 않음' },
-                ...TIERS.map((t) => ({ value: t, label: TIER_LABELS[t] })),
-              ]}
-              value={defaultTier}
-              onValueChange={setDefaultTier}
-            >
+            <Select items={tierItems} value={defaultTier} onValueChange={setDefaultTier}>
               <SelectTrigger id="org-tier" className="h-9 w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={NO_TIER}>정하지 않음</SelectItem>
-                {TIERS.map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {TIER_LABELS[t]}
+                {tierItems.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>
+                    {t.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -160,7 +178,7 @@ export function OrganizationSettings() {
             {/* 등급 이름은 지위를 말하는데, 고르는 사람이 알아야 하는 건
                 그 지위가 무엇을 여는가다. */}
             <p className="text-xs text-slate-500">
-              {defaultTier === NO_TIER ? '비우면 요청자로 제안됩니다' : TIER_HINTS[defaultTier]}
+              {defaultTier === NONE ? '비우면 요청자로 제안됩니다' : TIER_HINTS[defaultTier]}
             </p>
           </div>
           <div className="flex flex-col justify-start gap-2">
@@ -188,41 +206,137 @@ export function OrganizationSettings() {
               <th className="px-4 py-2 font-medium">이름</th>
               <th className="px-4 py-2 font-medium">연결 브랜드</th>
               <th className="px-4 py-2 font-medium">기본 등급</th>
-              <th className="px-4 py-2 font-medium">전사 열람</th>
-              <th className="px-4 py-2 font-medium">사용</th>
+              <th className="px-4 py-2 text-center font-medium">전사 열람</th>
+              <th className="px-4 py-2 text-center font-medium">사용</th>
+              <th className="px-4 py-2 text-right font-medium">수정</th>
             </tr>
           </thead>
           <tbody>
-            {organizations.map((o) => (
-              <tr key={o.id} className="border-t border-slate-100">
-                <td className="px-4 py-2 text-slate-900">{o.name}</td>
-                <td className="px-4 py-2 text-slate-600">{o.brand?.name ?? '—'}</td>
-                <td className="px-4 py-2 text-slate-600">
-                  {o.default_tier ? TIER_LABELS[o.default_tier] : '요청자 (기본)'}
-                </td>
-                <td className="px-4 py-2">
-                  <input
-                    type="checkbox"
-                    checked={o.default_view_all_projects}
-                    onChange={(e) => patch(o.id, { defaultViewAllProjects: e.target.checked })}
-                    className="h-4 w-4 accent-indigo-600"
-                    aria-label={`${o.name} 전사 열람`}
-                  />
-                </td>
-                <td className="px-4 py-2">
-                  <input
-                    type="checkbox"
-                    checked={o.is_active}
-                    onChange={(e) => patch(o.id, { isActive: e.target.checked })}
-                    className="h-4 w-4 accent-indigo-600"
-                    aria-label={`${o.name} 사용`}
-                  />
-                </td>
-              </tr>
-            ))}
+            {organizations.map((o) =>
+              editingId === o.id ? (
+                // 수정 중인 줄. 다른 줄과 배경을 달리해서 지금 무엇을 고치고
+                // 있는지가 표에서 바로 보이게 한다.
+                <tr key={o.id} className="border-t border-slate-100 bg-indigo-50/40">
+                  <td className="px-4 py-2">
+                    <Input
+                      value={draft.name}
+                      onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+                      className="h-8"
+                      aria-label="조직 이름"
+                    />
+                  </td>
+                  <td className="px-4 py-2">
+                    <Select
+                      items={brandItems}
+                      value={draft.brandId}
+                      onValueChange={(v) => setDraft((d) => ({ ...d, brandId: v }))}
+                    >
+                      <SelectTrigger className="h-8 w-full" aria-label="연결 브랜드">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {brandItems.map((b) => (
+                          <SelectItem key={b.value} value={b.value}>
+                            {b.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </td>
+                  <td className="px-4 py-2">
+                    <Select
+                      items={tierItems}
+                      value={draft.defaultTier}
+                      onValueChange={(v) => setDraft((d) => ({ ...d, defaultTier: v }))}
+                    >
+                      <SelectTrigger className="h-8 w-full" aria-label="기본 등급">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {tierItems.map((t) => (
+                          <SelectItem key={t.value} value={t.value}>
+                            {t.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </td>
+                  {/* 체크박스 둘은 수정 모드에서도 그대로 둔다. 저장 버튼을
+                      거치지 않고 바로 반영되는 값이라 여기 끌어들이면
+                      "저장을 눌러야 하나"가 헷갈린다. */}
+                  <td className="px-4 py-2 text-center text-xs text-slate-400">—</td>
+                  <td className="px-4 py-2 text-center text-xs text-slate-400">—</td>
+                  <td className="px-4 py-2">
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        onClick={saveEdit}
+                        disabled={!draft.name.trim() || busy}
+                        className="h-8 px-3"
+                      >
+                        저장
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setEditingId(null)}
+                        className="h-8 px-3"
+                      >
+                        취소
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                <tr
+                  key={o.id}
+                  className={`border-t border-slate-100 ${o.is_active ? '' : 'text-slate-400'}`}
+                >
+                  <td className="px-4 py-2">
+                    <span className={o.is_active ? 'text-slate-900' : ''}>{o.name}</span>
+                    {!o.is_active && <span className="ml-2 text-xs">(사용 안 함)</span>}
+                  </td>
+                  <td className="px-4 py-2">
+                    {o.brand?.name ?? <span className="text-slate-400">본부</span>}
+                  </td>
+                  <td className="px-4 py-2">
+                    {o.default_tier ? (
+                      TIER_LABELS[o.default_tier]
+                    ) : (
+                      <span className="text-slate-400">요청자 (기본)</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2 text-center">
+                    <input
+                      type="checkbox"
+                      checked={o.default_view_all_projects}
+                      onChange={(e) => patch(o.id, { defaultViewAllProjects: e.target.checked })}
+                      className="h-4 w-4 accent-indigo-600"
+                      aria-label={`${o.name} 전사 열람`}
+                    />
+                  </td>
+                  <td className="px-4 py-2 text-center">
+                    <input
+                      type="checkbox"
+                      checked={o.is_active}
+                      onChange={(e) => patch(o.id, { isActive: e.target.checked })}
+                      className="h-4 w-4 accent-indigo-600"
+                      aria-label={`${o.name} 사용`}
+                    />
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    <button
+                      type="button"
+                      onClick={() => startEdit(o)}
+                      className="text-xs text-indigo-600 underline hover:text-indigo-800"
+                    >
+                      수정
+                    </button>
+                  </td>
+                </tr>
+              )
+            )}
             {organizations.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
+                <td colSpan={6} className="px-4 py-6 text-center text-slate-500">
                   아직 조직이 없습니다.
                 </td>
               </tr>

@@ -38,7 +38,7 @@ export default function SignupPage() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
 
-  // 소속 셀렉트를 브랜드 / 본부·팀 두 그룹으로 나눈다. 조직이 20개쯤 되면
+  // 소속 셀렉트를 브랜드 / 본부 두 그룹으로 나눈다. 조직이 20개쯤 되면
   // 한 줄로 늘어놓을 수 없고, 고르는 사람 머릿속에 이미 갈라져 있는 축이다.
   const { brands: brandOrgs, teams: teamOrgs } = groupOrganizations(organizations);
 
@@ -204,7 +204,7 @@ export default function SignupPage() {
                   <SelectValue placeholder="선택하세요" />
                 </SelectTrigger>
                 <SelectContent>
-                  {/* 브랜드와 본부·팀을 나눈다. 한 목록에 섞으면 조직이 늘수록
+                  {/* 브랜드와 본부를 나눈다. 한 목록에 섞으면 조직이 늘수록
                       찾는 데 시간이 걸리고, 이 둘은 고르는 사람 머릿속에 이미
                       갈라져 있는 축이다. */}
                   {brandOrgs.length > 0 && (
@@ -219,7 +219,7 @@ export default function SignupPage() {
                   )}
                   {teamOrgs.length > 0 && (
                     <SelectGroup>
-                      <SelectLabel>본부·팀</SelectLabel>
+                      <SelectLabel>본부</SelectLabel>
                       {teamOrgs.map((o) => (
                         <SelectItem key={o.id} value={o.id}>
                           {o.name}
