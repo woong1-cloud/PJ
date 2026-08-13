@@ -22,10 +22,20 @@ export async function POST(request) {
       throw new ApiError(503, 'CRON_SECRET 이 설정되지 않았습니다. 환경변수에 넣어 주세요.');
     }
 
-    // Authorization 헤더만 받는다. 쿼리스트링(?token=)으로도 받으면 그 값이
-    // 접근 로그와 리퍼러에 그대로 남는다.
+    // 토큰은 헤더로만 받는다. 쿼리스트링(?token=)으로도 받으면 그 값이 접근
+    // 로그와 리퍼러에 그대로 남는다.
+    //
+    // 헤더 이름이 둘인 이유: 부르는 쪽이 이름을 고를 수 없는 경우가 있다.
+    // noa-vibe 배포 플랫폼의 스케줄러는 토큰 칸이 'x-noa-token' 하나로 고정이라
+    // Authorization 을 보낼 방법이 없다. 그렇다고 Authorization 을 버리면
+    // curl 로 직접 부르는 길과 표준 방식이 사라진다.
+    //
+    // 둘 다 받아도 느슨해지지 않는다 — 통과 조건은 여전히 "같은 비밀값을
+    // 알고 있다" 하나이고, 어느 봉투에 담아 오느냐만 다르다.
     const auth = request.headers.get('authorization') ?? '';
-    if (auth !== `Bearer ${secret}`) {
+    const noaToken = request.headers.get('x-noa-token') ?? '';
+    const authorized = auth === `Bearer ${secret}` || noaToken === secret;
+    if (!authorized) {
       throw new ApiError(401, '인증에 실패했습니다.');
     }
 

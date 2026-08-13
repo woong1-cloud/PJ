@@ -501,6 +501,18 @@ curl -X POST https://<주소>/api/cron/weekly-digest \\
   -H "Authorization: Bearer <CRON_SECRET>"
 \`\`\`
 
+토큰 헤더는 **둘 중 아무거나** 됩니다. 부르는 쪽이 헤더 이름을 고를 수
+없는 경우가 있어서다.
+
+| 헤더 | 값 |
+|---|---|
+| \`Authorization\` | \`Bearer <CRON_SECRET>\` |
+| \`x-noa-token\` | \`<CRON_SECRET>\` (Bearer 없이 값만) |
+
+noa-vibe 배포 플랫폼의 \`배치/스케줄\` 탭은 토큰 칸이 \`x-noa-token\` 으로
+고정이므로 아래쪽을 씁니다. 그 화면에서는 타입 \`HTTP\`, Method \`POST\`,
+URL 에 위 주소, \`내부 토큰\` 칸에 \`CRON_SECRET\` 값만 넣으면 됩니다.
+
 부르는 주체는 무엇이든 됩니다 — 배포 플랫폼의 스케줄러, Supabase 의
 pg_cron, 사내 배치 서버, 사람이 직접 실행하는 것까지.
 
