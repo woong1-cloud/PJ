@@ -13,8 +13,8 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { JOB_ROLES } from '@/lib/signup';
 import { groupOrganizations } from '@/lib/organizations';
+import { activeJobRoles } from '@/lib/jobRoles';
 import { BrandHeader } from '@/components/BrandHeader';
 
 export default function SignupPage() {
@@ -31,6 +31,7 @@ export default function SignupPage() {
   const [organizationId, setOrganizationId] = useState(null);
   const [jobRole, setJobRole] = useState(null);
   const [organizations, setOrganizations] = useState([]);
+  const [jobRoles, setJobRoles] = useState([]);
   // 소속은 필수라 목록이 없으면 가입 자체가 불가능하다. 빈 셀렉트를 보여주면
   // 사용자는 자기가 뭘 잘못했는지 찾다가 포기한다.
   const [orgError, setOrgError] = useState('');
@@ -41,15 +42,23 @@ export default function SignupPage() {
   // 소속 셀렉트를 브랜드 / 본부 두 그룹으로 나눈다. 조직이 20개쯤 되면
   // 한 줄로 늘어놓을 수 없고, 고르는 사람 머릿속에 이미 갈라져 있는 축이다.
   const { brands: brandOrgs, teams: teamOrgs } = groupOrganizations(organizations);
+  const roles = activeJobRoles(jobRoles);
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/signup/organizations')
-      .then((res) => res.json().then((d) => ({ res, d })))
-      .then(({ res, d }) => {
+    // 소속과 직무를 함께 받는다. 둘 다 필수라 하나만 실패해도 가입할 수 없고,
+    // 그때 어느 쪽이 문제인지 구분해 봐야 사용자가 할 수 있는 일이 없다.
+    Promise.all([
+      fetch('/api/signup/organizations').then((r) => r.json().then((d) => ({ res: r, d }))),
+      fetch('/api/signup/job-roles').then((r) => r.json().then((d) => ({ res: r, d }))),
+    ])
+      .then(([org, job]) => {
         if (cancelled) return;
-        if (!res.ok) throw new Error(d.error ?? '소속 목록을 불러오지 못했습니다.');
-        setOrganizations(d.organizations ?? []);
+        if (!org.res.ok || !job.res.ok) {
+          throw new Error(org.d.error ?? job.d.error ?? '가입 정보를 불러오지 못했습니다.');
+        }
+        setOrganizations(org.d.organizations ?? []);
+        setJobRoles(job.d.jobRoles ?? []);
       })
       .catch((e) => {
         if (!cancelled) setOrgError(e.message);
@@ -72,7 +81,7 @@ export default function SignupPage() {
           email,
           password,
           organizationId,
-          jobRole,
+          jobRoleId: jobRole,
         }),
       });
       const d = await res.json();
@@ -236,7 +245,7 @@ export default function SignupPage() {
             <div className="flex flex-col gap-1">
               <Label htmlFor="jobRole">직무</Label>
               <Select
-                items={JOB_ROLES.map((r) => ({ value: r, label: r }))}
+                items={roles.map((r) => ({ value: r.id, label: r.name }))}
                 value={jobRole}
                 onValueChange={setJobRole}
               >
@@ -244,9 +253,9 @@ export default function SignupPage() {
                   <SelectValue placeholder="선택하세요" />
                 </SelectTrigger>
                 <SelectContent>
-                  {JOB_ROLES.map((r) => (
-                    <SelectItem key={r} value={r}>
-                      {r}
+                  {roles.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

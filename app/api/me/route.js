@@ -11,6 +11,7 @@ const BASE_COLUMNS = 'id, name, must_change_password, can_view_all_projects';
 const SIGNUP_COLUMNS =
   `${BASE_COLUMNS}, affiliation, job_role, onboarded_at, ` +
   'organization:organizations(name), ' +
+  'jobRole:job_roles(name), ' +
   'requested_brand:brands!team_members_requested_brand_id_fkey(name)';
 
 export async function GET() {
@@ -46,7 +47,7 @@ export async function GET() {
       // 조직 이름을 먼저 쓴다. 이관되지 않은 사람은 옛 값으로 떨어진다
       // (lib/organizations.js 의 displayAffiliation 과 같은 순서).
       affiliation: member.organization?.name ?? member.affiliation ?? null,
-      jobRole: member.job_role ?? null,
+      jobRole: member.jobRole?.name ?? member.job_role ?? null,
       // 등급과 직교하는 축. 로그인 직후 어느 화면으로 보낼지가 이 값으로 갈린다.
       canViewAllProjects: member.can_view_all_projects === true,
       requestedBrandName: member.requested_brand?.name ?? null,

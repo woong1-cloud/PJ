@@ -20,8 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { JOB_ROLES } from '@/lib/signup';
 import { groupOrganizations, suggestTierFromOrg } from '@/lib/organizations';
+import { activeJobRoles } from '@/lib/jobRoles';
 import { TIER_LABELS } from '@/lib/tiers';
 
 // 팀원 이름·소속·직무 수정.
@@ -39,6 +39,7 @@ export function TeamMemberEditDialog({ open, onOpenChange, member, onSaved }) {
   const [organizationId, setOrganizationId] = useState(null);
   const [jobRole, setJobRole] = useState(null);
   const [organizations, setOrganizations] = useState([]);
+  const [jobRoles, setJobRoles] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -49,7 +50,7 @@ export function TeamMemberEditDialog({ open, onOpenChange, member, onSaved }) {
     if (open) {
       setName(member?.name ?? '');
       setOrganizationId(member?.organization_id ?? null);
-      setJobRole(member?.job_role ?? null);
+      setJobRole(member?.job_role_id ?? null);
       setError('');
     }
   }
@@ -57,12 +58,21 @@ export function TeamMemberEditDialog({ open, onOpenChange, member, onSaved }) {
   // 이 화면은 전체관리자 전용이라 관리용 조회를 쓴다(가입 화면의 공개
   // 조회에는 default_tier 가 없어 제안 등급을 계산할 수 없다).
   const loadOrgs = useCallback(() => {
-    fetch('/api/organizations')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setOrganizations(d?.organizations ?? []))
+    Promise.all([
+      fetch('/api/organizations').then((r) => (r.ok ? r.json() : null)),
+      fetch('/api/job-roles').then((r) => (r.ok ? r.json() : null)),
+    ])
+      .then(([o, j]) => {
+        setOrganizations(o?.organizations ?? []);
+        setJobRoles(j?.jobRoles ?? []);
+      })
       .catch(() => {});
   }, []);
   useEffect(loadOrgs, [loadOrgs]);
+
+  // 이 파일에는 이미 roles(브랜드 배치 목록)가 있다. 이름이 겹치면
+  // 어느 쪽인지 읽을 때마다 확인해야 한다.
+  const jobRoleOptions = activeJobRoles(jobRoles);
 
   const { brands: brandOrgs, teams: teamOrgs } = groupOrganizations(organizations);
   const selectedOrg = organizations.find((o) => o.id === organizationId) ?? null;
@@ -86,7 +96,7 @@ export function TeamMemberEditDialog({ open, onOpenChange, member, onSaved }) {
       const res = await fetch(`/api/team-members/${member.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, organizationId, jobRole }),
+        body: JSON.stringify({ name, organizationId, jobRoleId: jobRole }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error ?? '저장에 실패했습니다.');
@@ -163,7 +173,7 @@ export function TeamMemberEditDialog({ open, onOpenChange, member, onSaved }) {
           <div className="flex flex-col gap-1">
             <Label htmlFor="member-jobrole">직무</Label>
             <Select
-              items={JOB_ROLES.map((r) => ({ value: r, label: r }))}
+              items={jobRoleOptions.map((r) => ({ value: r.id, label: r.name }))}
               value={jobRole}
               onValueChange={setJobRole}
             >
@@ -171,9 +181,9 @@ export function TeamMemberEditDialog({ open, onOpenChange, member, onSaved }) {
                 <SelectValue placeholder="선택하세요" />
               </SelectTrigger>
               <SelectContent>
-                {JOB_ROLES.map((r) => (
-                  <SelectItem key={r} value={r}>
-                    {r}
+                {jobRoleOptions.map((r) => (
+                  <SelectItem key={r.id} value={r.id}>
+                    {r.name}
                   </SelectItem>
                 ))}
               </SelectContent>

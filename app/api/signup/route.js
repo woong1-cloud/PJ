@@ -1,6 +1,6 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { errorResponse, ApiError } from '@/lib/apiError';
-import { JOB_ROLES, isAllowedEmail } from '@/lib/signup';
+import { isAllowedEmail } from '@/lib/signup';
 import { notifySignup } from '@/lib/notify';
 
 // 이 라우트는 로그인하지 않은 사람이 호출한다. 다른 모든 라우트와 달리
@@ -31,7 +31,7 @@ export async function POST(request) {
     }
     if (!body || typeof body !== 'object') throw new ApiError(400, '잘못된 요청입니다.');
 
-    const { name, email, password, organizationId, jobRole } = body;
+    const { name, email, password, organizationId, jobRoleId } = body;
 
     if (typeof name !== 'string' || !name.trim()) throw new ApiError(400, '이름을 입력해 주세요.');
     if (name.trim().length > MAX_NAME_LENGTH) {
@@ -56,7 +56,9 @@ export async function POST(request) {
     if (typeof organizationId !== 'string' || !organizationId) {
       throw new ApiError(400, '소속을 선택해 주세요.');
     }
-    if (!JOB_ROLES.includes(jobRole)) throw new ApiError(400, '직무를 선택해 주세요.');
+    if (typeof jobRoleId !== 'string' || !jobRoleId) {
+      throw new ApiError(400, '직무를 선택해 주세요.');
+    }
 
     const supabase = getSupabaseAdmin();
 
@@ -71,6 +73,17 @@ export async function POST(request) {
       .maybeSingle();
     if (orgErr) throw orgErr;
     if (!organization) throw new ApiError(400, '소속을 선택해 주세요.');
+
+    // 직무도 같은 이유로 서버가 확인한다. 꺼진 직무 id 를 손으로 보내
+    // 가입하는 길을 막는다.
+    const { data: jobRole, error: jobErr } = await supabase
+      .from('job_roles')
+      .select('id, name')
+      .eq('id', jobRoleId)
+      .eq('is_active', true)
+      .maybeSingle();
+    if (jobErr) throw jobErr;
+    if (!jobRole) throw new ApiError(400, '직무를 선택해 주세요.');
 
     // 이미 가입된 이메일인지 먼저 본다. auth 계정만 만들어 놓고 team_members
     // 삽입이 실패하면 그 이메일은 영원히 쓸 수 없게 된다.
@@ -96,7 +109,10 @@ export async function POST(request) {
       // 아래 세 값은 자기 신고다. 관리자 화면에 힌트로만 쓰이고
       // 어떤 조회·권한 판단에도 쓰이지 않는다.
       organization_id: organization.id,
-      job_role: jobRole,
+      job_role_id: jobRole.id,
+      // 이름도 함께 남긴다. 직무 이름을 나중에 바꿔도 "가입 당시 무엇으로
+      // 신청했는지"가 사라지지 않는다(affiliation 을 남긴 것과 같은 이유).
+      job_role: jobRole.name,
       // 조직이 브랜드면 배치 화면이 그 브랜드를 미리 채울 수 있도록 남긴다.
       // 법무팀처럼 브랜드가 없는 조직이면 null 이고, 그때는 관리자가 고른다.
       requested_brand_id: organization.brand_id,

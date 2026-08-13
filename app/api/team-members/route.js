@@ -14,6 +14,7 @@ const ADMIN_COLUMNS =
   `${BASE_COLUMNS}, email, affiliation, job_role, signed_up_at, requested_brand_id, ` +
   'can_view_all_projects, organization_id, ' +
   'organization:organizations(id, name, brand_id, default_tier, default_view_all_projects), ' +
+  'jobRole:job_roles(id, name), ' +
   'requested_brand:brands!team_members_requested_brand_id_fkey(name)';
 
 export async function GET(request) {

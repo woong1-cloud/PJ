@@ -2,13 +2,12 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { requireGlobalAdmin } from '@/lib/permissions';
 import { errorResponse, ApiError } from '@/lib/apiError';
 import { checkLastGlobalAdmin } from '@/lib/checkLastGlobalAdmin';
-import { JOB_ROLES } from '@/lib/signup';
 
 export async function PATCH(request, { params }) {
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, isActive, isGlobalAdmin, organizationId, jobRole, canViewAllProjects } = body;
+    const { name, isActive, isGlobalAdmin, organizationId, jobRoleId, canViewAllProjects } = body;
 
     await requireGlobalAdmin();
 
@@ -46,9 +45,13 @@ export async function PATCH(request, { params }) {
     if (canViewAllProjects !== undefined) {
       updates.can_view_all_projects = Boolean(canViewAllProjects);
     }
-    if (jobRole !== undefined) {
-      if (!JOB_ROLES.includes(jobRole)) throw new ApiError(400, '유효하지 않은 직무입니다.');
-      updates.job_role = jobRole;
+    // 직무는 id 로 받는다. 이름을 그대로 넣으면 관리자가 목록에서 이름을
+    // 바꿨을 때 옛 문자열이 남아 조인이 끊긴다.
+    //
+    // 존재 여부는 FK 가 지킨다. null 로 비우는 것은 허용한다 — 이관되지 않은
+    // 사람을 되돌릴 길이 없으면 실수를 고칠 수 없다(organization_id 와 같은 규칙).
+    if (jobRoleId !== undefined) {
+      updates.job_role_id = jobRoleId || null;
     }
     if (Object.keys(updates).length === 0) throw new ApiError(400, '수정할 필드가 없습니다.');
 

@@ -3,6 +3,7 @@
 import { useIdentity } from '@/components/IdentityProvider';
 import { isGlobalAdmin } from '@/lib/tiers';
 import { OrganizationSettings } from '@/components/OrganizationSettings';
+import { JobRoleSettings } from '@/components/JobRoleSettings';
 
 // 조직 관리.
 //
@@ -25,6 +26,19 @@ export default function OrganizationsPage() {
         </p>
       </div>
       <OrganizationSettings />
+
+      {/* 직무는 소속과 다른 축이다 — 소속이 '어느 조직인가'이고 직무는
+          '무슨 일을 하는가'다. 큰 조직(온라인BU)에서는 기획자/개발자 구분이
+          여전히 의미가 있어서 칸을 따로 둔다. 한 화면에 두는 이유는 둘 다
+          가입 화면의 선택지이고 고치는 사람이 같기 때문이다. */}
+      <div className="mt-6 border-t border-slate-200 pt-6">
+        <h2 className="text-lg font-semibold text-slate-900">직무 관리</h2>
+        <p className="mt-1 mb-4 text-sm text-slate-500">
+          가입 화면의 직무 목록입니다. 소속이 &apos;어느 조직인가&apos;라면 직무는 &apos;무슨
+          일을 하는가&apos;입니다.
+        </p>
+        <JobRoleSettings />
+      </div>
     </div>
   );
 }
