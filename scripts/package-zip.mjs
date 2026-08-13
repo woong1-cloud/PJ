@@ -404,6 +404,13 @@ SUPABASE_URL=https://xxxxx.supabase.co
 # service_role 키. RLS 를 우회하는 키입니다. 이 앱은 권한 판정을 전부 서버
 # 라우트에서 하기 때문에 반드시 필요하지만, 브라우저로는 절대 나가지 않습니다.
 SUPABASE_SERVICE_ROLE_KEY=
+
+# 주간 요약 메일을 부르는 스케줄러가 쓸 토큰(선택).
+#
+# 비우면 /api/cron/weekly-digest 가 503 으로 잠깁니다 — 없을 때 통과시키면
+# "설정을 깜빡한 서버"가 곧 "누구나 메일을 쏠 수 있는 서버"가 됩니다.
+# 아무 긴 임의 문자열이면 됩니다: openssl rand -hex 32
+CRON_SECRET=
 `;
 
 function sourceGuide(name, withEnv) {
@@ -477,6 +484,37 @@ ${envSection}
    (500 이면 \`SUPABASE_URL\` / \`SUPABASE_SERVICE_ROLE_KEY\` 확인)
 3. 로그인하면 요구사항 목록이 뜬다 → 끝
    (여기서만 실패하면 \`NEXT_PUBLIC_\` 두 개를 빌드 전에 안 넣은 것입니다)
+
+## 주간 요약 메일 (선택)
+
+매주 월요일 아침, 브랜드의 실무자 이상에게 "이번 주 손볼 것"을 메일로
+보냅니다. 담당자 없는 검토대기, 예상일 없는 진행 건, 레드마인 미연결,
+그리고 받는 사람 본인의 지연 건입니다. 손볼 것이 없으면 보내지 않습니다.
+
+켜려면 두 가지가 필요합니다.
+
+1. 환경변수 \`CRON_SECRET\` 에 임의의 긴 문자열을 넣습니다.
+2. 스케줄러가 매주 월요일 아침에 아래를 호출하게 합니다.
+
+\`\`\`
+curl -X POST https://<주소>/api/cron/weekly-digest \\
+  -H "Authorization: Bearer <CRON_SECRET>"
+\`\`\`
+
+부르는 주체는 무엇이든 됩니다 — 배포 플랫폼의 스케줄러, Supabase 의
+pg_cron, 사내 배치 서버, 사람이 직접 실행하는 것까지.
+
+응답에 몇 통이 나갔는지가 담깁니다. 화면에 아무도 없는 작업이라 이 응답이
+유일한 단서입니다.
+
+\`\`\`
+{"ok":true,"brands":1,"sent":4,"skipped":0,"failed":0}
+\`\`\`
+
+- \`skipped\` — 메일 주소가 없거나 그 사람에게 손볼 것이 없었던 경우
+- \`401\` — 토큰 불일치 · \`503\` — \`CRON_SECRET\` 미설정(잠긴 상태)
+
+\`CRON_SECRET\` 을 안 넣으면 이 기능만 꺼지고 나머지는 전부 그대로 동작합니다.
 `;
 }
 
