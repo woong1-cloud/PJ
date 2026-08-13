@@ -2,13 +2,13 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { requireGlobalAdmin } from '@/lib/permissions';
 import { errorResponse, ApiError } from '@/lib/apiError';
 import { checkLastGlobalAdmin } from '@/lib/checkLastGlobalAdmin';
-import { AFFILIATIONS, JOB_ROLES } from '@/lib/signup';
+import { JOB_ROLES } from '@/lib/signup';
 
 export async function PATCH(request, { params }) {
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, isActive, isGlobalAdmin, affiliation, jobRole } = body;
+    const { name, isActive, isGlobalAdmin, organizationId, jobRole, canViewAllProjects } = body;
 
     await requireGlobalAdmin();
 
@@ -36,9 +36,15 @@ export async function PATCH(request, { params }) {
     //
     // 가입 폼과 같은 목록으로 검증한다. DB CHECK 도 같은 값이라 여기서 막지
     // 않으면 23514 가 사용자 화면에 뜬다.
-    if (affiliation !== undefined) {
-      if (!AFFILIATIONS.includes(affiliation)) throw new ApiError(400, '유효하지 않은 소속입니다.');
-      updates.affiliation = affiliation;
+    if (organizationId !== undefined) {
+      // 조직 존재 여부는 FK 가 지킨다. 여기서는 null 로 비우는 것만 허용한다 —
+      // 이관되지 않은 사람을 되돌릴 길이 없으면 실수를 고칠 수 없다.
+      updates.organization_id = organizationId || null;
+    }
+    // 등급과 직교하는 축이다. 브랜드 배치(user_brand_roles)와 달리 사람에게
+    // 붙으므로 여기서 다룬다.
+    if (canViewAllProjects !== undefined) {
+      updates.can_view_all_projects = Boolean(canViewAllProjects);
     }
     if (jobRole !== undefined) {
       if (!JOB_ROLES.includes(jobRole)) throw new ApiError(400, '유효하지 않은 직무입니다.');

@@ -1,6 +1,7 @@
 'use client';
 
 import { TIER_LABELS } from '@/lib/tiers';
+import { displayAffiliation } from '@/lib/organizations';
 
 // props: members(전사 팀원, 비활성 포함), onCreate(), onAccount(member),
 //        onToggleGlobalAdmin(member), onToggleActive(member),
@@ -70,7 +71,7 @@ export function TeamMemberListSection({
               </td>
               <td className="py-2 text-slate-500">{m.email ?? ''}</td>
               <td className="py-2 text-slate-500">
-                {[m.affiliation, m.job_role].filter(Boolean).join(' · ') || '—'}
+                {[displayAffiliation(m), m.job_role].filter(Boolean).join(' · ') || '—'}
               </td>
               <td className="py-2">
                 {(m.brandRoles ?? []).length === 0 ? (

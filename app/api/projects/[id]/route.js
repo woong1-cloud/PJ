@@ -53,11 +53,19 @@ export async function GET(request, { params }) {
     // 프로젝트 목록 라우트도 같은 함수를 쓴다 — 규칙이 두 곳에 적혀 있으면
     // 한쪽만 고쳐지고, 새는 방향의 실수는 조용하다.
     const myBrandIds = (rolesResult.data ?? []).map((r) => r.brand_id);
+    // 전사 열람은 프로젝트가 보이는가에만 관여한다. 아래 requirementsOfMyBrands
+    // 는 그대로 배치된 브랜드로 좁힌다 — 넓히는 것은 프로젝트 단위까지다.
+    const { data: me } = await supabase
+      .from('team_members')
+      .select('can_view_all_projects')
+      .eq('id', memberId)
+      .maybeSingle();
+    const canViewAllProjects = me?.can_view_all_projects === true;
 
     // 권한 확인이 여기여야 하는 이유: 이 라우트는 로그인만 보고 있어서, id 만
     // 알면 다른 브랜드 프로젝트의 이름·담당자·브랜드별 진척이 그대로 나갔다.
     // 목록에서 안 보이게 하는 것만으로는 막히지 않는다.
-    if (!canSeeProject({ projectBrands, myBrandIds, isGlobalAdmin })) {
+    if (!canSeeProject({ projectBrands, myBrandIds, isGlobalAdmin, canViewAllProjects })) {
       throw new ApiError(403, '이 프로젝트를 볼 권한이 없습니다.');
     }
 

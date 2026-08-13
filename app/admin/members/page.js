@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useIdentity } from '@/components/IdentityProvider';
 import { isGlobalAdmin } from '@/lib/tiers';
-import { suggestTier } from '@/lib/signup';
+import { suggestTierFromOrg } from '@/lib/organizations';
 import { AdminSectionNav } from '@/components/AdminSectionNav';
 import { PendingMembersSection } from '@/components/PendingMembersSection';
 import { TeamMemberListSection } from '@/components/TeamMemberListSection';
@@ -175,8 +175,8 @@ export default function AdminMembersPage() {
         }}
         identity={identity}
         presetMember={assignTarget}
-        targetBrandId={assignTarget?.requested_brand_id ?? null}
-        presetTier={suggestTier(assignTarget?.affiliation)}
+        targetBrandId={assignTarget?.organization?.brand_id ?? assignTarget?.requested_brand_id ?? null}
+        presetTier={suggestTierFromOrg(assignTarget?.organization)}
         brands={activeBrands}
         onAssigned={() => {
           setAssignTarget(null);

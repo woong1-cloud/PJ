@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { TIER_LABELS } from '@/lib/tiers';
+import { TIER_LABELS, TIER_HINTS } from '@/lib/tiers';
 
 const TIERS = ['3차', '4차'];
 const SUB_ROLES = ['기획', '개발', '뷰어'];
@@ -183,6 +183,10 @@ export function BrandTeamAssignDialog({
                     ))}
                   </SelectContent>
                 </Select>
+                {/* 등급 이름은 지위를 말하는데, 고르는 사람이 알아야 하는 건
+                    그 지위가 무엇을 여는가다. '실무자'와 '실무 관리자'는
+                    이름만으로 한눈에 안 갈린다. */}
+                <p className="text-xs text-slate-500">{TIER_HINTS[tier]}</p>
                 {presetTier && (
                   <p className="text-xs text-slate-500">
                     신청한 소속을 근거로 제안한 등급입니다. 바꿀 수 있습니다.

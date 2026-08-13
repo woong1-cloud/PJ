@@ -10,7 +10,11 @@ const BASE_COLUMNS = 'id, name, is_active, is_global_admin, auth_user_id';
 // 누구인지" 판단하는 데만 쓰인다. 담당자 드롭다운에는 이름이면 충분하므로
 // 전체관리자에게만 실어 보낸다 — 필요 없는 사람에게까지 전사 이메일부를
 // 내려 줄 이유가 없다.
-const ADMIN_COLUMNS = `${BASE_COLUMNS}, email, affiliation, job_role, signed_up_at, requested_brand_id, requested_brand:brands!team_members_requested_brand_id_fkey(name)`;
+const ADMIN_COLUMNS =
+  `${BASE_COLUMNS}, email, affiliation, job_role, signed_up_at, requested_brand_id, ` +
+  'can_view_all_projects, organization_id, ' +
+  'organization:organizations(id, name, brand_id, default_tier, default_view_all_projects), ' +
+  'requested_brand:brands!team_members_requested_brand_id_fkey(name)';
 
 export async function GET(request) {
   try {

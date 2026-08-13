@@ -146,7 +146,6 @@ export default function LoginPage() {
     const applied = [
       ['소속', me?.affiliation],
       ['직무', me?.jobRole],
-      ['근무 브랜드', me?.requestedBrandName],
     ].filter(([, v]) => v);
 
     return (
@@ -158,6 +157,17 @@ export default function LoginPage() {
           <p className="mt-2 text-sm text-slate-600">
             관리자가 브랜드를 배치하면 사용할 수 있습니다.
           </p>
+          {/* 전사 열람이 켜진 사람(법무팀·재무팀)은 브랜드에 배치되지 않아도
+              프로젝트 진행은 볼 수 있다. 그 길을 여기서 알려주지 않으면
+              "기다리세요"만 보고 나가서 다시 안 들어온다. */}
+          {me?.canViewAllProjects && (
+            <Link
+              href="/projects"
+              className="mt-4 inline-block rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700"
+            >
+              전사 프로젝트 보기
+            </Link>
+          )}
           {applied.length > 0 && (
             <div className="mt-4 rounded-lg bg-slate-50 p-3 text-left">
               <p className="text-xs text-slate-500">신청 내용</p>

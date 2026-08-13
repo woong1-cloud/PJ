@@ -41,13 +41,21 @@ export async function GET(request) {
       ? 'id, title, project_id, brand_id, status, is_confidential, expected_release_date'
       : 'project_id, brand_id, status';
 
-    const [pbResult, brandsResult, reqResult, myRoles] = await Promise.all([
+    const [pbResult, brandsResult, reqResult, myRoles, meResult] = await Promise.all([
       supabase.from('project_brands').select('project_id, brand_id, status').in('project_id', projectIds),
       supabase.from('brands').select('id, name'),
       supabase.from('requirements').select(reqColumns).in('project_id', projectIds),
       // 예전에는 withRequirements 일 때만 등급을 읽었다. 이제 권한 판정에
       // 항상 필요하므로 조건 없이 읽는다.
       supabase.from('user_brand_roles').select('brand_id, tier').eq('team_member_id', memberId),
+      // 전사 열람 플래그. 등급과 직교하는 축이라 user_brand_roles 가 아니라
+      // 사람에게 붙는다 — 법무팀·재무팀처럼 브랜드에 배치되지 않은 사람이
+      // 어떤 프로젝트가 도는지 봐야 하는 경우를 위한 것이다.
+      supabase
+        .from('team_members')
+        .select('can_view_all_projects')
+        .eq('id', memberId)
+        .maybeSingle(),
     ]);
     if (pbResult.error) throw pbResult.error;
     if (brandsResult.error) throw brandsResult.error;
@@ -91,10 +99,12 @@ export async function GET(request) {
     //     프로젝트가 그대로 나갔다 — '전사 전체' 버튼을 누르거나 API 를 직접
     //     부르면 스파오 4차가 미쏘 프로젝트를 볼 수 있었다.
     const myBrandIds = (myRoles.data ?? []).map((r) => r.brand_id);
+    const canViewAllProjects = meResult.data?.can_view_all_projects === true;
     result = visibleProjects({
       projects: result,
       allProjectBrands,
       myBrandIds,
+      canViewAllProjects,
       isGlobalAdmin,
     });
 

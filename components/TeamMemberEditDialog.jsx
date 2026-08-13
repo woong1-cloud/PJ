@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -14,11 +14,14 @@ import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { AFFILIATIONS, JOB_ROLES, suggestTier } from '@/lib/signup';
+import { JOB_ROLES } from '@/lib/signup';
+import { groupOrganizations, suggestTierFromOrg } from '@/lib/organizations';
 import { TIER_LABELS } from '@/lib/tiers';
 
 // 팀원 이름·소속·직무 수정.
@@ -33,8 +36,9 @@ import { TIER_LABELS } from '@/lib/tiers';
 // props: open, onOpenChange, member, onSaved
 export function TeamMemberEditDialog({ open, onOpenChange, member, onSaved }) {
   const [name, setName] = useState('');
-  const [affiliation, setAffiliation] = useState(null);
+  const [organizationId, setOrganizationId] = useState(null);
   const [jobRole, setJobRole] = useState(null);
+  const [organizations, setOrganizations] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -44,21 +48,35 @@ export function TeamMemberEditDialog({ open, onOpenChange, member, onSaved }) {
     setWasOpen(open);
     if (open) {
       setName(member?.name ?? '');
-      setAffiliation(member?.affiliation ?? null);
+      setOrganizationId(member?.organization_id ?? null);
       setJobRole(member?.job_role ?? null);
       setError('');
     }
   }
+
+  // 이 화면은 전체관리자 전용이라 관리용 조회를 쓴다(가입 화면의 공개
+  // 조회에는 default_tier 가 없어 제안 등급을 계산할 수 없다).
+  const loadOrgs = useCallback(() => {
+    fetch('/api/organizations')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setOrganizations(d?.organizations ?? []))
+      .catch(() => {});
+  }, []);
+  useEffect(loadOrgs, [loadOrgs]);
+
+  const { brands: brandOrgs, teams: teamOrgs } = groupOrganizations(organizations);
+  const selectedOrg = organizations.find((o) => o.id === organizationId) ?? null;
 
   // 소속을 바꿨는데 등급이 그대로면 "본부 소속인데 4차" 같은 상태가 남는다.
   // 화면에 아무 경고가 없으면 나중에 "이 사람 왜 상태를 못 바꿔요?"로 돌아온다.
   // 여기서 제안 등급과 현재 배치를 나란히 보여주고, 실제 변경은 팀원 목록의
   // 등급 셀렉트로 하게 둔다 — 한 다이얼로그가 두 테이블을 고치면 절반만
   // 성공했을 때 무엇이 저장됐는지 알 수 없다.
-  const proposed = affiliation ? suggestTier(affiliation) : null;
+  const proposed = selectedOrg ? suggestTierFromOrg(selectedOrg) : null;
   const roles = member?.brandRoles ?? [];
   const mismatched = proposed ? roles.filter((r) => r.tier !== proposed) : [];
-  const affiliationChanged = Boolean(affiliation) && affiliation !== member?.affiliation;
+  const affiliationChanged =
+    Boolean(organizationId) && organizationId !== (member?.organization_id ?? null);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -68,7 +86,7 @@ export function TeamMemberEditDialog({ open, onOpenChange, member, onSaved }) {
       const res = await fetch(`/api/team-members/${member.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, affiliation, jobRole }),
+        body: JSON.stringify({ name, organizationId, jobRole }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error ?? '저장에 실패했습니다.');
@@ -81,7 +99,7 @@ export function TeamMemberEditDialog({ open, onOpenChange, member, onSaved }) {
     }
   }
 
-  const canSubmit = name.trim() && affiliation && jobRole;
+  const canSubmit = name.trim() && organizationId && jobRole;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -104,21 +122,43 @@ export function TeamMemberEditDialog({ open, onOpenChange, member, onSaved }) {
           <div className="flex flex-col gap-1">
             <Label htmlFor="member-affiliation">소속</Label>
             <Select
-              items={AFFILIATIONS.map((a) => ({ value: a, label: a }))}
-              value={affiliation}
-              onValueChange={setAffiliation}
+              items={organizations.map((o) => ({ value: o.id, label: o.name }))}
+              value={organizationId}
+              onValueChange={setOrganizationId}
             >
               <SelectTrigger id="member-affiliation" className="w-full">
                 <SelectValue placeholder="선택하세요" />
               </SelectTrigger>
               <SelectContent>
-                {AFFILIATIONS.map((a) => (
-                  <SelectItem key={a} value={a}>
-                    {a}
-                  </SelectItem>
-                ))}
+                {brandOrgs.length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel>브랜드</SelectLabel>
+                    {brandOrgs.map((o) => (
+                      <SelectItem key={o.id} value={o.id}>
+                        {o.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
+                {teamOrgs.length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel>본부·팀</SelectLabel>
+                    {teamOrgs.map((o) => (
+                      <SelectItem key={o.id} value={o.id}>
+                        {o.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
               </SelectContent>
             </Select>
+            {/* 이관되지 않은 사람은 조직이 비어 있다. 무엇이었는지 보여주지
+                않으면 관리자가 아무 조직이나 고르게 된다. */}
+            {!member?.organization_id && member?.affiliation && (
+              <p className="text-xs text-slate-500">
+                이전 소속: {member.affiliation} — 조직을 지정해 주세요
+              </p>
+            )}
           </div>
           <div className="flex flex-col gap-1">
             <Label htmlFor="member-jobrole">직무</Label>
@@ -145,7 +185,7 @@ export function TeamMemberEditDialog({ open, onOpenChange, member, onSaved }) {
           {affiliationChanged && (
             <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
               <p>
-                소속을 <b>{affiliation}</b>로 바꾸면 제안 등급은{' '}
+                소속을 <b>{selectedOrg?.name}</b>(으)로 바꾸면 제안 등급은{' '}
                 <b>{TIER_LABELS[proposed] ?? proposed}</b>입니다. 소속은
                 등급을 제안할 뿐이고, 실제 권한은 브랜드별 배치에서 나옵니다.
               </p>
