@@ -99,6 +99,14 @@ export function TopBar() {
               대시보드
             </NavLink>
           )}
+          {globalAdmin && (
+            <NavLink
+              href="/admin/organizations"
+              active={pathname.startsWith('/admin/organizations')}
+            >
+              조직
+            </NavLink>
+          )}
         </div>
       </div>
 
