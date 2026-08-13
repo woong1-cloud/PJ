@@ -3,7 +3,7 @@ import { requireBrandAccess } from '@/lib/permissions';
 import { errorResponse, ApiError } from '@/lib/apiError';
 import { INITIAL_STATUS, REVIEW_PENDING_STATUS } from '@/lib/statuses';
 import { canSubmitForReview } from '@/lib/submitRequirement';
-import { notifyStatusChange } from '@/lib/notify';
+import { notifySubmitted } from '@/lib/notify';
 
 // 브랜드가 '검토 요청'을 누르는 길.
 //
@@ -61,11 +61,11 @@ export async function POST(request, { params }) {
     if (logError) throw logError;
 
     // 상태는 이미 바뀌었다. 알림이 실패해도 조용히 넘어간다(notify 는 던지지 않는다).
-    await notifyStatusChange({
-      requirementId: id,
-      actorId: actor.memberId,
-      status: REVIEW_PENDING_STATUS,
-    });
+    //
+    // notifyStatusChange 가 아니라 notifySubmitted 다. 저쪽 수신자는 요청자와
+    // 담당자인데, 여기서는 요청자가 곧 행위자라 제외되고 담당자는 아직 없다 —
+    // 늘 0명이었다. 접수는 그 브랜드의 3차 이상이 받아야 하는 알림이다.
+    await notifySubmitted({ requirementId: id, actorId: actor.memberId, brandId });
 
     return Response.json({ ok: true, status: REVIEW_PENDING_STATUS });
   } catch (error) {

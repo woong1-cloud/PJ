@@ -4,6 +4,7 @@ import { errorResponse, ApiError } from '@/lib/apiError';
 import { TIER_RANK } from '@/lib/tiers';
 import { INITIAL_STATUS, REVIEW_PENDING_STATUS, CLOSED_STATUSES } from '@/lib/statuses';
 import { todayInKst } from '@/lib/overdue';
+import { notifySubmitted } from '@/lib/notify';
 import { HANDOFF_STATUSES } from '@/lib/redmineLink';
 import { isValidType } from '@/lib/requirementTypes';
 import { CHANNELS, DEFAULT_CHANNEL } from '@/lib/channels';
@@ -216,6 +217,16 @@ export async function POST(request) {
       ({ data, error } = await supabase.from('requirements').insert(row).select().single());
     }
     if (error) throw error;
+
+    // 등록하면서 바로 제출한 경우에만 알린다. 작성중으로 저장한 건은 아직
+    // 아무에게도 보여 줄 단계가 아니다(올린 사람과 실무 관리자만 목록에서 본다).
+    //
+    // 이 호출이 없어서 34건이 조용히 쌓였다. 가장 흔한 등록 경로가 이쪽인데
+    // 알림 코드가 아예 없었고, 그래서 "알림이 안 온다"가 아니라 "알림 기능이
+    // 있다는 것조차 드러나지 않는" 상태였다.
+    if (row.status === REVIEW_PENDING_STATUS) {
+      await notifySubmitted({ requirementId: data.id, actorId: memberId, brandId });
+    }
     return Response.json({ requirement: data }, { status: 201 });
   } catch (error) {
     return errorResponse(error);
