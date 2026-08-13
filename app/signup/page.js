@@ -5,13 +5,16 @@ import Link from 'next/link';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { AFFILIATIONS, JOB_ROLES } from '@/lib/signup';
+import { JOB_ROLES } from '@/lib/signup';
+import { groupOrganizations } from '@/lib/organizations';
 import { BrandHeader } from '@/components/BrandHeader';
 
 export default function SignupPage() {
@@ -25,27 +28,32 @@ export default function SignupPage() {
   // 오타를 내면 본인이 할 수 있는 일이 없다 — 게다가 가입 직후에는 배치 대기라
   // "내가 틀린 건지 승인이 안 난 건지"조차 구분되지 않는다.
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [affiliation, setAffiliation] = useState(null);
+  const [organizationId, setOrganizationId] = useState(null);
   const [jobRole, setJobRole] = useState(null);
-  const [brandId, setBrandId] = useState(null);
-  const [brands, setBrands] = useState([]);
+  const [organizations, setOrganizations] = useState([]);
+  // 소속은 필수라 목록이 없으면 가입 자체가 불가능하다. 빈 셀렉트를 보여주면
+  // 사용자는 자기가 뭘 잘못했는지 찾다가 포기한다.
+  const [orgError, setOrgError] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
 
-  // 소속이 '브랜드'일 때만 근무 브랜드를 묻는다. 본부 소속은 여러 브랜드를
-  // 함께 보므로 하나를 고르라는 질문 자체가 성립하지 않는다.
-  const needsBrand = affiliation === '브랜드';
+  // 소속 셀렉트를 브랜드 / 본부·팀 두 그룹으로 나눈다. 조직이 20개쯤 되면
+  // 한 줄로 늘어놓을 수 없고, 고르는 사람 머릿속에 이미 갈라져 있는 축이다.
+  const { brands: brandOrgs, teams: teamOrgs } = groupOrganizations(organizations);
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/signup/brands')
+    fetch('/api/signup/organizations')
       .then((res) => res.json().then((d) => ({ res, d })))
       .then(({ res, d }) => {
-        if (cancelled || !res.ok) return;
-        setBrands(d.brands ?? []);
+        if (cancelled) return;
+        if (!res.ok) throw new Error(d.error ?? '소속 목록을 불러오지 못했습니다.');
+        setOrganizations(d.organizations ?? []);
       })
-      .catch(() => {});
+      .catch((e) => {
+        if (!cancelled) setOrgError(e.message);
+      });
     return () => {
       cancelled = true;
     };
@@ -63,9 +71,8 @@ export default function SignupPage() {
           name,
           email,
           password,
-          affiliation,
+          organizationId,
           jobRole,
-          brandId: needsBrand ? brandId : null,
         }),
       });
       const d = await res.json();
@@ -111,9 +118,11 @@ export default function SignupPage() {
     // 일치 여부를 여기 안 넣으면 확인 칸이 그냥 장식이 된다 — 안 맞아도 가입이
     // 그대로 된다.
     password === confirmPassword &&
-    affiliation &&
-    jobRole &&
-    (!needsBrand || brandId);
+    // 목록을 못 받았으면 고를 수 있는 소속이 없다. 제출을 막지 않으면
+    // 서버가 400 을 돌려주고, 사용자는 자기 입력이 틀린 줄 안다.
+    !orgError &&
+    organizationId &&
+    jobRole;
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-6">
@@ -185,28 +194,44 @@ export default function SignupPage() {
               )}
             </div>
             <div className="flex flex-col gap-1">
-              <Label htmlFor="affiliation">소속</Label>
+              <Label htmlFor="organization">소속</Label>
               <Select
-                items={AFFILIATIONS.map((a) => ({ value: a, label: a }))}
-                value={affiliation}
-                onValueChange={(v) => {
-                  setAffiliation(v);
-                  // 본부로 바꾸면 고른 브랜드는 보내지 않는다. 화면에서 사라진
-                  // 값이 조용히 따라가면 안 된다.
-                  if (v !== '브랜드') setBrandId(null);
-                }}
+                items={organizations.map((o) => ({ value: o.id, label: o.name }))}
+                value={organizationId}
+                onValueChange={setOrganizationId}
               >
-                <SelectTrigger id="affiliation" className="h-11 w-full md:h-8">
+                <SelectTrigger id="organization" className="h-11 w-full md:h-8">
                   <SelectValue placeholder="선택하세요" />
                 </SelectTrigger>
                 <SelectContent>
-                  {AFFILIATIONS.map((a) => (
-                    <SelectItem key={a} value={a}>
-                      {a}
-                    </SelectItem>
-                  ))}
+                  {/* 브랜드와 본부·팀을 나눈다. 한 목록에 섞으면 조직이 늘수록
+                      찾는 데 시간이 걸리고, 이 둘은 고르는 사람 머릿속에 이미
+                      갈라져 있는 축이다. */}
+                  {brandOrgs.length > 0 && (
+                    <SelectGroup>
+                      <SelectLabel>브랜드</SelectLabel>
+                      {brandOrgs.map((o) => (
+                        <SelectItem key={o.id} value={o.id}>
+                          {o.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  )}
+                  {teamOrgs.length > 0 && (
+                    <SelectGroup>
+                      <SelectLabel>본부·팀</SelectLabel>
+                      {teamOrgs.map((o) => (
+                        <SelectItem key={o.id} value={o.id}>
+                          {o.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  )}
                 </SelectContent>
               </Select>
+              {/* 목록을 못 받으면 소속을 고를 수 없고, 소속은 필수다.
+                  왜 못 고르는지 말해 주지 않으면 사용자는 자기 잘못을 찾는다. */}
+              {orgError && <p className="text-xs text-red-600">{orgError}</p>}
             </div>
             <div className="flex flex-col gap-1">
               <Label htmlFor="jobRole">직무</Label>
@@ -227,27 +252,9 @@ export default function SignupPage() {
                 </SelectContent>
               </Select>
             </div>
-            {needsBrand && (
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="brand">근무 브랜드</Label>
-                <Select
-                  items={brands.map((b) => ({ value: b.id, label: b.name }))}
-                  value={brandId}
-                  onValueChange={setBrandId}
-                >
-                  <SelectTrigger id="brand" className="h-11 w-full md:h-8">
-                    <SelectValue placeholder="선택하세요" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {brands.map((b) => (
-                      <SelectItem key={b.id} value={b.id}>
-                        {b.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+            {/* '근무 브랜드' 칸은 없앴다. 조직이 이미 브랜드를 알고 있어서
+                (organizations.brand_id) 같은 정보를 두 번 묻는 칸이었다.
+                관리자 배치 화면이 그 값으로 브랜드를 미리 채운다. */}
             <button
               type="submit"
               className="h-11 rounded-lg bg-indigo-600 px-3 text-white transition-colors hover:bg-indigo-700 disabled:opacity-50 md:h-9"

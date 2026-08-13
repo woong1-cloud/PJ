@@ -1,6 +1,6 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { errorResponse, ApiError } from '@/lib/apiError';
-import { AFFILIATIONS, JOB_ROLES, isAllowedEmail } from '@/lib/signup';
+import { JOB_ROLES, isAllowedEmail } from '@/lib/signup';
 import { notifySignup } from '@/lib/notify';
 
 // 이 라우트는 로그인하지 않은 사람이 호출한다. 다른 모든 라우트와 달리
@@ -31,7 +31,7 @@ export async function POST(request) {
     }
     if (!body || typeof body !== 'object') throw new ApiError(400, '잘못된 요청입니다.');
 
-    const { name, email, password, affiliation, jobRole, brandId } = body;
+    const { name, email, password, organizationId, jobRole } = body;
 
     if (typeof name !== 'string' || !name.trim()) throw new ApiError(400, '이름을 입력해 주세요.');
     if (name.trim().length > MAX_NAME_LENGTH) {
@@ -53,36 +53,24 @@ export async function POST(request) {
       throw new ApiError(400, `비밀번호는 ${MAX_PASSWORD_LENGTH}자 이하여야 합니다.`);
     }
 
-    if (!AFFILIATIONS.includes(affiliation)) throw new ApiError(400, '소속을 선택해 주세요.');
-    if (!JOB_ROLES.includes(jobRole)) throw new ApiError(400, '직무를 선택해 주세요.');
-
-    // 브랜드 소속은 근무 브랜드가 필요하다. 본부 소속은 여러 브랜드를 함께
-    // 보므로 묻지 않는다.
-    const wantsBrand = affiliation === '브랜드';
-    if (wantsBrand && (typeof brandId !== 'string' || !brandId)) {
-      throw new ApiError(400, '근무 브랜드를 선택해 주세요.');
+    if (typeof organizationId !== 'string' || !organizationId) {
+      throw new ApiError(400, '소속을 선택해 주세요.');
     }
+    if (!JOB_ROLES.includes(jobRole)) throw new ApiError(400, '직무를 선택해 주세요.');
 
     const supabase = getSupabaseAdmin();
 
-    // 신청 브랜드가 실재하는 활성 브랜드인지 확인한다. 이 값으로 권한이
-    // 생기지는 않지만, 검증 없이 넣으면 FK 위반이 500으로 튀어나온다.
-    let requestedBrandId = null;
-    // 이름은 관리자 알림 문구에만 쓴다. 어느 브랜드 사람이 기다리는지가
-    // 배치 판단의 절반이라 id 만으로는 부족하다.
-    let requestedBrandName = null;
-    if (wantsBrand) {
-      const { data: brand, error: brandErr } = await supabase
-        .from('brands')
-        .select('id, name')
-        .eq('id', brandId)
-        .eq('is_active', true)
-        .maybeSingle();
-      if (brandErr) throw brandErr;
-      if (!brand) throw new ApiError(400, '근무 브랜드를 선택해 주세요.');
-      requestedBrandId = brand.id;
-      requestedBrandName = brand.name;
-    }
+    // 조직이 실재하고 활성인지 서버가 확인한다. 화면 목록은 편의일 뿐이고
+    // 여기가 관문이다 — 꺼진 조직 id 를 손으로 보내 가입하는 길을 막는다.
+    // 검증 없이 넣으면 FK 위반이 500 으로 튀어나오기도 한다.
+    const { data: organization, error: orgErr } = await supabase
+      .from('organizations')
+      .select('id, name, brand_id')
+      .eq('id', organizationId)
+      .eq('is_active', true)
+      .maybeSingle();
+    if (orgErr) throw orgErr;
+    if (!organization) throw new ApiError(400, '소속을 선택해 주세요.');
 
     // 이미 가입된 이메일인지 먼저 본다. auth 계정만 만들어 놓고 team_members
     // 삽입이 실패하면 그 이메일은 영원히 쓸 수 없게 된다.
@@ -107,9 +95,11 @@ export async function POST(request) {
       auth_user_id: created.user.id,
       // 아래 세 값은 자기 신고다. 관리자 화면에 힌트로만 쓰이고
       // 어떤 조회·권한 판단에도 쓰이지 않는다.
-      affiliation,
+      organization_id: organization.id,
       job_role: jobRole,
-      requested_brand_id: requestedBrandId,
+      // 조직이 브랜드면 배치 화면이 그 브랜드를 미리 채울 수 있도록 남긴다.
+      // 법무팀처럼 브랜드가 없는 조직이면 null 이고, 그때는 관리자가 고른다.
+      requested_brand_id: organization.brand_id,
       signed_up_at: new Date().toISOString(),
       is_active: true,
       // 전체관리자는 가입으로 얻을 수 있는 것이 아니다.
@@ -130,11 +120,9 @@ export async function POST(request) {
     //
     // 가입 자체는 이미 끝났으므로 알림 실패가 응답을 바꾸면 안 된다.
     // notifySignup 은 throw 하지 않는다(lib/notify.js 규약).
-    await notifySignup({
-      name: name.trim(),
-      affiliation,
-      brandName: requestedBrandName,
-    });
+    // 어느 조직 사람이 기다리는지가 배치 판단의 절반이다. 예전에는 '브랜드'
+    // /'본부' 두 값뿐이라 이 자리가 사실상 비어 있었다.
+    await notifySignup({ name: name.trim(), organizationName: organization.name });
 
     return Response.json({ ok: true }, { status: 201 });
   } catch (error) {
