@@ -3,6 +3,7 @@ import { requireBrandAccess } from '@/lib/permissions';
 import { errorResponse, ApiError } from '@/lib/apiError';
 import { TIER_RANK } from '@/lib/tiers';
 import { INITIAL_STATUS, REVIEW_PENDING_STATUS, CLOSED_STATUSES } from '@/lib/statuses';
+import { todayInKst } from '@/lib/overdue';
 import { HANDOFF_STATUSES } from '@/lib/redmineLink';
 import { isValidType } from '@/lib/requirementTypes';
 import { CHANNELS, DEFAULT_CHANNEL } from '@/lib/channels';
@@ -46,6 +47,8 @@ export async function GET(request) {
     // assignee=none 처럼 기존 파라미터에 매직 문자열을 넣지 않는다. 그 자리는
     // uuid 자리이고, 특수값을 섞으면 규칙이 두 가지가 된다.
     const missing = searchParams.get('missing');
+    // 빠른 필터 '지연'. 예상일이 지났는데 아직 종결되지 않은 건이다.
+    const overdue = searchParams.get('overdue') === 'true';
     // 이름은 'includeDone' 이지만 실제 의미는 "완료를 포함한 종결 상태 전체"다
     // (완료·반려·취소·중복). 목록 페이지와 보드가 이미 이 이름으로 쿼리를
     // 만들고 있어 지금 바꾸면 세 파일을 함께 고쳐야 하므로 이름은 둔다.
@@ -53,8 +56,17 @@ export async function GET(request) {
     // CSV 내보내기 전용. 화면 목록은 본문을 쓰지 않는다.
     const detail = searchParams.get('detail') === 'true';
 
-    const { tier, isGlobalAdmin } = await requireBrandAccess(brandId, '4차');
+    const { memberId, tier, isGlobalAdmin } = await requireBrandAccess(brandId, '4차');
     const canSeeConfidential = isGlobalAdmin || TIER_RANK[tier] >= TIER_RANK['3차'];
+    // 작성중(임시저장)은 올린 사람과 실무 관리자 이상만 본다.
+    //
+    // 예전에는 브랜드의 모두에게 보였다. 등록 폼과 첫 로그인 안내가 "임시저장은
+    // 나에게만 보입니다"라고 말하고 있었는데 조회 규칙이 그렇지 않았다 — 화면이
+    // 거짓말을 하고 있었던 셈이다.
+    //
+    // 남의 초안이 목록에 섞이면 IT 는 "이건 접수된 건가 아닌가"를 줄마다
+    // 판단해야 한다. 실제로 작성중 세 건이 몇 주째 그 상태로 남아 있었다.
+    const canSeeAllDrafts = isGlobalAdmin || TIER_RANK[tier] >= TIER_RANK['2차'];
 
     const supabase = getSupabaseAdmin();
 
@@ -66,6 +78,11 @@ export async function GET(request) {
         .order('request_date', { ascending: false });
 
       if (!canSeeConfidential) query = query.eq('is_confidential', false);
+      // 초안은 남의 것을 감춘다. 요청자가 없는(=지워진 계정이 남긴) 초안은
+      // 어느 쪽에도 안 걸려 자연히 빠진다.
+      if (!canSeeAllDrafts) {
+        query = query.or(`status.neq.${INITIAL_STATUS},requester.eq.${memberId}`);
+      }
       if (status) query = query.eq('status', status);
       if (assignee) query = query.eq('assignee', assignee);
       if (requester) query = query.eq('requester', requester);
@@ -82,6 +99,14 @@ export async function GET(request) {
       // 숫자와 목록 건수가 어긋난다.
       if (missing === 'redmine') {
         query = query.is('redmine_url', null).in('status', HANDOFF_STATUSES);
+      }
+      // '지연'도 조건이 둘이다. 종결된 건은 더 진행될 일이 없으므로 지연이
+      // 아니다 — 반려된 건을 빨갛게 띄우면 아무도 하지 않기로 한 일을 독촉하는
+      // 화면이 된다(lib/overdue.js 의 isOverdue 와 같은 규칙).
+      if (overdue) {
+        query = query
+          .lt('expected_release_date', todayInKst())
+          .not('status', 'in', `(${CLOSED_STATUSES.join(',')})`);
       }
       if (q && q.trim()) query = query.ilike('title', `%${q.trim()}%`);
       // 종결된 건(완료·반려·취소·중복)은 기본으로 숨긴다. 끝난 건이 목록 상단을

@@ -15,10 +15,21 @@ import { FilterBar } from '@/components/FilterBar';
 import { MergeDialog } from '@/components/MergeDialog';
 import { NewRequirementFab } from '@/components/NewRequirementFab';
 import { useFilterMemory } from '@/components/useFilterMemory';
+import { QuickFilterChips } from '@/components/QuickFilterChips';
+import { useQuickFilterCounts } from '@/components/useQuickFilterCounts';
+import { activeChipKey, chipParams, quickFilterChips } from '@/lib/quickFilters';
 import {
   useRequirementFilters,
   useRequirementFilterOptions,
 } from '@/components/useRequirementFilters';
+
+// 대시보드 '손볼 것' 링크가 넣는 missing 값의 사람 말. 예전에는 삼항으로
+// 두 갈래만 갈라서 missing=redmine 이 '예상 배포일이 없는 건'으로 잘못 표시됐다.
+const MISSING_LABELS = {
+  assignee: '담당자가 없는 건',
+  expectedDate: '예상 배포일이 없는 건',
+  redmine: '레드마인에 연결되지 않은 건',
+};
 
 // useSearchParams 를 쓰는 부분은 Suspense 경계 안에 있어야 한다. 없으면
 // 프로덕션 빌드가 "Missing Suspense boundary with useSearchParams" 로 실패한다
@@ -64,6 +75,7 @@ function RequirementsView() {
     mine,
     setMine,
     missing,
+    overdue,
     searchKey,
   } = useRequirementFilters();
   const { teamMembers, categories, projects } = useRequirementFilterOptions(identity.brandId);
@@ -89,9 +101,41 @@ function RequirementsView() {
     mine,
     memberId: identity.memberId,
     missing,
+    overdue,
   });
   const currentKey = `${reloadToken}|${apiQuery}`;
   const loading = loadedKey !== currentKey;
+
+  // 빠른 필터 칩. 등급에 따라 칩 구성이 다르다(lib/quickFilters.js).
+  //
+  // 켜진 칩은 주소에서 되읽는다. 칩 상태를 따로 들고 있으면 뒤로가기나 공유
+  // 링크로 들어왔을 때 화면과 주소가 어긋난다.
+  //
+  // missing 은 filters 밖에 따로 오므로(대시보드 링크 전용 파라미터) 여기서
+  // 합쳐 넘긴다 — activeChipKey 는 한 덩어리로 본다.
+  const chips = quickFilterChips(identity);
+  const activeKey = activeChipKey(identity, { filters: { ...filters, missing }, mine, overdue });
+  const chipCounts = useQuickFilterCounts({
+    brandId: identity.brandId,
+    identity,
+    includeDone,
+    reloadToken,
+  });
+
+  function pickChip(key) {
+    dismissRestored();
+    setFilters(chipParams(identity, key, activeKey));
+  }
+
+  // 요청자에게는 '내 요청' 칩이 이미 같은 일을 한다. 같은 스위치를 두 군데 두면
+  // 한쪽을 눌렀을 때 다른 쪽이 따라 움직여 어느 것이 진짜인지 헷갈린다.
+  // 기획자 이상은 칩이 담당자 기준이라 이 체크박스가 여전히 쓸모가 있어 남긴다.
+  const handleMineChange = processAllowed
+    ? (v) => {
+        dismissRestored();
+        setMine(v);
+      }
+    : undefined;
 
   function refreshRequirements() {
     setReloadToken((t) => t + 1);
@@ -235,6 +279,15 @@ function RequirementsView() {
         </div>
       </div>
 
+      {/* 셀렉트보다 위에 둔다. 대부분의 사람이 원하는 건 "지금 내가 볼 덩어리"
+          하나이고, 그건 셀렉트 일곱 개를 조합해서 만드는 값이 아니다. */}
+      <QuickFilterChips
+        chips={chips}
+        counts={chipCounts}
+        activeKey={activeKey}
+        onPick={pickChip}
+      />
+
       {/* 필터를 건드리는 모든 입구에서 '지난번 조건' 안내를 내린다. 그대로 두면
           초기화 뒤에 새로 건 필터에까지 그 문구가 붙어 거짓말이 된다. */}
       <FilterBar
@@ -257,11 +310,8 @@ function RequirementsView() {
           dismissRestored();
           setIncludeDone(v);
         }}
-        mine={mine}
-        onMineChange={(v) => {
-          dismissRestored();
-          setMine(v);
-        }}
+        mine={processAllowed ? mine : false}
+        onMineChange={handleMineChange}
       />
 
       {/* 되살렸을 때만 뜬다.
@@ -269,7 +319,7 @@ function RequirementsView() {
           있던 것"은 다르다. 어제 걸어 둔 필터를 잊은 채 오늘 들어와 "요구사항이
           세 건뿐이네?" 하는 것을 막는 게 이 한 줄이다.
           필터가 없어지면(초기화·전체 보기) 조건이 거짓이 되어 저절로 사라진다. */}
-      {restored && hasActiveFilters({ filters, query, mine }) && (
+      {restored && hasActiveFilters({ filters, query, mine, overdue }) && (
         <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
           <span className="flex-1 break-keep">지난번에 보던 조건으로 열었습니다.</span>
           <button
@@ -284,12 +334,15 @@ function RequirementsView() {
 
       {/* missing 은 필터바에 칸이 없다(대시보드 '손볼 것' 링크로만 들어온다).
           표시가 없으면 사용자는 목록이 왜 이것뿐인지 알 수 없어 화면이 고장난
-          줄 안다. '필터 초기화'도 이 값을 지우지 않으므로 빠져나갈 길을 준다. */}
-      {missing && (
+          줄 안다.
+
+          칩이 켜져 있으면 내리다. '담당자 없음' 칩이 바로 위에서 같은 말을
+          하고 있는데 아래에 경고 띠까지 두면 같은 사실을 두 번 말하는 셈이다.
+          칩이 없는 등급(요청자)에게는 그대로 뜬다. */}
+      {missing && !activeKey && (
         <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           <span className="flex-1 break-keep">
-            {missing === 'assignee' ? '담당자가 없는 건' : '예상 배포일이 없는 건'}만 보고
-            있습니다.
+            {MISSING_LABELS[missing] ?? '일부 항목이 빈 건'}만 보고 있습니다.
           </span>
           <Link href="/requirements" className="whitespace-nowrap underline">
             전체 보기
@@ -311,7 +364,7 @@ function RequirementsView() {
           onPatch={processAllowed ? patchRequirement : undefined}
           // missing 도 조건이다. 대시보드 '손볼 것'에서 넘어와 0건이면 그건
           // 아직 아무것도 없는 게 아니라 그 조건에 걸리는 게 없는 것이다.
-          filtered={hasActiveFilters({ filters, query, mine }) || Boolean(missing)}
+          filtered={hasActiveFilters({ filters, query, mine, overdue }) || Boolean(missing)}
           onCreate={() => setDialogOpen(true)}
         />
       )}
