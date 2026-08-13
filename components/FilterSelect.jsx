@@ -16,15 +16,24 @@ import { CLEAR_FILTER_VALUE } from '@/lib/filterFields';
 // 골랐는데 상태·채널까지 같이 날아가는 것은 되돌리기가 아니다.
 //
 // 셀렉트를 연 사람이 거기서 되돌릴 수 있기를 기대한다 — 가장 먼저 찾는 자리다.
+//
+// 값이 걸린 셀렉트는 색으로 표시한다. 데스크톱에 일곱 칸이 늘어서 있으면
+// "어디에 값이 걸렸나"를 칸마다 읽어야 알 수 있는데, 그건 결과가 왜 좁아졌는지
+// 확인할 때마다 드는 비용이다.
 export function FilterSelect({ label, options, current, onPick, className = 'h-8 w-32 text-xs' }) {
   const items = [{ value: CLEAR_FILTER_VALUE, label: '전체' }, ...options];
+  const active = Boolean(current);
   return (
     <Select
       items={items}
       value={current || null}
       onValueChange={(picked) => onPick(picked === CLEAR_FILTER_VALUE ? '' : picked)}
     >
-      <SelectTrigger className={className}>
+      <SelectTrigger
+        className={`${className} ${
+          active ? 'border-indigo-300 bg-indigo-50 font-medium text-indigo-700' : ''
+        }`}
+      >
         <SelectValue placeholder={label} />
       </SelectTrigger>
       <SelectContent>

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { FilterSheet } from '@/components/FilterSheet';
 import { FilterSelect } from '@/components/FilterSelect';
 import { ActiveFilterChips } from '@/components/ActiveFilterChips';
-import { activeFilterChips, buildFilterFields, PRIMARY_FILTER_KEYS } from '@/lib/filterFields';
+import { activeFilterChips, buildFilterFields } from '@/lib/filterFields';
 import { countActiveFilters, hasActiveFilters } from '@/lib/requirementFilters';
 
 // 목록과 보드가 함께 쓴다. 필터 값 자체는 URL 이 들고 있고(useRequirementFilters)
@@ -35,20 +35,14 @@ export function FilterBar({
   onMineChange,
 }) {
   const fields = buildFilterFields({ teamMembers, categories, projects });
-  const primary = fields.filter((f) => PRIMARY_FILTER_KEYS.includes(f.key));
-  const secondary = fields.filter((f) => !PRIMARY_FILTER_KEYS.includes(f.key));
-
-  // 접힌 쪽에 값이 걸린 채로 닫혀 있으면 사용자는 목록이 왜 이것뿐인지 모른다.
-  // 그래서 값이 하나라도 있으면 처음부터 펼친 상태로 연다.
-  const hiddenActiveCount = secondary.filter((f) => value[f.key]).length;
-  const [expanded, setExpanded] = useState(hiddenActiveCount > 0);
   const [sheetOpen, setSheetOpen] = useState(false);
 
   // 모바일 버튼에 붙는 숫자. 시트 안에 든 것이 몇 개인지 보여준다.
   const mobileActiveCount = countActiveFilters({ filters: value, mine, includeDone });
 
-  // 칩은 데스크톱·모바일 공용이다. 접힌 필터와 시트 안 필터를 똑같이 드러내야
-  // 하므로 한쪽에만 두면 다른 쪽이 다시 "몇 개인지만 아는" 상태로 남는다.
+  // 칩은 모바일 전용이다. 시트 안 필터는 밖에서 안 보이므로 무엇이 걸렸는지
+  // 드러낼 자리가 따로 필요하다. 데스크톱은 일곱 칸이 라벨과 값을 그대로
+  // 보여주므로 칩이 같은 말을 두 번 하게 된다.
   const chips = activeFilterChips({ fields, filters: value, mine, includeDone });
 
   // 체크박스 둘은 fields 밖이라 따로 푼다.
@@ -85,112 +79,110 @@ export function FilterBar({
         </button>
       </div>
 
-      <div className="hidden flex-wrap items-center gap-2 md:flex">
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => onQueryChange(e.target.value)}
-          placeholder="제목 검색"
-          className="h-8 w-48 rounded-lg border border-slate-300 px-3 text-xs placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none"
-        />
-        {/* 상태는 보드에서도 감추지 않는다. 보드는 상태가 컬럼 그 자체라
-            상태로 거르면 컬럼 하나만 채워지는데, 그래도 컨트롤을 보여주는
-            쪽이 맞다 — 목록에서 상태를 걸고 보드로 넘어왔을 때 컨트롤을
-            숨기면 필터는 URL 에 남아 적용되는데 화면에는 근거가 없다.
-            보이지 않는 필터가 제일 나쁘다. */}
-        {primary.map((field) => (
-          <FilterSelect
-            key={field.key}
-            label={field.label}
-            options={field.options}
-            current={value[field.key]}
-            onPick={(picked) => onChange({ [field.key]: picked })}
+      {/* 데스크톱: 흰 카드 안에 두 줄.
+          윗줄은 검색과 옵션(종결 숨김·내 요청만·초기화), 아랫줄은 필터 격자다.
+          예전처럼 한 줄에 전부 흘려 두면 '필터 초기화'가 나타났다 사라질 때마다
+          셀렉트가 밀려서, 같은 필터가 매번 다른 자리에 있다.
+
+          '필터 더보기'를 없앴다. 예전 주석에 "어느 필터가 실제로 쓰이는지 보이면
+          기본 노출을 다시 정한다"고 적어 뒀는데, 그 답이 나왔다 — 값이 가장 잘
+          갈리는 카테고리(9종)와 프로젝트(5종)가 접힌 쪽에 있었고, 그래서 아무도
+          안 썼다. 접어 둔 필터는 없는 필터다.
+
+          상태는 보드에서도 감추지 않는다. 보드는 상태가 컬럼 그 자체라 상태로
+          거르면 컬럼 하나만 채워지는데, 그래도 컨트롤을 보여주는 쪽이 맞다 —
+          목록에서 상태를 걸고 보드로 넘어왔을 때 컨트롤을 숨기면 필터는 URL 에
+          남아 적용되는데 화면에는 근거가 없다. 보이지 않는 필터가 제일 나쁘다. */}
+      <div className="hidden flex-col gap-2.5 rounded-xl border border-slate-200 bg-white p-3 md:flex">
+        <div className="flex items-center gap-3">
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => onQueryChange(e.target.value)}
+            placeholder="제목 검색"
+            className="h-8 w-56 rounded-lg border border-slate-300 px-3 text-xs placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none"
           />
-        ))}
-        {/* 여기부터는 접는다.
-            필터가 일곱 개인데 요구사항은 아직 아홉 건이다. 이 정도 규모에서는
-            아무도 필터를 안 쓰고, 늘 펼쳐 두면 검색창과 상태만 찾는 사람에게
-            나머지가 전부 소음이 된다.
-            어느 필터가 실제로 쓰이는지는 URL 파라미터를 보면 나온다 — 그때
-            기본 노출을 다시 정한다. 지금 정하면 그건 추측이다. */}
-        {expanded &&
-          secondary.map((field) => (
-            <FilterSelect
-              key={field.key}
-              label={field.label}
-              options={field.options}
-              current={value[field.key]}
-              onPick={(picked) => onChange({ [field.key]: picked })}
-            />
+          {/* 옵션과 초기화는 오른쪽 끝에 붙인다. 필터 자체가 아니라 필터에
+              거는 조건이라, 셀렉트 줄과 섞이면 같은 무게로 읽힌다. */}
+          <div className="flex-1" />
+          {/* 라벨이 "종결 숨김"이므로 체크됨 = 숨김 = includeDone === false 다.
+              숨기는 대상이 완료만이 아니라 반려·취소·중복까지이므로 라벨도 그렇게
+              적는다 — "완료 숨김"이라고 써 두면 반려된 건이 사라진 이유를 알 수 없다.
+              쿼리 파라미터 이름(includeDone)은 목록·보드·병합 세 곳이 쓰고 있어 둔다.
+
+              보드에서는 이 체크박스를 아예 감춘다(showIncludeDone={false}).
+              KanbanBoard 는 BOARD_STATUSES 컬럼만 그리므로 반려·취소·중복은 값과
+              무관하게 화면에 없고, '완료' 컬럼은 항상 채워져야 한다. 눌러도 아무
+              변화가 없는 토글은 없는 것만 못하다. */}
+          {showIncludeDone && (
+            <label
+              className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-500"
+              title="완료·반려·취소·중복된 요구사항을 목록에서 숨깁니다."
+            >
+              <input
+                type="checkbox"
+                checked={!includeDone}
+                onChange={(e) => onIncludeDoneChange(!e.target.checked)}
+                className="h-3.5 w-3.5 accent-indigo-600"
+              />
+              종결 숨김
+            </label>
+          )}
+          {/* 내가 올린 것만. 목록 화면의 요청자에게는 '내 요청' 칩이 같은 일을
+              하므로 페이지가 이 핸들러를 안 넘긴다(app/requirements/page.js). */}
+          {onMineChange && (
+            <label
+              className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-500"
+              title="내가 등록한 요구사항만 봅니다."
+            >
+              <input
+                type="checkbox"
+                checked={mine}
+                onChange={(e) => onMineChange(e.target.checked)}
+                className="h-3.5 w-3.5 accent-indigo-600"
+              />
+              내 요청만
+            </label>
+          )}
+          {hasActiveFilters({ filters: value, query, mine }) && (
+            <button
+              type="button"
+              onClick={onReset}
+              className="text-xs text-slate-500 underline hover:text-slate-700"
+            >
+              필터 초기화
+            </button>
+          )}
+        </div>
+
+        {/* 일곱 개를 격자로 세운다. 라벨을 셀렉트 위에 따로 다는 것이 요점이다 —
+            지금까지 라벨은 placeholder 였고, 값을 고르면 그 자리에 값이 들어오면서
+            라벨이 사라졌다. '전시'라고만 적힌 칸을 보고 그게 카테고리인지 유형인지
+            알 방법이 없었다. 접혀 있어서 못 쓴 것 절반, 이것 때문에 못 쓴 것
+            절반이다. */}
+        <div className="grid grid-cols-4 gap-2 lg:grid-cols-7">
+          {fields.map((field) => (
+            <div key={field.key} className="flex min-w-0 flex-col gap-1">
+              <span className="px-0.5 text-[11px] font-medium text-slate-500">{field.label}</span>
+              <FilterSelect
+                label="전체"
+                options={field.options}
+                current={value[field.key]}
+                onPick={(picked) => onChange({ [field.key]: picked })}
+                className="h-8 w-full text-xs"
+              />
+            </div>
           ))}
-
-        {/* 접힌 쪽에 값이 걸려 있으면 개수를 보여준다. 안 그러면 결과가 좁아진
-            이유가 화면 어디에도 없다 — 보이지 않는 필터가 제일 나쁘다. */}
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="text-xs text-slate-500 underline hover:text-slate-700"
-        >
-          {expanded
-            ? '필터 접기'
-            : `필터 더보기${hiddenActiveCount > 0 ? ` (${hiddenActiveCount})` : ''}`}
-        </button>
-        {/* 라벨이 "종결 숨김"이므로 체크됨 = 숨김 = includeDone === false 다.
-            숨기는 대상이 완료만이 아니라 반려·취소·중복까지이므로 라벨도 그렇게
-            적는다 — "완료 숨김"이라고 써 두면 반려된 건이 사라진 이유를 알 수 없다.
-            쿼리 파라미터 이름(includeDone)은 목록·보드·병합 세 곳이 쓰고 있어 둔다.
-
-            보드에서는 이 체크박스를 아예 감춘다(showIncludeDone={false}).
-            KanbanBoard 는 BOARD_STATUSES 컬럼만 그리므로 반려·취소·중복은 값과
-            무관하게 화면에 없고, '완료' 컬럼은 항상 채워져야 한다. 눌러도 아무
-            변화가 없는 토글은 없는 것만 못하다. */}
-        {showIncludeDone && (
-          <label
-            className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-500"
-            title="완료·반려·취소·중복된 요구사항을 목록에서 숨깁니다."
-          >
-            <input
-              type="checkbox"
-              checked={!includeDone}
-              onChange={(e) => onIncludeDoneChange(!e.target.checked)}
-              className="h-3.5 w-3.5 accent-indigo-600"
-            />
-            종결 숨김
-          </label>
-        )}
-        {/* 내가 올린 것만. 4차 요청자가 가장 자주 찾는 화면인데 지금까지
-            방법이 없었다(담당자 필터만 있었다). 요청자 셀렉트를 두는 대신
-            토글로 둔 이유는 lib/requirementFilters.js 주석 참조. */}
-        {onMineChange && (
-          <label
-            className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-500"
-            title="내가 등록한 요구사항만 봅니다."
-          >
-            <input
-              type="checkbox"
-              checked={mine}
-              onChange={(e) => onMineChange(e.target.checked)}
-              className="h-3.5 w-3.5 accent-indigo-600"
-            />
-            내 요청만
-          </label>
-        )}
-        {hasActiveFilters({ filters: value, query, mine }) && (
-          <button
-            type="button"
-            onClick={onReset}
-            className="text-xs text-slate-500 underline hover:text-slate-700"
-          >
-            필터 초기화
-          </button>
-        )}
+        </div>
       </div>
 
       {/* 걸린 필터를 이름과 값으로 드러낸다. 없으면 아무것도 안 그린다.
-          '필터 초기화'와 역할이 겹치지 않는다 — 저쪽은 검색어까지 한 번에
-          지우는 것이고, 이쪽은 하나만 떼는 것이다. 잘못 고른 필터 하나 때문에
-          상태·채널까지 날리는 것은 되돌리기가 아니다. */}
-      <ActiveFilterChips chips={chips} onRemove={removeChip} />
+          모바일 전용이다 — 시트 안 필터는 밖에서 안 보이므로 여기가 유일한
+          단서다. 데스크톱은 일곱 칸이 라벨과 값을 그대로 보여주므로 칩을 두면
+          같은 말을 두 번 하면서 목록만 아래로 민다. */}
+      <div className="md:hidden">
+        <ActiveFilterChips chips={chips} onRemove={removeChip} />
+      </div>
 
       <FilterSheet
         open={sheetOpen}
