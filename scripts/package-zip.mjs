@@ -11,6 +11,13 @@
 // 반대로 그냥 Node 가 설치된 서버에 올려 직접 띄우는 경우라면 빌드 완료본이
 // 맞다. install 도 build 도 필요 없다.
 //
+// moa.noavibe.app 은 앞쪽이다 — 소스를 받아 @opennextjs/aws 로 다시 빌드한다.
+// 즉 이 저장소의 실제 배포에는 package:src 만 쓴다.
+//
+// 그런데 이 주석을 여기 적어 둔 뒤에도 같은 실패를 다시 냈다. 주석은 스크립트를
+// 실행하는 사람 눈앞에 없기 때문이다. 그래서 빌드 완료본 모드는 실행할 때마다
+// 경고를 화면에 찍는다(BUILT_MODE_WARNING).
+//
 // --- 아래는 빌드 완료본 모드에 대한 설명 ---
 //
 // next build 가 만드는 .next/standalone 을 그대로 압축하면 안 된다. Next 는
@@ -309,8 +316,40 @@ async function packBuilt() {
 
   const { size } = await stat(zip);
   console.log(`\n완료: dist/${path.basename(zip)} (${(size / 1024 / 1024).toFixed(1)} MB)`);
-  console.log('풀어서 `node server.js` 로 실행합니다. 자세한 건 ZIP 안의 배포안내.md.\n');
+  console.log('풀어서 `node server.js` 로 실행합니다. 자세한 건 ZIP 안의 배포안내.md.');
+  console.log(BUILT_MODE_WARNING);
 }
+
+// 이 경고가 있는 이유.
+//
+// 이 모드가 맞는 곳과 틀린 곳이 겉으로 구분되지 않는다. 둘 다 "ZIP 을 올리세요"
+// 라고만 말한다. 파일 맨 위 주석에 그 구분이 적혀 있었는데도 이 실패를 두 번
+// 냈다 — 주석은 스크립트를 실행하는 사람 눈앞에 없기 때문이다. 그래서 실행할
+// 때마다 화면에 찍는다.
+//
+// 실패 모양까지 적어 두는 게 핵심이다. 로그에서 이 줄을 보고 여기로 돌아올 수
+// 있어야 한다. 실제 로그(2026-08-13)는 이랬다:
+//   npx --yes @opennextjs/aws@3 build  →  exit status 1   (16초 만에)
+// standalone 결과물에는 app/ 도 next.config.mjs 도 없는데 package.json 의
+// "build": "next build" 는 그대로 남아 있어서, 플랫폼이 그 스크립트를 믿고
+// 빌드를 돌리다 소스를 못 찾고 죽는다.
+const BUILT_MODE_WARNING = `
+────────────────────────────────────────────────────────────────
+ 이 ZIP 은 "빌드 완료본" 입니다.
+
+ Node 가 설치된 서버에 올려 직접 \`node server.js\` 로 띄울 때만 맞습니다.
+
+ ZIP 을 올리면 알아서 빌드해 주는 플랫폼(noa-vibe 등)이라면 이걸
+ 올리면 실패합니다. 소스가 없어서 빌드가 돌지 않기 때문입니다.
+ 그 경우 아래로 다시 만드세요:
+
+     npm run package:src
+
+ 실패 신호 — 배포 로그에 이 줄이 보이면 모드를 잘못 고른 것입니다:
+     npx --yes @opennextjs/aws@3 build ... exit status 1
+     Phase complete: BUILD State: FAILED
+────────────────────────────────────────────────────────────────
+`;
 
 // archiver 를 쓰는 이유: 처음에는 윈도우 기본 명령인 Compress-Archive 로
 // 만들었는데, 방금 복사한 파일을 다른 프로세스가 잡고 있다며 실패했다.
@@ -443,6 +482,14 @@ ${envSection}
 
 function guide(name) {
   return `# 모아 MOA 배포 안내 (${name})
+
+> **이 ZIP 은 빌드 완료본입니다.** Node 가 설치된 서버에 올려 직접
+> \`node server.js\` 로 띄울 때만 맞습니다.
+>
+> ZIP 을 올리면 알아서 빌드해 주는 플랫폼(noa-vibe 등)에는 이걸 올리면
+> 실패합니다 — 이 안에는 \`app/\` 도 \`next.config.mjs\` 도 없어서 빌드가
+> 돌지 않습니다. 그 경우 \`npm run package:src\` 로 만든 **소스 ZIP** 을
+> 쓰세요.
 
 ## 필요한 것
 - Node.js 20 이상
