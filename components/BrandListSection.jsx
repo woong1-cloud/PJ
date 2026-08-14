@@ -172,7 +172,6 @@ export function BrandListSection({ brands, teamMembers, identity, onCreate, onEd
                                 <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">
                                   {TIER_LABELS[m.tier] ?? m.tier}
                                 </span>
-                                <span className="text-slate-500">{m.subRole ?? '역할 미지정'}</span>
                                 {!m.isActive && (
                                   <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-500">
                                     비활성

@@ -21,7 +21,19 @@ import {
 import { TIER_LABELS, TIER_HINTS } from '@/lib/tiers';
 
 const TIERS = ['3차', '4차'];
-const SUB_ROLES = ['기획', '개발', '뷰어'];
+
+// '역할'(기획/개발/뷰어) 칸을 없앴다.
+//
+// 세 값 중 어느 것도 권한에 영향이 없었는데(표시용 sub_role 컬럼), '뷰어'는
+// 읽기 전용으로 제한한다고 읽힌다. 실제로는 위에서 고른 등급 권한을 그대로
+// 갖는다 — 없는 안전장치를 있다고 말하는 칸이었다.
+//
+// 기획/개발은 사람 단위 '직무'(job_roles)와 같은 말이라, 같은 정보를 두 곳에서
+// 다르게 관리하는 셈이기도 했다.
+//
+// 화면에서만 뺐다. sub_role 컬럼과 그 안의 값은 그대로 둔다 — 지우면 되돌릴
+// 수 없고, 남겨 두면 나중에 "예전에 무엇으로 적혀 있었나"를 확인할 수 있다.
+// API 도 subRole 을 계속 받아 준다(보내는 화면은 이제 없다).
 
 // props: open, onOpenChange, candidates(미배치 전사 활성 직원), identity, onAssigned()
 //
@@ -49,7 +61,7 @@ export function BrandTeamAssignDialog({
   const [targetId, setTargetId] = useState(null);
   const [brandId, setBrandId] = useState(null);
   const [tier, setTier] = useState('4차');
-  const [subRole, setSubRole] = useState(null);
+  const [allBrands, setAllBrands] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   // 다이얼로그가 열릴 때마다 입력을 초기화한다. useEffect 안에서 직접 setState를 호출하지
@@ -62,7 +74,7 @@ export function BrandTeamAssignDialog({
       setTargetId(presetMember?.id ?? null);
       setBrandId(targetBrandId ?? identity?.brandId ?? null);
       setTier(presetTier ?? '4차');
-      setSubRole(null);
+      setAllBrands(false);
       setError('');
     }
   }
@@ -72,8 +84,13 @@ export function BrandTeamAssignDialog({
     ? pool.filter((m) => m.name.toLowerCase().includes(search.toLowerCase())).slice(0, 8)
     : [];
 
+  // '모든 브랜드'를 켜면 브랜드 셀렉트 대신 활성 브랜드 전부를 보낸다.
+  // brands 를 못 받은 화면(브랜드 설정)에서는 체크박스 자체가 안 보이므로
+  // 여기 값도 늘 false 다.
+  const targetBrandIds = allBrands && brands ? brands.map((b) => b.id) : [brandId];
+
   async function handleAssign() {
-    if (!targetId || !brandId) return;
+    if (!targetId || targetBrandIds.filter(Boolean).length === 0) return;
     setSubmitting(true);
     setError('');
     try {
@@ -81,10 +98,9 @@ export function BrandTeamAssignDialog({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          brandId,
+          brandIds: targetBrandIds,
           targetMemberId: targetId,
           tier,
-          subRole,
         }),
       });
       const d = await res.json();
@@ -146,8 +162,9 @@ export function BrandTeamAssignDialog({
                     items={brands.map((b) => ({ value: b.id, label: b.name }))}
                     value={brandId}
                     onValueChange={setBrandId}
+                    disabled={allBrands}
                   >
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className="w-full" disabled={allBrands}>
                       <SelectValue placeholder="선택하세요" />
                     </SelectTrigger>
                     <SelectContent>
@@ -158,10 +175,29 @@ export function BrandTeamAssignDialog({
                       ))}
                     </SelectContent>
                   </Select>
-                  {targetBrandId && (
+                  {/* 브랜드를 여럿 맡는 사람(온라인BU 기획자 등)을 다섯 번
+                      배치하게 만들 이유가 없다. 켜면 셀렉트를 잠가서 "지금
+                      고른 하나"와 "전부" 중 무엇이 적용되는지 헷갈리지 않게 한다. */}
+                  <label className="mt-1 flex cursor-pointer items-center gap-2 text-xs text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={allBrands}
+                      onChange={(e) => setAllBrands(e.target.checked)}
+                      className="h-3.5 w-3.5 accent-indigo-600"
+                    />
+                    모든 브랜드에 같은 등급으로 배치 ({brands.length}개)
+                  </label>
+                  {allBrands ? (
                     <p className="text-xs text-slate-500">
-                      본인이 신청한 브랜드입니다. 확인하고 바꿀 수 있습니다.
+                      이미 배치된 브랜드가 있으면 배치되지 않습니다. 그 브랜드를 먼저 해제하거나
+                      하나씩 배치해 주세요.
                     </p>
+                  ) : (
+                    targetBrandId && (
+                      <p className="text-xs text-slate-500">
+                        본인이 신청한 브랜드입니다. 확인하고 바꿀 수 있습니다.
+                      </p>
+                    )
                   )}
                 </div>
               )}
@@ -183,34 +219,15 @@ export function BrandTeamAssignDialog({
                     ))}
                   </SelectContent>
                 </Select>
-                {/* 등급 이름은 지위를 말하는데, 고르는 사람이 알아야 하는 건
-                    그 지위가 무엇을 여는가다. '실무자'와 '실무 관리자'는
-                    이름만으로 한눈에 안 갈린다. */}
-                <p className="text-xs text-slate-500">{TIER_HINTS[tier]}</p>
-                {presetTier && (
-                  <p className="text-xs text-slate-500">
-                    신청한 소속을 근거로 제안한 등급입니다. 바꿀 수 있습니다.
-                  </p>
-                )}
-              </div>
-              <div className="flex flex-col gap-1">
-                <Label>역할</Label>
-                <Select
-                  items={SUB_ROLES.map((s) => ({ value: s, label: s }))}
-                  value={subRole}
-                  onValueChange={setSubRole}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="미지정" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SUB_ROLES.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {s}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/* 한 줄로 합친다. 예전에는 "무엇을 할 수 있는가"와 "제안값
+                    이다"가 각각 한 줄씩 나와서, 화면에서는 회색 두 줄이
+                    겹쳐 보이고 어느 쪽이 중요한지 알 수 없었다.
+                    등급 이름은 지위를 말하는데 고르는 사람이 알아야 하는 건
+                    그 지위가 무엇을 여는가다 — 그쪽을 앞에 둔다. */}
+                <p className="text-xs text-slate-500">
+                  {TIER_HINTS[tier]}
+                  {presetTier && ' · 신청한 소속을 근거로 미리 고른 값이며 바꿀 수 있습니다'}
+                </p>
               </div>
             </>
           )}

@@ -12,7 +12,6 @@ import { BrandTeamAssignDialog } from '@/components/BrandTeamAssignDialog';
 import { TIER_LABELS } from '@/lib/tiers';
 
 const TIERS = ['3차', '4차'];
-const SUB_ROLES = ['기획', '개발', '뷰어'];
 
 // props: members(브랜드 배치 목록), teamMembers(전사 활성 풀), identity, onChanged()
 export function BrandTeamSection({ members, teamMembers, identity, onChanged }) {
@@ -71,7 +70,6 @@ export function BrandTeamSection({ members, teamMembers, identity, onChanged }) 
           <tr className="border-b border-slate-200 text-left text-slate-500">
             <th className="py-2">이름</th>
             <th className="py-2">권한 등급</th>
-            <th className="py-2">역할</th>
             <th className="py-2" />
           </tr>
         </thead>
@@ -92,24 +90,6 @@ export function BrandTeamSection({ members, teamMembers, identity, onChanged }) 
                     {TIERS.map((t) => (
                       <SelectItem key={t} value={t}>
                         {TIER_LABELS[t]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </td>
-              <td className="py-2">
-                <Select
-                  items={SUB_ROLES.map((s) => ({ value: s, label: s }))}
-                  value={m.subRole ?? null}
-                  onValueChange={(v) => updateRole(m.id, { subRole: v })}
-                >
-                  <SelectTrigger className="h-8 w-24 text-xs">
-                    <SelectValue placeholder="미지정" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SUB_ROLES.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {s}
                       </SelectItem>
                     ))}
                   </SelectContent>
