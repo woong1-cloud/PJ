@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { checklistProgress } from '@/lib/checklist';
+import { SidebarBlock } from '@/components/ui/SidebarBlock';
 
 // 하위 작업 체크리스트.
 //
@@ -91,37 +92,67 @@ export function ChecklistSection({ requirementId, brandId, canManage }) {
   const { done, total } = checklistProgress(items);
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4">
-      <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-sm font-medium text-slate-500">하위 작업</h2>
-        {total > 0 && (
-          <span className="text-xs text-slate-400">
-            {done}/{total} 완료
-          </span>
-        )}
-      </div>
-      {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
+    <SidebarBlock
+      title="하위 작업"
+      count={total > 0 ? `${done}/${total}` : 0}
+      addLabel="＋ 하위 작업"
+      form={
+        canManage
+          ? ({ close }) => (
+              <form
+                onSubmit={(e) => {
+                  addItem(e);
+                  close();
+                }}
+                className="flex gap-1"
+              >
+                <input
+                  type="text"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  placeholder="하위 작업"
+                  maxLength={200}
+                  autoFocus
+                  className="h-7 min-w-0 flex-1 rounded border border-slate-300 px-2 text-xs placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={adding || !newTitle.trim()}
+                  className="h-7 shrink-0 rounded bg-indigo-600 px-2 text-xs text-white disabled:opacity-40"
+                >
+                  추가
+                </button>
+              </form>
+            )
+          : null
+      }
+    >
+      {error && <p className="mb-1 text-xs text-red-600">{error}</p>}
       {items.length === 0 ? (
-        <p className="text-sm text-slate-400">아직 없습니다.</p>
+        <p className="text-xs text-slate-400">아직 없습니다.</p>
       ) : (
-        <ul className="flex flex-col gap-1.5">
+        <ul className="flex flex-col gap-1">
           {items.map((item) => (
-            <li key={item.id} className="flex items-center gap-2 text-sm">
+            <li key={item.id} className="group flex items-center gap-2 text-xs">
               <input
                 type="checkbox"
                 checked={item.is_done}
                 onChange={canManage ? () => toggle(item) : undefined}
                 disabled={!canManage}
-                className="h-4 w-4 shrink-0 accent-indigo-600"
+                className="h-3.5 w-3.5 shrink-0 accent-indigo-600"
               />
-              <span className={item.is_done ? 'flex-1 text-slate-400 line-through' : 'flex-1 text-slate-700'}>
+              <span
+                className={
+                  item.is_done ? 'flex-1 text-slate-400 line-through' : 'flex-1 text-slate-700'
+                }
+              >
                 {item.title}
               </span>
               {canManage && (
                 <button
                   type="button"
                   onClick={() => remove(item)}
-                  className="shrink-0 text-xs text-slate-400 hover:text-red-600"
+                  className="hidden shrink-0 text-[11px] text-slate-400 group-hover:block hover:text-rose-600"
                   aria-label={`${item.title} 삭제`}
                 >
                   삭제
@@ -131,25 +162,6 @@ export function ChecklistSection({ requirementId, brandId, canManage }) {
           ))}
         </ul>
       )}
-      {canManage && (
-        <form onSubmit={addItem} className="mt-3 flex gap-2 border-t border-slate-100 pt-3">
-          <input
-            type="text"
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            placeholder="하위 작업 추가"
-            maxLength={200}
-            className="h-8 flex-1 rounded-lg border border-slate-300 px-3 text-sm placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none"
-          />
-          <button
-            type="submit"
-            disabled={adding || !newTitle.trim()}
-            className="h-8 rounded-lg bg-indigo-600 px-3 text-sm text-white hover:bg-indigo-700 disabled:opacity-40"
-          >
-            추가
-          </button>
-        </form>
-      )}
-    </section>
+    </SidebarBlock>
   );
 }

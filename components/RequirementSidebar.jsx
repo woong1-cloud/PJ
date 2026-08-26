@@ -13,6 +13,7 @@ import { PropertyRow } from '@/components/ui/PropertyRow';
 //   assigneeFilled — 담당자가 지정돼 있는가. 색을 가진 행을 정한다
 //   assigneeSlot, typeSlot, expectedSlot, projectSlot — 각 행의 컨트롤
 //   redmineSlot — 행이 아니라 아래에 붙는 섹션이다
+//   extras — 지정과 요청 내용 사이에 들어가는 블록들(하위 작업 · 연결)
 //   statusText — 상태는 여기서 바꾸지 않는다(머리 줄의 버튼이 한다)
 //   request — { summary, rows: [[label, value], ...] }
 export function RequirementSidebar({
@@ -23,6 +24,7 @@ export function RequirementSidebar({
   expectedSlot,
   redmineSlot,
   projectSlot,
+  extras,
   request,
 }) {
   const [openRequest, setOpenRequest] = useState(false);
@@ -58,6 +60,8 @@ export function RequirementSidebar({
           )}
         </div>
       </div>
+
+      {extras}
 
       <div className="border-t border-slate-200 pt-3">
         <button

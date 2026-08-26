@@ -54,8 +54,10 @@ export function StatusStrip({ durations = [], current }) {
               }`}
             >
               {status}
+              {/* 가운뎃점으로 띄운다. 붙여 두면 '검토대기 오늘'이 한 단어처럼
+                  읽힌다 — 배포 후 실제로 그렇게 보였다. */}
               {days !== undefined && (
-                <span className="ml-1">{days === 0 ? '오늘' : `${days}일`}</span>
+                <span className="ml-1 opacity-70">· {days === 0 ? '오늘' : `${days}일`}</span>
               )}
             </span>
           </span>

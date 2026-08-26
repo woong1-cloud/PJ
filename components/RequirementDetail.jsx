@@ -359,10 +359,15 @@ export function RequirementDetail({ id }) {
     onPrimary: runPrimary,
     onTransition: changeStatus,
     onClose: closeRequirement,
+    // '수정'은 예전에 화면에 한 줄을 통째로 차지하는 링크였다. 자주 쓰는
+    // 행동이 아니라 메뉴가 맞다.
+    onEdit: canEdit && !showEditForm ? () => setEditing(true) : null,
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    // 최대 폭을 준다. 없으면 1900px 화면에서 본문 열이 1200px 이 되는데
+    // 글줄은 68ch(약 600px)에서 멈추므로 그 오른쪽 600px 이 통째로 빈다.
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
       <Link href="/requirements" className="text-sm text-slate-500 hover:text-slate-700">
         ← 목록으로
       </Link>
@@ -392,20 +397,8 @@ export function RequirementDetail({ id }) {
         actionsCompact={<RequirementStatusActions {...actionProps} compact />}
       />
 
-      {canEdit && !showEditForm && (
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="text-sm text-indigo-600 hover:underline"
-          >
-            수정
-          </button>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="flex flex-col gap-4 md:col-span-2">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="flex flex-col gap-4">
           {showEditForm ? (
             <RequirementEditForm
               requirement={r}
@@ -431,11 +424,13 @@ export function RequirementDetail({ id }) {
                 </p>
               </div>
 
-              {/* To-Be 에만 강조선을 준다. 실무자가 이 화면에서 찾는 것은
-                  "뭘 만들어야 하나"다. */}
-              <div className="max-w-[68ch] border-l-2 border-indigo-500 pl-4">
-                <p className="mb-1.5 text-[10px] font-semibold tracking-widest text-indigo-600 uppercase">
-                  To-Be
+              {/* To-Be 를 확실히 띄운다.
+                  배포해 보니 선 하나로는 부족했다 — 1900px 화면에서 2px 선은
+                  사라지고, As-Is 가 열 줄이 넘으면 To-Be 가 아래로 밀려 둘의
+                  무게가 같아 보인다. 배경과 굵은 선과 큰 라벨을 함께 준다. */}
+              <div className="max-w-[68ch] rounded-r border-l-4 border-indigo-500 bg-indigo-50/50 py-3 pr-4 pl-4">
+                <p className="mb-1.5 text-xs font-semibold tracking-wide text-indigo-700">
+                  TO-BE
                 </p>
                 <p className="text-sm leading-7 whitespace-pre-wrap text-slate-800">
                   {r.to_be || '-'}
@@ -453,17 +448,6 @@ export function RequirementDetail({ id }) {
             onAddFiles={(added) => setNewFiles((prev) => [...prev, ...added])}
             onRemoveFile={(i) => setNewFiles((prev) => prev.filter((_, idx) => idx !== i))}
             onUpload={uploadNew}
-          />
-
-          <RequirementLinks requirementId={id} brandId={requirementBrandId} />
-
-          {/* 하위 작업은 자리만 준다. 기능은 이미 있는데 운영 데이터가 0개다.
-              본문의 요건을 여기로 옮기면 진척을 셀 수 있지만, 그건 요청 작성
-              방식을 바꾸는 일이라 이 재설계와 함께 하지 않는다. */}
-          <ChecklistSection
-            requirementId={id}
-            brandId={requirementBrandId}
-            canManage={processAllowed}
           />
 
           {/* 비고는 접는다. 참고 사항이라 늘 펴 둘 값어치가 없다. */}
@@ -589,6 +573,21 @@ export function RequirementDetail({ id }) {
               canEdit={processAllowed}
               onSaved={load}
             />
+          }
+          extras={
+            <>
+              {/* 연결과 하위 작업을 오른쪽으로 옮겼다. 둘 다 짧은 목록이고
+                  "이 건에 딸린 것"이라 메타 성격이다. 본문 아래에 카드로
+                  붙어 있을 때는 비어 있어도 각각 90px 을 먹었다.
+                  대화는 본문에 남긴다 — 코멘트는 문장이라 300px 열에서 읽기
+                  나쁘고, 위로 올린 이유가 그대로 사라진다. */}
+              <ChecklistSection
+                requirementId={id}
+                brandId={requirementBrandId}
+                canManage={processAllowed}
+              />
+              <RequirementLinks requirementId={id} brandId={requirementBrandId} />
+            </>
           }
           request={{
             summary: `${r.requester?.name ?? '요청자 없음'} · ${r.request_date ?? '요청일 없음'}`,

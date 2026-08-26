@@ -24,7 +24,24 @@ export function RequirementAttachments({
   onUpload,
 }) {
   const [zoom, setZoom] = useState(null);
+  const [adding, setAdding] = useState(false);
   const single = pics.length === 1;
+  const empty = pics.length === 0 && docs.length === 0;
+
+  // 첨부가 하나도 없으면 한 줄로 접는다. 44건 중 37건이 첨부가 없어서, 그냥
+  // 두면 대부분의 화면에서 "없습니다" 문구와 업로드 영역이 빈 자리를 먹는다.
+  if (empty && !adding) {
+    if (!canEdit) return null;
+    return (
+      <button
+        type="button"
+        onClick={() => setAdding(true)}
+        className="w-fit text-xs text-indigo-600 hover:underline"
+      >
+        ＋ 첨부
+      </button>
+    );
+  }
 
   return (
     <section className="flex flex-col gap-2">
@@ -97,10 +114,6 @@ export function RequirementAttachments({
           )}
         </div>
       ))}
-
-      {pics.length === 0 && docs.length === 0 && (
-        <p className="text-sm text-slate-400">첨부된 파일이 없습니다.</p>
-      )}
 
       {canEdit && (
         <div className="mt-1">

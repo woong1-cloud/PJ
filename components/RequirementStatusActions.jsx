@@ -21,6 +21,7 @@ import { canProcess } from '@/lib/tiers';
 //   onClose(status, reason) => Promise<boolean>
 //   onMerge — 중복 병합 창. 지금 상세 화면에는 그 기능이 없어 넘기지 않는다.
 //     목록·보드에만 있다. 나중에 상세에도 붙이면 여기로 넘기면 된다.
+//   onEdit — '수정'. 예전에는 화면에 한 줄을 통째로 차지하는 링크였다.
 //   compact — 모바일. 주 버튼을 가로 전체로
 export function RequirementStatusActions({
   status,
@@ -30,6 +31,7 @@ export function RequirementStatusActions({
   onTransition,
   onClose,
   onMerge,
+  onEdit,
   compact = false,
 }) {
   const [open, setOpen] = useState(false);
@@ -46,7 +48,8 @@ export function RequirementStatusActions({
   // 요청자에게는 취소가 이 화면에서 할 수 있는 유일한 행동이고, 메뉴에
   // 숨기면 길이 사라진다.
   const canReject = canProcess(identity) && !merged;
-  const showMenu = !merged && (transitions.length > 0 || canReject || Boolean(onMerge));
+  const showMenu =
+    !merged && (transitions.length > 0 || canReject || Boolean(onMerge) || Boolean(onEdit));
 
   async function submitClose(event) {
     event.preventDefault();
@@ -95,20 +98,43 @@ export function RequirementStatusActions({
     );
   }
 
+  const hasPrimary = action?.kind === 'primary' && primary;
+  const tall = compact ? 'h-10' : 'h-8';
+  // 주 버튼과 여는 손잡이를 붙여 하나로 보이게 한다.
+  //
+  // 예전에는 '···' 이 따로 떨어져 있었다. 그 기호는 관례적으로 '기타'를
+  // 뜻해서, 상태 변경이 그 안에 있으리라 짐작할 근거가 화면에 없었다.
+  // 주 버튼에 붙은 '▾' 는 "이 행동의 다른 선택지"로 읽힌다.
+  const primaryTone =
+    primary?.via === 'approve'
+      ? 'bg-emerald-600 hover:bg-emerald-700'
+      : 'bg-indigo-600 hover:bg-indigo-700';
+
   return (
     <div className={`relative flex gap-1.5 ${compact ? 'w-full' : ''}`}>
-      {action?.kind === 'primary' && primary && (
-        <Button
-          type="button"
-          onClick={onPrimary}
-          className={`${compact ? 'h-10 flex-1' : 'h-8'} ${
-            primary.via === 'approve'
-              ? 'bg-emerald-600 hover:bg-emerald-700'
-              : 'bg-indigo-600 hover:bg-indigo-700'
-          }`}
-        >
-          {primary.label}
-        </Button>
+      {hasPrimary && (
+        <div className={`flex ${compact ? 'flex-1' : ''}`}>
+          <button
+            type="button"
+            onClick={onPrimary}
+            className={`${tall} ${primaryTone} ${showMenu ? 'rounded-l-md' : 'rounded-md'} ${
+              compact ? 'flex-1' : ''
+            } px-3 text-sm font-medium text-white`}
+          >
+            {primary.label}
+          </button>
+          {showMenu && (
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              aria-label="다른 선택지"
+              aria-expanded={open}
+              className={`${tall} ${primaryTone} rounded-r-md border-l border-white/30 px-2 text-sm text-white`}
+            >
+              ▾
+            </button>
+          )}
+        </div>
       )}
 
       {action?.kind === 'cancel' && (
@@ -121,17 +147,21 @@ export function RequirementStatusActions({
         </button>
       )}
 
+      {/* 주 버튼이 없는 사람에게는(요청자 등) 손잡이만 따로 둔다. */}
+      {showMenu && !hasPrimary && (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-label="다른 선택지"
+          aria-expanded={open}
+          className={`${tall} rounded border border-slate-300 px-2 text-sm text-slate-500 hover:bg-slate-50`}
+        >
+          ▾
+        </button>
+      )}
+
       {showMenu && (
         <>
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            aria-label="다른 상태로"
-            aria-expanded={open}
-            className={`${compact ? 'h-10' : 'h-8'} rounded border border-slate-300 px-2 text-sm text-slate-500 hover:bg-slate-50`}
-          >
-            ···
-          </button>
           {open && (
             <>
               {/* 바깥을 눌러 닫는다. 메뉴 안에 되돌리기 어려운 것(반려)이
@@ -166,6 +196,18 @@ export function RequirementStatusActions({
                     className="px-3 py-1.5 text-left text-sm text-slate-600 hover:bg-slate-50"
                   >
                     중복 병합
+                  </button>
+                )}
+                {onEdit && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      onEdit();
+                    }}
+                    className="mt-1 border-t border-slate-100 px-3 py-1.5 pt-2 text-left text-sm text-slate-600 hover:bg-slate-50"
+                  >
+                    내용 수정
                   </button>
                 )}
                 {canReject && (
