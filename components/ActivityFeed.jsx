@@ -208,7 +208,9 @@ function ChangeEntry({ log: h }) {
                 변경'으로 보였다. */}
             {h.change_type === '예상일변경'
               ? `배포예상일을 ${h.old_value ?? '미정'}→${h.new_value ?? '미정'}(으)로 변경`
-              : `상태를 ${h.old_value}→${h.new_value}로 변경`}
+              : h.change_type === '담당자지정'
+                ? `담당자를 ${h.old_value ?? '없음'}→${h.new_value ?? '없음'}(으)로 변경`
+                : `상태를 ${h.old_value}→${h.new_value}로 변경`}
             {/* 종결(반려·취소) 사유가 여기 들어온다. 사유를 필수로
                 받아놓고 화면에 안 보여주면 저장한 의미가 없다. */}
             {h.comment && <span className="text-slate-600"> — {h.comment}</span>}
