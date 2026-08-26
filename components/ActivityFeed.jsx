@@ -125,7 +125,10 @@ export function ActivityFeed({ requirementId, brandId, history, memberId }) {
   const commentCount = feed.filter((e) => e.kind === 'comment').length;
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4">
+    // 카드를 벗긴다. 본문의 As-Is·To-Be·첨부가 전부 문서인데 대화만 상자
+    // 안에 있으면 한 화면에 두 언어가 섞인다 — 연결·하위 작업에서 걷어낸
+    // 것과 같은 문제가 여기 남아 있었다.
+    <section className="border-t border-slate-200 pt-4">
       <div className="mb-3 flex items-center gap-1">
         <TabButton active={tab === 'comment'} onClick={() => setTab('comment')}>
           코멘트{commentCount > 0 && <span className="ml-1 text-slate-400">{commentCount}</span>}

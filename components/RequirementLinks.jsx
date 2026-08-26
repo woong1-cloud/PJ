@@ -106,7 +106,7 @@ export function RequirementLinks({ requirementId, brandId }) {
     >
       {error && <p className="mb-1 text-xs text-red-600">{error}</p>}
       {links.length === 0 ? (
-        <p className="text-xs text-slate-400">없습니다.</p>
+        <p className="text-xs text-slate-400">아직 없습니다.</p>
       ) : (
         <ul className="flex flex-col gap-1">
           {links.map((l) => (

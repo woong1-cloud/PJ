@@ -14,12 +14,12 @@ import { PropertyRow } from '@/components/ui/PropertyRow';
 //   assigneeSlot, typeSlot, expectedSlot, projectSlot — 각 행의 컨트롤
 //   redmineSlot — 행이 아니라 아래에 붙는 섹션이다
 //   extras — 지정과 요청 내용 사이에 들어가는 블록들(하위 작업 · 연결)
-//   statusText — 상태는 여기서 바꾸지 않는다(머리 줄의 버튼이 한다)
+// 상태 행은 없다. 머리 줄과 진행 스트립이 이미 상태를 말하는데 여기까지
+// 두면 한 화면에 세 번 나오고, 게다가 이 자리에서는 바꿀 수도 없다.
 //   request — { summary, rows: [[label, value], ...] }
 export function RequirementSidebar({
   assigneeFilled,
   assigneeSlot,
-  statusText,
   typeSlot,
   expectedSlot,
   redmineSlot,
@@ -41,7 +41,6 @@ export function RequirementSidebar({
           <PropertyRow icon="◍" label="담당자" alert={!assigneeFilled}>
             {assigneeSlot}
           </PropertyRow>
-          <PropertyRow icon="◌" label="상태" value={statusText} />
           {/* 유형은 요청자도 바꾼다. 그래도 '지정'에 두는 이유는 셀렉트이기
               때문이다 — 머리 줄에 셀렉트를 넣으면 뱃지가 아니라 컨트롤이
               되어 그 줄이 무거워진다. 머리 줄은 값만 보여준다. */}

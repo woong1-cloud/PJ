@@ -36,7 +36,7 @@ export function RequirementAttachments({
       <button
         type="button"
         onClick={() => setAdding(true)}
-        className="w-fit text-xs text-indigo-600 hover:underline"
+        className="mt-2 w-fit text-xs text-indigo-600 hover:underline"
       >
         ＋ 첨부
       </button>

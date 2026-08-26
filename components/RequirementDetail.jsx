@@ -351,6 +351,9 @@ export function RequirementDetail({ id }) {
     now: new Date().toISOString(),
   });
   const head = headline({ requirement: r, stalledDays: days, viewer: identity, today });
+  const note = r.note?.trim() ?? '';
+  const noteLines = note ? note.split(/\r?\n/).length : 0;
+  const noteFirstLine = note ? note.split(/\r?\n/)[0] : '';
   // 데스크톱과 모바일이 같은 컨트롤을 쓴다. compact 만 다르다.
   const actionProps = {
     status: r.status,
@@ -450,11 +453,22 @@ export function RequirementDetail({ id }) {
             onUpload={uploadNew}
           />
 
-          {/* 비고는 접는다. 참고 사항이라 늘 펴 둘 값어치가 없다. */}
-          {r.note && (
-            <details className="max-w-[68ch] border-y border-slate-100 py-2">
-              <summary className="cursor-pointer text-sm text-slate-500">비고</summary>
-              <p className="mt-2 text-sm leading-7 whitespace-pre-wrap text-slate-800">{r.note}</p>
+          {/* 비고는 접되 첫 줄을 미리 보여준다.
+              내용이 있을 때 배경으로 강조하는 안도 있었지만, 47건 중 33건에
+              비고가 있어서 그러면 대부분의 화면이 강조된다 — 그때부터 강조는
+              강조가 아니다. 미리보기가 "있다"와 "무슨 내용인지"를 함께 말한다.
+              줄 수는 두 줄 이상일 때만 붙인다(중앙값이 1줄이다). */}
+          {note && (
+            <details className="group max-w-[68ch] border-y border-slate-100 py-2">
+              <summary className="flex cursor-pointer items-baseline gap-2 text-sm">
+                <span className="shrink-0 text-slate-500">
+                  비고{noteLines > 1 ? ` · ${noteLines}줄` : ''}
+                </span>
+                <span className="truncate text-xs text-slate-400 group-open:hidden">
+                  {noteFirstLine}
+                </span>
+              </summary>
+              <p className="mt-2 text-sm leading-7 whitespace-pre-wrap text-slate-800">{note}</p>
             </details>
           )}
 
@@ -499,7 +513,6 @@ export function RequirementDetail({ id }) {
               <span className="text-slate-900">{r.assignee?.name ?? '미지정'}</span>
             )
           }
-          statusText={r.status}
           expectedSlot={
             <ExpectedDateField
               key={r.expected_release_date ?? '__none__'}
@@ -708,14 +721,17 @@ function ExpectedDateField({ value, overdue, editable, onSave }) {
     );
   }
 
-  // 값이 없으면 회색 '—' 대신 유도 문구를 보여준다. 44건 중 7건만 채워져
-  // 있어서, 그냥 두면 오른쪽 열 네 줄 중 절반이 늘 비어 보인다.
+  // 값이 없을 때도 셀렉트와 같은 폭·높이의 상자로 둔다.
+  //
+  // 글자만 오른쪽 끝에 띄워 놨더니 이 행만 라벨과 200px 떨어진 채 시선이
+  // 중간에서 끊겼다. 옆 행들이 전부 테두리 있는 셀렉트라 이것만 허공에 뜬다.
+  // 점선은 '아직 안 정했다'는 뜻이다.
   if (!value && !dirty) {
     return (
       <button
         type="button"
         onClick={() => setDraft(new Date().toISOString().slice(0, 10))}
-        className="text-indigo-600 hover:underline"
+        className="h-8 w-32 rounded border border-dashed border-slate-300 text-xs text-indigo-600 hover:bg-slate-50"
       >
         ＋ 정하기
       </button>
