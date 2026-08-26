@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { useIdentity } from './IdentityProvider';
 import { BrandSwitcher } from './BrandSwitcher';
 import { NotificationBell } from './NotificationBell';
-import { canManageBrand, isGlobalAdmin } from '@/lib/tiers';
+import { canManageBrand, canProcess, isGlobalAdmin } from '@/lib/tiers';
 
 function NavLink({ href, active, children }) {
   return (
@@ -45,6 +45,7 @@ export function TopBar() {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const manageBrand = canManageBrand(identity);
+  const process = canProcess(identity);
   const globalAdmin = isGlobalAdmin(identity);
   const closeMenu = () => setMenuOpen(false);
 
@@ -86,6 +87,15 @@ export function TopBar() {
           <NavLink href="/requirements" active={pathname.startsWith('/requirements')}>
             요구사항
           </NavLink>
+          {/* 주간회의는 요구사항 바로 옆이다. 같은 브랜드의 같은 목록을 다른
+              각도로 보는 화면이라 구분선 왼쪽에 있어야 한다.
+              4차(요청자)에게는 안 보인다 — 담당자를 지정할 수 없어서 그
+              화면에서 할 일이 없다. */}
+          {process && (
+            <NavLink href="/meeting" active={pathname.startsWith('/meeting')}>
+              주간회의
+            </NavLink>
+          )}
           {/* 구분선이 여기 있는 이유: 브랜드 선택이 어디까지 영향을 주는지를
               위치만으로 알려준다. 왼쪽은 선택한 브랜드의 것, 오른쪽은 브랜드를
               넘어서 보는 화면이다. "브랜드 바꿨는데 왜 이 화면은 그대로지?"가
@@ -146,6 +156,15 @@ export function TopBar() {
                 >
                   요구사항
                 </MenuLink>
+                {process && (
+                  <MenuLink
+                    href="/meeting"
+                    onClick={closeMenu}
+                    active={pathname.startsWith('/meeting')}
+                  >
+                    주간회의
+                  </MenuLink>
+                )}
                 <MenuLink
                   href="/projects"
                   onClick={closeMenu}

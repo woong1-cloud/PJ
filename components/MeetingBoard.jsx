@@ -1,0 +1,264 @@
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+
+const FILTERS = [
+  { key: 'all', label: '오래 멈춘 순' },
+  { key: 'unassigned', label: '담당 없는 것만' },
+  { key: 'incoming', label: '이번 주 신규' },
+];
+
+// 회의 화면 본체.
+//
+// 이 화면의 규칙 하나: 상세로 들어가지 않는다. 회의는 건당 30초짜리 자리라
+// 클릭 세 번이면 안 쓴다. 담당자와 예상일은 목록 행에서 바로 정한다.
+export function MeetingBoard({ identity }) {
+  const brandId = identity?.brandId ?? null;
+  const [data, setData] = useState(null);
+  const [filter, setFilter] = useState('all');
+  const [people, setPeople] = useState([]);
+  const [rowError, setRowError] = useState({});
+  const [ending, setEnding] = useState(false);
+  const [ended, setEnded] = useState(null);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    if (!brandId) return;
+    try {
+      const res = await fetch(`/api/meeting?brandId=${brandId}`);
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? '불러오지 못했습니다.');
+      setData(body);
+    } catch (err) {
+      setError(err.message);
+    }
+  }, [brandId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // 담당자 후보. 그 브랜드에 배치된 사람만 고를 수 있다 — assignee 라우트가
+  // 같은 규칙으로 막고 있어서, 여기서 아무나 보여 주면 고른 뒤에 400 이 뜬다.
+  useEffect(() => {
+    if (!brandId) return;
+    let cancelled = false;
+    fetch(`/api/brand-team?brandId=${brandId}`)
+      .then((res) => res.json())
+      .then((body) => {
+        if (!cancelled) setPeople((body.members ?? []).filter((m) => m.isActive));
+      })
+      .catch(() => {
+        if (!cancelled) setPeople([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId]);
+
+  // 저장은 고르는 즉시.
+  //
+  // 회의 중이라 저장 버튼을 따로 누르게 하면 안 누른 채 다음 건으로 넘어간다.
+  // 화면을 먼저 바꾸고 실패하면 되돌린다 — 회의 속도로 눌리는 화면에서
+  // 응답을 기다리며 멈춰 있으면 두 번 누르게 된다.
+  async function save(id, url, requestBody, optimistic) {
+    const before = data;
+    setData((prev) => ({
+      ...prev,
+      items: prev.items.map((item) => (item.id === id ? { ...item, ...optimistic } : item)),
+    }));
+    setRowError((prev) => ({ ...prev, [id]: '' }));
+    try {
+      const res = await fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brandId, ...requestBody }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? '저장하지 못했습니다.');
+    } catch (err) {
+      setData(before);
+      setRowError((prev) => ({ ...prev, [id]: err.message }));
+    }
+  }
+
+  async function endMeeting() {
+    setEnding(true);
+    setError('');
+    try {
+      const res = await fetch('/api/meeting/end', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brandId }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? '회의를 마치지 못했습니다.');
+      setEnded(body);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setEnding(false);
+    }
+  }
+
+  if (!brandId) return <p className="text-sm text-slate-500">브랜드를 먼저 선택해 주세요.</p>;
+  if (error) return <p className="text-sm text-red-600">{error}</p>;
+  if (!data) return <p className="text-sm text-slate-500">불러오는 중...</p>;
+
+  const stallDays = data.stallDays;
+  const rows = data.items.filter((item) => {
+    if (filter === 'unassigned') return !item.assignee;
+    if (filter === 'incoming') return item.isNew;
+    return true;
+  });
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div>
+        <h1 className="text-lg font-semibold text-slate-900">주간회의</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          오래 멈춘 것부터 봅니다. 담당자와 예상일은 이 목록에서 바로 정할 수 있습니다.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <Stat label={`${stallDays}일+ 멈춤`} value={data.summary.stalled} tone="rose" />
+        <Stat label="담당 없음" value={data.summary.unassigned} tone="amber" />
+        <Stat label="이번 주 신규" value={data.summary.incoming} tone="slate" />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-slate-500">보기</span>
+        {FILTERS.map((f) => (
+          <button
+            key={f.key}
+            type="button"
+            onClick={() => setFilter(f.key)}
+            className={`rounded px-2.5 py-1 text-xs ${
+              filter === f.key
+                ? 'bg-indigo-50 font-medium text-indigo-700'
+                : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {ended && (
+        <p className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          {ended.assigned === 0
+            ? '회의를 마쳤습니다. 이번 회의에서 새로 배정된 건은 없습니다.'
+            : `회의를 마쳤습니다. ${ended.assigned}건이 배정됐고 요청자 ${ended.notified}명에게 알렸습니다.`}
+        </p>
+      )}
+
+      <ul className="flex flex-col">
+        {rows.length === 0 && (
+          <li className="py-6 text-sm text-slate-500">이 조건에 해당하는 건이 없습니다.</li>
+        )}
+        {rows.map((item) => (
+          <li
+            key={item.id}
+            className={`flex flex-wrap items-start gap-3 border-b border-l-2 border-slate-100 py-3 pl-3 ${
+              item.assignee ? 'border-l-slate-200' : 'border-l-rose-400'
+            }`}
+          >
+            <div className="min-w-0 flex-1">
+              <Link href={`/requirements/${item.id}`} className="text-sm hover:underline">
+                {item.title}
+              </Link>
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                {item.stalledDays >= stallDays ? (
+                  <span className="rounded bg-rose-50 px-1.5 py-0.5 text-rose-700">
+                    {item.stalledDays}일 멈춤
+                  </span>
+                ) : item.isNew ? (
+                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">신규</span>
+                ) : null}
+                <span className="text-slate-500">
+                  {item.status} · {item.requester?.name ?? '요청자 없음'} 요청
+                </span>
+              </div>
+              {rowError[item.id] && (
+                <p className="mt-1 text-xs text-red-600">{rowError[item.id]}</p>
+              )}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <select
+                aria-label={`${item.title} 담당자`}
+                value={item.assignee?.id ?? ''}
+                onChange={(e) => {
+                  const id = e.target.value || null;
+                  const person = people.find((p) => p.id === id);
+                  save(
+                    item.id,
+                    `/api/requirements/${item.id}/assignee`,
+                    { assignee: id },
+                    { assignee: id ? { id, name: person?.name ?? '' } : null }
+                  );
+                }}
+                className="h-8 rounded border border-slate-200 px-2 text-xs"
+              >
+                <option value="">담당 지정</option>
+                {people.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="date"
+                aria-label={`${item.title} 배포예상일`}
+                value={item.expectedDate ?? ''}
+                onChange={(e) => {
+                  const value = e.target.value || null;
+                  save(
+                    item.id,
+                    `/api/requirements/${item.id}/expected-date`,
+                    { expectedReleaseDate: value },
+                    { expectedDate: value }
+                  );
+                }}
+                className="h-8 rounded border border-slate-200 px-2 text-xs"
+              />
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      {/* 회의 마치기가 루프를 닫는 지점이다. 이 회의에서 배정된 건의 요청자가
+          "내가 올린 게 어떻게 됐는지"를 아는 유일한 통로다. */}
+      <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-3">
+        <p className="text-xs text-slate-500">
+          마치면 이 회의에서 배정된 건의 요청자에게 메일이 갑니다.
+        </p>
+        <Button
+          type="button"
+          onClick={endMeeting}
+          disabled={ending}
+          className="bg-indigo-600 hover:bg-indigo-700"
+        >
+          {ending ? '마치는 중...' : '회의 마치기'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value, tone }) {
+  const tones = {
+    rose: 'bg-rose-50 text-rose-700',
+    amber: 'bg-amber-50 text-amber-800',
+    slate: 'bg-slate-100 text-slate-700',
+  };
+  return (
+    <div className={`rounded px-3 py-2 ${tones[tone]}`}>
+      <div className="text-xs opacity-80">{label}</div>
+      <div className="text-xl font-semibold">{value}</div>
+    </div>
+  );
+}
