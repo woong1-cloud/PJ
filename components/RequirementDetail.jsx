@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useIdentity } from '@/components/IdentityProvider';
 import { canProcess, isGlobalAdmin } from '@/lib/tiers';
 import {
-  BOARD_STATUSES,
+  DIRECT_STATUSES,
   DONE_STATUS,
   MERGED_STATUS,
   REJECTED_STATUS,
@@ -15,16 +15,26 @@ import {
   REVIEW_PENDING_STATUS,
 } from '@/lib/statuses';
 import { canApprove } from '@/lib/approval';
-import { statusStyle } from '@/lib/statusMeta';
+import { STATUS_META } from '@/lib/statusMeta';
 import { canSubmitForReview } from '@/lib/submitRequirement';
 import { isOverdue, toLocalDateString } from '@/lib/overdue';
-import { Badge } from '@/components/ui/badge';
-import { ImageDropzone } from '@/components/ImageDropzone';
 import { isImageType } from '@/lib/imageUpload';
 import { RequirementEditForm } from '@/components/RequirementEditForm';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { RequirementLinks } from '@/components/RequirementLinks';
+import { RequirementHeader } from '@/components/RequirementHeader';
+import { RequirementStatusActions } from '@/components/RequirementStatusActions';
+import { RequirementSidebar } from '@/components/RequirementSidebar';
+import { RequirementAttachments } from '@/components/RequirementAttachments';
+import { headline } from '@/lib/headline';
+import { stalledDays } from '@/lib/stalled';
 import { ActivityFeed } from '@/components/ActivityFeed';
-import { StatusDurations } from '@/components/StatusDurations';
 import { ChecklistSection } from '@/components/ChecklistSection';
 import { RequirementDangerZone } from '@/components/RequirementDangerZone';
 import { ApprovalDialog } from '@/components/ApprovalDialog';
@@ -32,7 +42,7 @@ import { StartReviewDialog } from '@/components/StartReviewDialog';
 import { RedmineLinkSection } from '@/components/RedmineLinkSection';
 import { HelpHint } from '@/components/HelpHint';
 import { canDeleteRequirement } from '@/lib/deleteRequirement';
-import { REQUIREMENT_TYPES, TYPE_HINTS, UNTYPED_LABEL, typeLabel } from '@/lib/requirementTypes';
+import { REQUIREMENT_TYPES, UNTYPED_LABEL, typeLabel } from '@/lib/requirementTypes';
 import {
   Select,
   SelectContent,
@@ -48,6 +58,9 @@ export function RequirementDetail({ id }) {
   const [approvalOpen, setApprovalOpen] = useState(false);
   // 착수 창. 검토대기 → 검토중 으로 갈 때 담당자·예상일을 받는다.
   const [startOpen, setStartOpen] = useState(false);
+  // 종결 건의 '재개'가 여는 창. 예전에는 보드 밖 상태일 때만 나타나는 별도
+  // Select 였는데, 주 버튼 하나로 들어오면서 창이 됐다.
+  const [resumeOpen, setResumeOpen] = useState(false);
   const [data, setData] = useState(null);
   const [teamMembers, setTeamMembers] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -153,6 +166,19 @@ export function RequirementDetail({ id }) {
       return;
     }
     load();
+  }
+
+  // 주 버튼 한 개가 상태에 따라 다른 곳으로 간다. 어디로 갈지는
+  // STATUS_META.primary.via 가 정한다 — 화면이 상태 이름으로 다시 분기하면
+  // 상태를 추가할 때 여기를 빼먹고, 그러면 버튼이 조용히 아무 일도 안 한다.
+  async function runPrimary() {
+    const primary = STATUS_META[data?.requirement?.status]?.primary;
+    if (!primary) return;
+    if (primary.via === 'submit') return submitForReview();
+    if (primary.via === 'start') return setStartOpen(true);
+    if (primary.via === 'approve') return setApprovalOpen(true);
+    if (primary.via === 'resume') return setResumeOpen(true);
+    return changeStatus(primary.to);
   }
 
   // 종결(반려·취소)은 상태 변경과 다른 라우트를 쓴다. BOARD_STATUSES 밖의
@@ -313,10 +339,27 @@ export function RequirementDetail({ id }) {
     refresh();
   }
 
-  const isOffBoard = !BOARD_STATUSES.includes(r.status);
-  // 병합된 건은 종결할 수 없다(API도 막는다). 이미 반려·취소된 건은 서로
-  // 바꿀 수 있게 둔다 — 잘못 누른 것을 고칠 방법이 있어야 한다.
-  const canClose = r.status !== MERGED_STATUS;
+  // 정체 일수는 회의 화면과 같은 함수를 쓴다. 회의 안건에 오른 건을 상세에서
+  // 열었을 때 다른 숫자가 보이면 둘 중 하나가 틀린 것이다.
+  //
+  // 코멘트는 넘기지 않는다 — ActivityFeed 가 자기 엔드포인트에서 따로 불러오고,
+  // 그것 하나를 위해 상세 API 를 늘리는 것보다 정체 판정이 코멘트 하나만큼
+  // 늦어지는 편이 낫다.
+  const days = stalledDays({
+    requirement: r,
+    changeLogs: history ?? [],
+    now: new Date().toISOString(),
+  });
+  const head = headline({ requirement: r, stalledDays: days, viewer: identity, today });
+  // 데스크톱과 모바일이 같은 컨트롤을 쓴다. compact 만 다르다.
+  const actionProps = {
+    status: r.status,
+    identity,
+    action: head.action,
+    onPrimary: runPrimary,
+    onTransition: changeStatus,
+    onClose: closeRequirement,
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -336,20 +379,30 @@ export function RequirementDetail({ id }) {
         </div>
       )}
 
-      {/* 제목은 grid 밖이다. 모바일에서 메타(aside)를 본문 위로 올려야 하는데,
-          제목이 본문 안에 있으면 메타가 제목보다 위로 가 버린다. */}
-      <div className="flex items-start justify-between gap-3">
-        <h1 className="text-lg font-semibold text-slate-900">{r.title}</h1>
-        {canEdit && !showEditForm && (
+      {/* 머리 줄은 grid 밖이다. 모바일에서 이 한 줄이 상단에 있어야 하고,
+          본문 안에 넣으면 오른쪽 열과 순서가 얽힌다. */}
+      <RequirementHeader
+        requirement={r}
+        head={head}
+        durations={statusDurations}
+        counts={{ attachments: images?.length ?? 0, comments: commentCount ?? 0 }}
+        projectName={r.project?.name}
+        typeLabel={r.requirement_type}
+        actions={<RequirementStatusActions {...actionProps} />}
+        actionsCompact={<RequirementStatusActions {...actionProps} compact />}
+      />
+
+      {canEdit && !showEditForm && (
+        <div className="flex justify-end">
           <button
             type="button"
             onClick={() => setEditing(true)}
-            className="shrink-0 text-sm text-indigo-600 hover:underline"
+            className="text-sm text-indigo-600 hover:underline"
           >
             수정
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <div className="flex flex-col gap-4 md:col-span-2">
@@ -366,243 +419,78 @@ export function RequirementDetail({ id }) {
             />
           ) : (
             <>
-              <section className="rounded-lg border border-slate-200 bg-white p-4">
-                <h2 className="mb-1 text-sm font-medium text-slate-500">As-Is</h2>
-                <p className="whitespace-pre-wrap text-sm text-slate-900">{r.as_is || '-'}</p>
-              </section>
-              <section className="rounded-lg border border-slate-200 bg-white p-4">
-                <h2 className="mb-1 text-sm font-medium text-slate-500">To-Be</h2>
-                <p className="whitespace-pre-wrap text-sm text-slate-900">{r.to_be || '-'}</p>
-              </section>
-              <section className="rounded-lg border border-slate-200 bg-white p-4">
-                <h2 className="mb-1 text-sm font-medium text-slate-500">비고</h2>
-                <p className="whitespace-pre-wrap text-sm text-slate-900">{r.note || '-'}</p>
-              </section>
+              {/* 카드 셋을 걷어내고 문서 한 장으로. 상자가 같은 무게로 셋이
+                  있으면 읽는 순서가 생기지 않는다. 순서는 그대로 As-Is → To-Be
+                  다 — 문제를 먼저 읽는 것이 자연스럽다. */}
+              <div className="max-w-[68ch]">
+                <p className="mb-1.5 text-[10px] font-semibold tracking-widest text-slate-400 uppercase">
+                  As-Is
+                </p>
+                <p className="text-sm leading-7 whitespace-pre-wrap text-slate-800">
+                  {r.as_is || '-'}
+                </p>
+              </div>
+
+              {/* To-Be 에만 강조선을 준다. 실무자가 이 화면에서 찾는 것은
+                  "뭘 만들어야 하나"다. */}
+              <div className="max-w-[68ch] border-l-2 border-indigo-500 pl-4">
+                <p className="mb-1.5 text-[10px] font-semibold tracking-widest text-indigo-600 uppercase">
+                  To-Be
+                </p>
+                <p className="text-sm leading-7 whitespace-pre-wrap text-slate-800">
+                  {r.to_be || '-'}
+                </p>
+              </div>
             </>
           )}
 
+          <RequirementAttachments
+            pics={pics}
+            docs={docs}
+            canEdit={canEdit}
+            onDelete={deleteImage}
+            newFiles={newFiles}
+            onAddFiles={(added) => setNewFiles((prev) => [...prev, ...added])}
+            onRemoveFile={(i) => setNewFiles((prev) => prev.filter((_, idx) => idx !== i))}
+            onUpload={uploadNew}
+          />
+
           <RequirementLinks requirementId={id} brandId={requirementBrandId} />
 
-          <section className="rounded-lg border border-slate-200 bg-white p-4">
-            <h2 className="mb-2 text-sm font-medium text-slate-500">첨부</h2>
-            {images.length === 0 && <p className="text-sm text-slate-400">첨부된 파일이 없습니다.</p>}
+          {/* 하위 작업은 자리만 준다. 기능은 이미 있는데 운영 데이터가 0개다.
+              본문의 요건을 여기로 옮기면 진척을 셀 수 있지만, 그건 요청 작성
+              방식을 바꾸는 일이라 이 재설계와 함께 하지 않는다. */}
+          <ChecklistSection
+            requirementId={id}
+            brandId={requirementBrandId}
+            canManage={processAllowed}
+          />
 
-            {/* 문서는 썸네일을 만들 수 없다. 이미지 격자에 회색 네모로 섞어 두면
-                무슨 파일인지 알 수 없으므로, 파일명이 보이는 목록으로 따로 뺀다. */}
-            {docs.length > 0 && (
-              <ul className="mb-3 flex flex-col gap-1">
-                {docs.map((f) => (
-                  <li key={f.id} className="flex items-center gap-2 text-sm">
-                    <a
-                      href={f.signedUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      download={f.file_name ?? undefined}
-                      className="flex-1 truncate text-indigo-600 hover:underline"
-                      title={f.file_name ?? ''}
-                    >
-                      {f.file_name || '이름 없는 파일'}
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => deleteImage(f.id)}
-                      className="shrink-0 text-xs text-slate-400 hover:text-red-600"
-                      aria-label={`${f.file_name ?? '파일'} 삭제`}
-                    >
-                      삭제
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+          {/* 비고는 접는다. 참고 사항이라 늘 펴 둘 값어치가 없다. */}
+          {r.note && (
+            <details className="max-w-[68ch] border-y border-slate-100 py-2">
+              <summary className="cursor-pointer text-sm text-slate-500">비고</summary>
+              <p className="mt-2 text-sm leading-7 whitespace-pre-wrap text-slate-800">{r.note}</p>
+            </details>
+          )}
 
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {pics.map((img) => (
-                <div key={img.id} className="relative">
-                  <a href={img.signedUrl} target="_blank" rel="noreferrer">
-                    <img
-                      src={img.signedUrl}
-                      alt=""
-                      className="h-20 w-full rounded-md border border-slate-200 object-cover"
-                    />
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => deleteImage(img.id)}
-                    className="absolute right-1 top-1 rounded-full bg-slate-900/70 px-1.5 text-xs text-white"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-            <div className="mt-3">
-              <ImageDropzone
-                files={newFiles}
-                onAdd={(added) => setNewFiles((prev) => [...prev, ...added])}
-                onRemove={(i) => setNewFiles((prev) => prev.filter((_, idx) => idx !== i))}
-              />
-              {newFiles.length > 0 && (
-                <button
-                  type="button"
-                  onClick={uploadNew}
-                  className="mt-2 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-700"
-                >
-                  {newFiles.length}개 업로드
-                </button>
-              )}
-            </div>
-          </section>
+          {/* 대화를 본문 바로 아래로 올린다. 지금은 스크롤 맨 끝인데, 코멘트
+              42건이 이 앱에서 유일하게 살아 있는 협업 신호다. */}
+          <ActivityFeed
+            requirementId={id}
+            brandId={requirementBrandId}
+            history={history}
+            memberId={identity.memberId}
+          />
         </div>
 
-        {/* 모바일에서는 본문 위로 올린다.
-            폰으로 상세를 여는 이유는 "내 요청 어디까지 왔나" 하나인데, 그대로
-            두면 As-Is·To-Be·비고·첨부를 다 지나야 상태와 담당자가 나온다.
-            데스크톱에서는 지금처럼 오른쪽 열이다. */}
-        <aside className="order-first flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm md:order-none">
-          <div>
-            <p className="flex items-center gap-1.5 text-slate-500">
-              상태
-              <HelpHint anchor="status" label="상태" />
-            </p>
-            {/* 보드 밖 상태(반려·취소·중복)일 때 BOARD_STATUSES 만 담은 Select 에
-                그 값을 넣으면 트리거가 빈 칸이 된다. 뱃지로 보여주고, 재개는
-                별도 Select 로 분리한다 — "지금 반려 상태"와 "어디로 되돌릴까"는
-                다른 질문이다. */}
-            {isOffBoard ? (
-              <div className="mt-1 flex flex-col gap-1">
-                <Badge className={`w-fit ${statusStyle(r.status)}`}>{r.status}</Badge>
-                {processAllowed && r.status !== MERGED_STATUS && (
-                  <Select
-                    items={BOARD_STATUSES.map((s) => ({ value: s, label: s }))}
-                    value={null}
-                    onValueChange={changeStatus}
-                  >
-                    <SelectTrigger className="h-11 w-full md:h-8">
-                      <SelectValue placeholder="재개 — 상태 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {BOARD_STATUSES.map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {s}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-            ) : processAllowed ? (
-              <Select
-                items={BOARD_STATUSES.map((s) => ({ value: s, label: s }))}
-                value={r.status}
-                onValueChange={changeStatus}
-              >
-                <SelectTrigger className="mt-1 h-11 w-full md:h-8">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {BOARD_STATUSES.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <p className="font-medium text-slate-900">{r.status}</p>
-            )}
-
-            {/* 위 상태 Select 는 3차 이상에게만 보인다. 그런데 승인은 4차도 할
-                수 있어야 하므로, 이 버튼이 없으면 요청한 브랜드 담당자가 자기
-                건을 확인할 방법이 아예 없다. 3차 이상에게도 함께 보여준다 —
-                승인대기에서 할 일은 Select 를 뒤지는 게 아니라 이 버튼이다. */}
-            {r.status === APPROVAL_PENDING_STATUS &&
-              canApprove({
-                requirement: { status: r.status, assignee: r.assignee?.id ?? null },
-                actor: { memberId: identity.memberId, isGlobalAdmin: isGlobalAdmin(identity) },
-              }).allowed && (
-                <div className="mt-2">
-                  <button
-                    type="button"
-                    onClick={() => setApprovalOpen(true)}
-                    // 되돌리기 어려운 동작이다. 작으면 오히려 잘못 누른다.
-                    className="h-11 w-full rounded-lg bg-emerald-600 px-3 text-sm text-white hover:bg-emerald-700 md:h-8"
-                  >
-                    승인하고 완료
-                  </button>
-                  <p className="mt-1 text-xs text-slate-500">
-                    무엇을 확인했는지 적으면 완료로 넘어갑니다.
-                  </p>
-                </div>
-              )}
-            {/* 4차 요청자에게 보이는 유일한 제출 수단이다. 3차 이상은 위 Select
-                로 바로 옮길 수 있으므로 중복해서 보여주지 않는다.
-                이 버튼이 없던 동안 4차가 올린 건은 '작성중'에 머물렀고,
-                올린 사람은 접수됐다고 믿었다. */}
-            {!processAllowed &&
-              canSubmitForReview(
-                { status: r.status, requester: r.requester?.id },
-                { memberId: identity.memberId, tier: identity.tier, isGlobalAdmin: false },
-              ) && (
-                <div className="mt-2">
-                  <button
-                    type="button"
-                    onClick={submitForReview}
-                    className="w-full rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-700"
-                  >
-                    검토 요청
-                  </button>
-                  <p className="mt-1 text-xs text-slate-500">
-                    누르면 IT 담당자에게 전달되고 상태가 검토대기로 바뀝니다.
-                  </p>
-                </div>
-              )}
-          </div>
-          {canClose && (
-            <CloseActions
-              canReject={processAllowed}
-              onClose={closeRequirement}
-            />
-          )}
-          <div>
-            <p className="text-slate-500">유형</p>
-            {/* 담당자·프로젝트와 같은 인라인 Select 다. 유형만 '수정' 전체 폼을
-                열어야 했는데, 화면의 다른 값들은 전부 여기서 바로 바뀐다 —
-                하나만 다르게 동작하면 그게 불편으로 느껴진다.
-                요청자 본인도 바꿀 수 있다(서버 PATCH 규칙과 같다). 등록할 때
-                모르고 넘겼다가 나중에 "아 이건 오류였네" 하는 경우가 있다. */}
-            {typeEditable ? (
-              <Select
-                items={[
-                  { value: '__none__', label: UNTYPED_LABEL },
-                  ...REQUIREMENT_TYPES.map((t) => ({ value: t, label: t })),
-                ]}
-                value={r.requirement_type ?? '__none__'}
-                onValueChange={changeType}
-              >
-                <SelectTrigger className="mt-1 h-11 w-full md:h-8">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">{UNTYPED_LABEL}</SelectItem>
-                  {REQUIREMENT_TYPES.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <p className="font-medium text-slate-900">{typeLabel(r.requirement_type)}</p>
-            )}
-            {r.requirement_type && (
-              <p className="mt-1 text-xs text-slate-400">{TYPE_HINTS[r.requirement_type]}</p>
-            )}
-          </div>
-
-          <div>
-            <p className="text-slate-500">담당자</p>
-            {processAllowed ? (
+        {/* 오른쪽 열은 본문 아래로 내려간다(모바일). 예전에는 order-first 로
+            본문 위에 올렸는데, 그 이유("폰으로 여는 까닭은 내 요청 어디까지
+            왔나 하나")를 이제 머리 줄이 대신한다. */}
+        <RequirementSidebar
+          assigneeFilled={Boolean(r.assignee)}
+          assigneeSlot={
+            processAllowed ? (
               <Select
                 items={[
                   { value: '__none__', label: '미지정' },
@@ -611,7 +499,7 @@ export function RequirementDetail({ id }) {
                 value={r.assignee?.id ?? '__none__'}
                 onValueChange={changeAssignee}
               >
-                <SelectTrigger className="mt-1 h-11 w-full md:h-8">
+                <SelectTrigger className="h-8 w-32 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -624,74 +512,95 @@ export function RequirementDetail({ id }) {
                 </SelectContent>
               </Select>
             ) : (
-              <p className="font-medium text-slate-900">{r.assignee?.name ?? '미지정'}</p>
-            )}
-          </div>
-          <div>
-            <p className="text-slate-500">프로젝트</p>
-            {processAllowed ? (
+              <span className="text-slate-900">{r.assignee?.name ?? '미지정'}</span>
+            )
+          }
+          statusText={r.status}
+          expectedSlot={
+            <ExpectedDateField
+              key={r.expected_release_date ?? '__none__'}
+              value={r.expected_release_date}
+              overdue={isOverdue(r.expected_release_date, r.status, today)}
+              editable={processAllowed}
+              onSave={changeExpectedDate}
+            />
+          }
+          projectSlot={
+            processAllowed ? (
               <Select
                 items={[
                   { value: 'none', label: '선택 안 함' },
-                  ...projects.map((p) => ({ value: p.id, label: p.name })),
+                  ...projects.map((pr) => ({ value: pr.id, label: pr.name })),
                 ]}
                 value={r.project_id ?? 'none'}
                 onValueChange={changeProject}
               >
-                <SelectTrigger className="mt-1 h-11 w-full md:h-8">
+                <SelectTrigger className="h-8 w-32 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">선택 안 함</SelectItem>
-                  {projects.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  {projects.map((pr) => (
+                    <SelectItem key={pr.id} value={pr.id}>
+                      {pr.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             ) : r.project ? (
-              <Link
-                href={`/projects/${r.project.id}`}
-                className="font-medium text-indigo-600 hover:underline"
-              >
+              <Link href={`/projects/${r.project.id}`} className="text-indigo-600 hover:underline">
                 {r.project.name}
               </Link>
             ) : (
-              <p className="font-medium text-slate-900">-</p>
-            )}
-          </div>
-          {/* 배포예상일은 IT가 정한다(API 도 3차 이상만 허용). 4차에게 입력칸을
-              보여주면 눌러놓고 403 을 받게 되므로 값만 보여준다. */}
-          <ExpectedDateField
-            key={r.expected_release_date ?? '__none__'}
-            value={r.expected_release_date}
-            overdue={isOverdue(r.expected_release_date, r.status, today)}
-            editable={processAllowed}
-            onSave={changeExpectedDate}
-          />
-          {/* 여기부터는 읽기 전용이다. 위쪽 컨트롤들과 섞여 있으면 "왜 이건
-              안 바뀌지?"로 읽히므로 선을 긋고 제목을 달아 갈라 둔다.
-              내용을 고치려면 상단의 '수정'을 눌러야 한다. */}
-          <div className="mt-1 border-t border-slate-200 pt-3">
-            <p className="mb-2 text-xs text-slate-400">요청 내용 · 수정에서 변경</p>
-            <div className="flex flex-col gap-3">
-              <MetaRow label="카테고리" value={r.category?.category_name ?? '미분류'} />
-              {/* 0009 이전에 만들어진 건은 channel 이 비어 있다. 수정에서 채워진다. */}
-              <MetaRow label="채널" value={r.channel ?? '미지정'} />
-              <MetaRow label="우선순위" value={r.priority ?? '미지정'} />
-              <MetaRow label="요청자" value={r.requester?.name ?? '-'} />
-              <MetaRow label="요청일" value={r.request_date ?? '-'} />
-            </div>
-          </div>
-
-          <RedmineLinkSection
-            requirementId={id}
-            brandId={requirementBrandId}
-            requirement={r}
-            canEdit={processAllowed}
-            onSaved={load}
-          />
-          {r.is_confidential && <p className="text-rose-600">비공개</p>}
-        </aside>
+              <span className="text-slate-400">—</span>
+            )
+          }
+          typeSlot={
+            typeEditable ? (
+              <Select
+                items={[
+                  { value: '__none__', label: UNTYPED_LABEL },
+                  ...REQUIREMENT_TYPES.map((t) => ({ value: t, label: t })),
+                ]}
+                value={r.requirement_type ?? '__none__'}
+                onValueChange={changeType}
+              >
+                <SelectTrigger className="h-8 w-32 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">{UNTYPED_LABEL}</SelectItem>
+                  {REQUIREMENT_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <span className="text-slate-900">{typeLabel(r.requirement_type)}</span>
+            )
+          }
+          redmineSlot={
+            <RedmineLinkSection
+              requirementId={id}
+              brandId={requirementBrandId}
+              requirement={r}
+              canEdit={processAllowed}
+              onSaved={load}
+            />
+          }
+          request={{
+            summary: `${r.requester?.name ?? '요청자 없음'} · ${r.request_date ?? '요청일 없음'}`,
+            rows: [
+              ['카테고리', r.category?.category_name ?? '미분류'],
+              ['채널', r.channel ?? '미지정'],
+              ['우선순위', r.priority ?? '미지정'],
+              ['요청자', r.requester?.name ?? '-'],
+              ['요청일', r.request_date ?? '-'],
+            ],
+          }}
+        />
       </div>
 
       {duplicates.length > 0 && (
@@ -706,23 +615,6 @@ export function RequirementDetail({ id }) {
           </ul>
         </section>
       )}
-
-      <StatusDurations durations={statusDurations} />
-
-      <ChecklistSection
-        requirementId={id}
-        brandId={requirementBrandId}
-        canManage={processAllowed}
-      />
-
-      {/* 상태 이력과 코멘트를 한 줄기로 보여준다. 이력은 상세 API 가 이미
-          내려주고, 코멘트는 자기 엔드포인트에서 따로 불러와 화면에서 섞는다. */}
-      <ActivityFeed
-        requirementId={id}
-        brandId={requirementBrandId}
-        history={history}
-        memberId={identity.memberId}
-      />
 
       <StartReviewDialog
         open={startOpen}
@@ -742,6 +634,32 @@ export function RequirementDetail({ id }) {
         onApproved={load}
       />
 
+      {/* 종결 건의 '재개'가 여는 창. 예전에는 보드 밖 상태일 때만 나타나는
+          별도 Select 였는데, 주 버튼 하나로 들어오면서 창이 됐다.
+          완료는 목록에 없다 — 서버가 PATCH /status 로 오는 완료를 거부한다. */}
+      <Dialog open={resumeOpen} onOpenChange={setResumeOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>어느 상태로 되돌릴까요?</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-wrap gap-2">
+            {DIRECT_STATUSES.map((st) => (
+              <Button
+                key={st}
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setResumeOpen(false);
+                  changeStatus(st);
+                }}
+              >
+                {st}
+              </Button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* 영구 삭제는 화면 맨 아래, 전체 관리자에게만. 서버도 같은 판정을 다시 한다. */}
       {canDeleteRequirement(identity) && (
         <RequirementDangerZone
@@ -755,99 +673,6 @@ export function RequirementDetail({ id }) {
         />
       )}
     </div>
-  );
-}
-
-// 종결 버튼 + 사유 입력.
-//
-// 사유를 필수로 받는 것이 이 UI의 존재 이유다. window.prompt 로도 되지만
-// 취소·재입력이 어렵고 긴 문장을 쓰기 나쁘다 — 한 달 뒤에 읽을 기록이므로
-// 제대로 쓸 자리를 준다.
-//
-// props: canReject(3차 이상인가), onClose(status, reason) => Promise<boolean>
-function CloseActions({ canReject, onClose }) {
-  const [target, setTarget] = useState(null); // null | '반려' | '취소'
-  const [reason, setReason] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-
-  function start(status) {
-    setTarget(status);
-    setReason('');
-  }
-
-  async function submit(event) {
-    event.preventDefault();
-    if (!reason.trim()) return;
-    setSubmitting(true);
-    const ok = await onClose(target, reason);
-    setSubmitting(false);
-    if (ok) {
-      setTarget(null);
-      setReason('');
-    }
-  }
-
-  if (!target) {
-    return (
-      <div className="flex gap-2 border-t border-slate-100 pt-3">
-        {/* 반려는 IT의 결정이라 3차 이상에게만 보인다. 취소는 요청한 쪽이
-            거두는 것이라 이 화면을 볼 수 있는 사람이면 누구나 할 수 있다. */}
-        {canReject && (
-          <button
-            type="button"
-            onClick={() => start(REJECTED_STATUS)}
-            className="rounded-lg border border-rose-200 px-2.5 py-1 text-xs text-rose-600 hover:bg-rose-50"
-          >
-            반려
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={() => start(CANCELLED_STATUS)}
-          className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50"
-        >
-          취소
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <form onSubmit={submit} className="flex flex-col gap-2 border-t border-slate-100 pt-3">
-      <label htmlFor="close-reason" className="text-xs text-slate-500">
-        {target === REJECTED_STATUS ? '반려 사유' : '취소 사유'} (필수)
-      </label>
-      <textarea
-        id="close-reason"
-        value={reason}
-        onChange={(e) => setReason(e.target.value)}
-        rows={3}
-        required
-        className="rounded-lg border border-slate-300 p-2 text-xs focus:border-indigo-400 focus:outline-none"
-        placeholder={
-          target === REJECTED_STATUS
-            ? '왜 진행하지 않기로 했는지 적어 주세요.'
-            : '왜 거두는지 적어 주세요.'
-        }
-      />
-      <div className="flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={() => setTarget(null)}
-          disabled={submitting}
-          className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50"
-        >
-          되돌리기
-        </button>
-        <button
-          type="submit"
-          disabled={submitting || !reason.trim()}
-          className="rounded-lg bg-slate-900 px-2.5 py-1 text-xs text-white disabled:opacity-40"
-        >
-          {submitting ? '처리 중...' : `${target} 처리`}
-        </button>
-      </div>
-    </form>
   );
 }
 
@@ -874,49 +699,49 @@ function ExpectedDateField({ value, overdue, editable, onSave }) {
     setSaving(false);
   }
 
+  // 라벨은 그리지 않는다. 이제 PropertyRow 안에 들어가고, 그 행이 이미
+  // '배포예상일'을 말한다. 예전에는 이 컴포넌트가 한 줄을 통째로 그렸다.
   if (!editable) {
     return (
-      <div className="flex items-center justify-between">
-        <span className="text-slate-500">배포예상일</span>
-        <span className={overdue ? 'font-medium text-rose-600' : 'font-medium text-slate-900'}>
-          {value ? (overdue ? `⚠ ${value} 지연` : value) : '-'}
-        </span>
-      </div>
+      <span className={overdue ? 'font-medium text-rose-600' : 'text-slate-900'}>
+        {value ? (overdue ? `⚠ ${value} 지연` : value) : '—'}
+      </span>
+    );
+  }
+
+  // 값이 없으면 회색 '—' 대신 유도 문구를 보여준다. 44건 중 7건만 채워져
+  // 있어서, 그냥 두면 오른쪽 열 네 줄 중 절반이 늘 비어 보인다.
+  if (!value && !dirty) {
+    return (
+      <button
+        type="button"
+        onClick={() => setDraft(new Date().toISOString().slice(0, 10))}
+        className="text-indigo-600 hover:underline"
+      >
+        ＋ 정하기
+      </button>
     );
   }
 
   return (
-    <div>
-      <p className="text-slate-500">배포예상일</p>
-      <div className="mt-1 flex items-center gap-2">
-        <input
-          type="date"
-          aria-label="배포예상일"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm focus:border-indigo-400 focus:outline-none"
-        />
-        {dirty && (
-          <button
-            type="button"
-            onClick={save}
-            disabled={saving}
-            className="shrink-0 rounded-lg bg-slate-900 px-2.5 py-1 text-xs text-white disabled:opacity-40"
-          >
-            {saving ? '...' : draft ? '저장' : '해제'}
-          </button>
-        )}
-      </div>
-      {overdue && !dirty && <p className="mt-1 text-xs font-medium text-rose-600">⚠ 예상일이 지났습니다</p>}
-    </div>
-  );
-}
-
-function MetaRow({ label, value }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-slate-500">{label}</span>
-      <span className="font-medium text-slate-900">{value}</span>
+    <div className="flex items-center gap-1">
+      <input
+        type="date"
+        aria-label="배포예상일"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        className="w-32 rounded border border-slate-300 px-1.5 py-0.5 text-xs focus:border-indigo-400 focus:outline-none"
+      />
+      {dirty && (
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving}
+          className="shrink-0 rounded bg-slate-900 px-1.5 py-0.5 text-[11px] text-white disabled:opacity-40"
+        >
+          {saving ? '...' : draft ? '저장' : '해제'}
+        </button>
+      )}
     </div>
   );
 }

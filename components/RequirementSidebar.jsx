@@ -11,13 +11,15 @@ import { PropertyRow } from '@/components/ui/PropertyRow';
 //
 // props:
 //   assigneeFilled — 담당자가 지정돼 있는가. 색을 가진 행을 정한다
-//   assigneeSlot, expectedSlot, redmineSlot, projectSlot — 각 행의 컨트롤
+//   assigneeSlot, typeSlot, expectedSlot, projectSlot — 각 행의 컨트롤
+//   redmineSlot — 행이 아니라 아래에 붙는 섹션이다
 //   statusText — 상태는 여기서 바꾸지 않는다(머리 줄의 버튼이 한다)
 //   request — { summary, rows: [[label, value], ...] }
 export function RequirementSidebar({
   assigneeFilled,
   assigneeSlot,
   statusText,
+  typeSlot,
   expectedSlot,
   redmineSlot,
   projectSlot,
@@ -38,14 +40,17 @@ export function RequirementSidebar({
             {assigneeSlot}
           </PropertyRow>
           <PropertyRow icon="◌" label="상태" value={statusText} />
+          {/* 유형은 요청자도 바꾼다. 그래도 '지정'에 두는 이유는 셀렉트이기
+              때문이다 — 머리 줄에 셀렉트를 넣으면 뱃지가 아니라 컨트롤이
+              되어 그 줄이 무거워진다. 머리 줄은 값만 보여준다. */}
+          {typeSlot && (
+            <PropertyRow icon="◈" label="유형">
+              {typeSlot}
+            </PropertyRow>
+          )}
           <PropertyRow icon="▤" label="배포예상일">
             {expectedSlot}
           </PropertyRow>
-          {redmineSlot && (
-            <PropertyRow icon="↗" label="레드마인">
-              {redmineSlot}
-            </PropertyRow>
-          )}
           {projectSlot && (
             <PropertyRow icon="▦" label="프로젝트">
               {projectSlot}
@@ -76,6 +81,10 @@ export function RequirementSidebar({
           <p className="mt-2 text-xs leading-relaxed text-slate-500">{request.summary}</p>
         )}
       </div>
+
+      {/* 레드마인은 행이 아니라 섹션이다 — 자기 제목과 구분선을 갖고 있고,
+          링크가 없을 때는 아예 사라진다. 한 줄에 밀어 넣으면 어긋난다. */}
+      {redmineSlot}
     </aside>
   );
 }
