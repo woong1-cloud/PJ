@@ -33,6 +33,7 @@ import { RequirementStatusActions } from '@/components/RequirementStatusActions'
 import { RequirementSidebar } from '@/components/RequirementSidebar';
 import { RequirementAttachments } from '@/components/RequirementAttachments';
 import { headline } from '@/lib/headline';
+import { closureReason } from '@/lib/closureReason';
 import { stalledDays } from '@/lib/stalled';
 import { ActivityFeed } from '@/components/ActivityFeed';
 import { ChecklistSection } from '@/components/ChecklistSection';
@@ -351,6 +352,9 @@ export function RequirementDetail({ id }) {
     now: new Date().toISOString(),
   });
   const head = headline({ requirement: r, stalledDays: days, viewer: identity, today });
+  // 종결 사유는 저장은 되는데 화면 어디에도 없었다 — 머리 줄은 상태만 말하고,
+  // 활동 피드는 기본 탭이 '코멘트'라 한 번 더 눌러야 나온다.
+  const closure = closureReason({ requirement: r, changeLogs: history ?? [] });
   const note = r.note?.trim() ?? '';
   const noteLines = note ? note.split(/\r?\n/).length : 0;
   const noteFirstLine = note ? note.split(/\r?\n/)[0] : '';
@@ -384,6 +388,28 @@ export function RequirementDetail({ id }) {
             &lsquo;{mergedInto.title}&rsquo;
           </Link>{' '}
           요청에 병합되었습니다.
+        </div>
+      )}
+
+      {/* 종결 사유를 머리 줄 위에 둔다.
+          이 건이 왜 이렇게 끝났는지가 지금 상태를 설명하는 가장 중요한
+          문장이라, 상태 뱃지보다 먼저 읽혀야 한다. */}
+      {closure && (
+        <div
+          className={`rounded-lg border p-3 text-sm ${
+            closure.status === '완료'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+              : closure.status === '반려'
+                ? 'border-rose-200 bg-rose-50 text-rose-900'
+                : 'border-slate-200 bg-slate-50 text-slate-700'
+          }`}
+        >
+          <p className="text-xs font-semibold opacity-80">{closure.label}</p>
+          <p className="mt-1 whitespace-pre-wrap">{closure.reason}</p>
+          <p className="mt-1.5 text-xs opacity-60">
+            {closure.by ?? '누군가'}
+            {closure.at ? ` · ${String(closure.at).slice(0, 10)}` : ''}
+          </p>
         </div>
       )}
 
@@ -721,23 +747,11 @@ function ExpectedDateField({ value, overdue, editable, onSave }) {
     );
   }
 
-  // 값이 없을 때도 셀렉트와 같은 폭·높이의 상자로 둔다.
+  // 값이 없어도 입력칸을 그대로 둔다.
   //
-  // 글자만 오른쪽 끝에 띄워 놨더니 이 행만 라벨과 200px 떨어진 채 시선이
-  // 중간에서 끊겼다. 옆 행들이 전부 테두리 있는 셀렉트라 이것만 허공에 뜬다.
-  // 점선은 '아직 안 정했다'는 뜻이다.
-  if (!value && !dirty) {
-    return (
-      <button
-        type="button"
-        onClick={() => setDraft(new Date().toISOString().slice(0, 10))}
-        className="h-8 w-32 rounded border border-dashed border-slate-300 text-xs text-indigo-600 hover:bg-slate-50"
-      >
-        ＋ 정하기
-      </button>
-    );
-  }
-
+  // '＋ 정하기' 버튼을 거쳐 가게 했더니 클릭이 하나 늘고, 다섯 행 중 이 행만
+  // 모양이 달랐다. 빈 날짜칸은 그 자체로 "아직 안 정했다"를 말하고, 옆 행들과
+  // 같은 테두리라 오른쪽 끝이 한 줄로 정렬된다.
   return (
     <div className="flex items-center gap-1">
       <input
@@ -745,7 +759,7 @@ function ExpectedDateField({ value, overdue, editable, onSave }) {
         aria-label="배포예상일"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
-        className="w-32 rounded border border-slate-300 px-1.5 py-0.5 text-xs focus:border-indigo-400 focus:outline-none"
+        className="h-8 w-32 rounded border border-slate-300 px-1.5 text-xs focus:border-indigo-400 focus:outline-none"
       />
       {dirty && (
         <button

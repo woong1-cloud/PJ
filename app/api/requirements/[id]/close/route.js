@@ -62,7 +62,12 @@ export async function PATCH(request, { params }) {
     if (logError) throw logError;
 
     // 반려·취소도 요청자에게는 가장 알아야 할 상태 변경이다. 실패해도 조용히 넘어간다.
-    await notifyStatusChange({ requirementId: id, actorId: memberId, status });
+    await notifyStatusChange({
+      requirementId: id,
+      actorId: memberId,
+      status,
+      reason: reason.trim(),
+    });
 
     return Response.json({ ok: true, status });
   } catch (error) {

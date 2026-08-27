@@ -77,7 +77,12 @@ export async function POST(request, { params }) {
     if (logError) throw logError;
 
     // 완료는 요청자가 가장 알고 싶어 하는 소식이다. 실패해도 조용히 넘어간다.
-    await notifyStatusChange({ requirementId: id, actorId: memberId, status: DONE_STATUS });
+    await notifyStatusChange({
+      requirementId: id,
+      actorId: memberId,
+      status: DONE_STATUS,
+      reason: reason.trim(),
+    });
 
     return Response.json({ ok: true, status: DONE_STATUS });
   } catch (error) {
