@@ -1,26 +1,38 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { requireBrandAccess } from '@/lib/permissions';
 import { errorResponse, ApiError } from '@/lib/apiError';
-import { REJECTED_STATUS, CANCELLED_STATUS, MERGED_STATUS } from '@/lib/statuses';
+import {
+  REJECTED_STATUS,
+  CANCELLED_STATUS,
+  HOLD_STATUS,
+  MERGED_STATUS,
+} from '@/lib/statuses';
 import { computeCompletedAt } from '@/lib/completedAt';
 import { notifyStatusChange } from '@/lib/notify';
 
 // 종결은 별도 라우트다. PATCH .../status 는 BOARD_STATUSES 만 허용하고
 // 사유를 받지 않는다 — 두 가지가 정확히 종결과 다른 점이다.
-const CLOSABLE = [REJECTED_STATUS, CANCELLED_STATUS];
+//
+// 보류가 여기 있는 것이 이름과 어긋난다. 보류는 종결이 아니라 미뤄 둔 것이다.
+// 그래도 라우트를 새로 만들지 않는다 — 사유 검증·권한·로그·알림·completed_at
+// 처리가 전부 같아서, 나누면 한쪽만 고쳐지는 날이 온다.
+const CLOSABLE = [REJECTED_STATUS, CANCELLED_STATUS, HOLD_STATUS];
 
 export async function PATCH(request, { params }) {
   try {
     const { id } = await params;
     const { brandId, status, reason } = await request.json();
     if (!brandId) throw new ApiError(400, 'brandId가 필요합니다.');
-    if (!CLOSABLE.includes(status)) throw new ApiError(400, '반려 또는 취소만 지정할 수 있습니다.');
-    // 사유 없는 반려는 한 달 뒤에 아무도 이유를 모른다.
+    if (!CLOSABLE.includes(status)) {
+      throw new ApiError(400, '보류, 반려 또는 취소만 지정할 수 있습니다.');
+    }
+    // 사유 없는 반려는 한 달 뒤에 아무도 이유를 모른다. 보류는 더하다 —
+    // 무엇이 풀려야 다시 움직이는지가 사유에만 적힌다.
     if (!reason?.trim()) throw new ApiError(400, '사유를 입력해 주세요.');
 
-    // 반려는 IT의 결정이므로 3차 이상. 취소는 요청한 브랜드가 거두는 것이라
-    // 4차도 할 수 있어야 한다.
-    const minTier = status === REJECTED_STATUS ? '3차' : '4차';
+    // 반려·보류는 IT의 판단이므로 3차 이상. 취소는 요청한 브랜드가 거두는
+    // 것이라 4차도 할 수 있어야 한다.
+    const minTier = status === CANCELLED_STATUS ? '4차' : '3차';
     const { memberId } = await requireBrandAccess(brandId, minTier);
 
     const supabase = getSupabaseAdmin();

@@ -8,7 +8,7 @@ import { notifySubmitted } from '@/lib/notify';
 import { HANDOFF_STATUSES } from '@/lib/redmineLink';
 import { isValidType } from '@/lib/requirementTypes';
 import { CHANNELS, DEFAULT_CHANNEL } from '@/lib/channels';
-import { STALL_DAYS, groupByRequirement, stalledDays } from '@/lib/stalled';
+import { groupByRequirement, isStalled, stalledDays } from '@/lib/stalled';
 import { closureReason } from '@/lib/closureReason';
 import { requestDateRange } from '@/lib/dateRange';
 
@@ -212,7 +212,7 @@ export async function GET(request) {
     // (missing·overdue 는 SQL 로) 이것만 화면에서 거르면 동작이 갈린다 —
     // 칩을 눌렀는데 주소는 바뀌고 목록은 그대로인 식이다.
     const requirements = stalled
-      ? withStall.filter((r) => r.stalledDays !== null && r.stalledDays >= STALL_DAYS)
+      ? withStall.filter((r) => isStalled({ status: r.status, stalledDays: r.stalledDays }))
       : withStall;
 
     return Response.json({ requirements });

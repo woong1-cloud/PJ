@@ -3,7 +3,7 @@ import { requireBrandAccess } from '@/lib/permissions';
 import { errorResponse, ApiError } from '@/lib/apiError';
 import { CLOSED_STATUSES, DONE_STATUS } from '@/lib/statuses';
 import { closureReason } from '@/lib/closureReason';
-import { STALL_DAYS, groupByRequirement, stalledDays } from '@/lib/stalled';
+import { STALL_DAYS, groupByRequirement, isStalled, stalledDays } from '@/lib/stalled';
 
 // '이번 주'의 길이. meetingDigest 와 같은 값이라 화면과 메일이 같은 것을
 // '신규'라고 부른다.
@@ -117,7 +117,7 @@ export async function GET(request) {
 
     return Response.json({
       summary: {
-        stalled: items.filter((i) => (i.stalledDays ?? 0) >= STALL_DAYS).length,
+        stalled: items.filter((i) => isStalled({ status: i.status, stalledDays: i.stalledDays })).length,
         // 완료 건은 빼고 센다. 목록에 들어오면서 담당자 없이 끝난 건이
         // '담당 없음'으로 세어지는데, 그건 지금 손볼 일이 아니다.
         unassigned: items.filter((i) => !i.assignee && !i.isDone).length,

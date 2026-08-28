@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { STATUS_META } from '@/lib/statusMeta';
 import { menuTransitions } from '@/lib/statusActions';
-import { MERGED_STATUS, REJECTED_STATUS, CANCELLED_STATUS } from '@/lib/statuses';
+import { MERGED_STATUS, REJECTED_STATUS, CANCELLED_STATUS, HOLD_STATUS } from '@/lib/statuses';
 import { canProcess } from '@/lib/tiers';
 
 // 주 버튼 + '⋯' 메뉴 + 종결 창.
@@ -35,7 +35,7 @@ export function RequirementStatusActions({
   compact = false,
 }) {
   const [open, setOpen] = useState(false);
-  const [closing, setClosing] = useState(null); // null | '반려' | '취소'
+  const [closing, setClosing] = useState(null); // null | '보류' | '반려' | '취소'
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -48,8 +48,15 @@ export function RequirementStatusActions({
   // 요청자에게는 취소가 이 화면에서 할 수 있는 유일한 행동이고, 메뉴에
   // 숨기면 길이 사라진다.
   const canReject = canProcess(identity) && !merged;
+  // 보류도 IT 의 판단이라 같은 문턱이다. 반려 바로 위에 둔다 — 반려하려던
+  // 사람이 "이건 안 하는 게 아니라 지금 못 하는 것"임을 그 자리에서 고를 수
+  // 있어야 한다. 그게 이 상태를 만든 이유다.
+  // 이미 보류인 건에는 보류를 안 보여준다. 눌러도 같은 상태로 가고, 사유만
+  // 덮어써진다.
+  const canHold = canReject && status !== HOLD_STATUS;
   const showMenu =
-    !merged && (transitions.length > 0 || canReject || Boolean(onMerge) || Boolean(onEdit));
+    !merged &&
+    (transitions.length > 0 || canReject || canHold || Boolean(onMerge) || Boolean(onEdit));
 
   async function submitClose(event) {
     event.preventDefault();
@@ -65,7 +72,7 @@ export function RequirementStatusActions({
       setReason('');
       setError('');
     } else {
-      setError('종결하지 못했습니다.');
+      setError(`${closing} 처리를 하지 못했습니다.`);
     }
   }
 
@@ -83,11 +90,25 @@ export function RequirementStatusActions({
           onChange={(e) => setReason(e.target.value)}
           rows={2}
           className="rounded border border-slate-300 px-2 py-1.5 text-sm"
-          placeholder="한 달 뒤에 읽어도 알 수 있게 적어 주세요."
+          placeholder={
+            closing === HOLD_STATUS
+              ? '무엇이 풀려야 다시 움직이는지 적어 주세요. (예: API 개편 후, 사업자 신고 완료 후)'
+              : '한 달 뒤에 읽어도 알 수 있게 적어 주세요.'
+          }
         />
         {error && <p className="text-xs text-red-600">{error}</p>}
         <div className="flex gap-2">
-          <Button type="submit" disabled={saving} className="bg-rose-600 hover:bg-rose-700">
+          {/* 보류는 붉게 하지 않는다. 거절이 아니라 미루는 것이고, 붉은 확정
+              버튼은 누르는 사람에게 "돌이킬 수 없는 일"로 읽힌다. */}
+          <Button
+            type="submit"
+            disabled={saving}
+            className={
+              closing === HOLD_STATUS
+                ? 'bg-violet-600 hover:bg-violet-700'
+                : 'bg-rose-600 hover:bg-rose-700'
+            }
+          >
             {saving ? '처리 중...' : `${closing} 확정`}
           </Button>
           <Button type="button" variant="outline" onClick={() => setClosing(null)}>
@@ -210,6 +231,18 @@ export function RequirementStatusActions({
                     내용 수정
                   </button>
                 )}
+                {canHold && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      setClosing(HOLD_STATUS);
+                    }}
+                    className="mt-1 border-t border-slate-100 px-3 py-1.5 pt-2 text-left text-sm text-violet-700 hover:bg-violet-50"
+                  >
+                    보류
+                  </button>
+                )}
                 {canReject && (
                   <button
                     type="button"
@@ -217,7 +250,7 @@ export function RequirementStatusActions({
                       setOpen(false);
                       setClosing(REJECTED_STATUS);
                     }}
-                    className="mt-1 border-t border-slate-100 px-3 py-1.5 pt-2 text-left text-sm text-rose-600 hover:bg-rose-50"
+                    className="px-3 py-1.5 text-left text-sm text-rose-600 hover:bg-rose-50"
                   >
                     반려
                   </button>
