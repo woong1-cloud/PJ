@@ -27,6 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { MergeDialog } from '@/components/MergeDialog';
 import { RequirementLinks } from '@/components/RequirementLinks';
 import { RequirementHeader } from '@/components/RequirementHeader';
 import { RequirementStatusActions } from '@/components/RequirementStatusActions';
@@ -62,6 +63,9 @@ export function RequirementDetail({ id }) {
   // 종결 건의 '재개'가 여는 창. 예전에는 보드 밖 상태일 때만 나타나는 별도
   // Select 였는데, 주 버튼 하나로 들어오면서 창이 됐다.
   const [resumeOpen, setResumeOpen] = useState(false);
+  // 병합은 목록·보드·프로젝트에만 있었다. 상세를 열어 읽다가 "이거 아까
+  // 그거네" 하고 처리할 길이 없었다.
+  const [mergeOpen, setMergeOpen] = useState(false);
   const [data, setData] = useState(null);
   const [teamMembers, setTeamMembers] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -369,6 +373,9 @@ export function RequirementDetail({ id }) {
     // '수정'은 예전에 화면에 한 줄을 통째로 차지하는 링크였다. 자주 쓰는
     // 행동이 아니라 메뉴가 맞다.
     onEdit: canEdit && !showEditForm ? () => setEditing(true) : null,
+    // 3차 이상만. RequirementStatusActions 가 종결 상태에서는 메뉴 자체를
+    // 감추므로 여기서 또 걸지 않는다.
+    onMerge: processAllowed ? () => setMergeOpen(true) : null,
   };
 
   return (
@@ -697,6 +704,19 @@ export function RequirementDetail({ id }) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* 목록·보드가 쓰는 것을 그대로 쓴다. 병합 규칙이 두 곳으로 갈리면
+          한쪽만 고쳐진다. 병합하면 이 건이 '중복'이 되고 mergedInto 배너가 뜬다. */}
+      {mergeOpen && (
+        <MergeDialog
+          source={r}
+          onClose={() => setMergeOpen(false)}
+          onMerged={() => {
+            setMergeOpen(false);
+            load();
+          }}
+        />
+      )}
 
       {/* 영구 삭제는 화면 맨 아래, 전체 관리자에게만. 서버도 같은 판정을 다시 한다. */}
       {canDeleteRequirement(identity) && (

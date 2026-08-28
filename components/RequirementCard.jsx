@@ -5,6 +5,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useRouter } from 'next/navigation';
 import { DONE_STATUS } from '@/lib/statuses';
 import { isOverdue } from '@/lib/overdue';
+import { listRow } from '@/lib/listRow';
 
 const PRIORITY_STYLE = {
   상: 'bg-rose-50 text-rose-600',
@@ -35,19 +36,35 @@ export function RequirementCard({
     disabled: !draggable,
   });
   const style = { transform: CSS.Translate.toString(transform), opacity: isDragging ? 0.5 : 1 };
+  // 목록의 행과 같은 함수를 본다. 뷰가 셋이 되면서 같은 판정이 세 곳에
+  // 흩어지면 다음 개선 때 그중 한 곳은 반드시 빠진다.
+  const row = listRow({ requirement: req, stalledDays: req.stalledDays, closure: req.closure });
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`rounded-xl border border-slate-200 bg-white p-3 ${
-        req.status === DONE_STATUS ? 'opacity-75' : ''
-      }`}
+      // 왼쪽 막대는 목록의 행과 같은 규칙이다. 붉은색은 오래 멈춘 것, 노란색은
+      // 담당자가 없는 것 — 뷰를 바꿔도 같은 신호를 본다.
+      className={`rounded-xl border border-l-3 border-slate-200 bg-white p-3 ${
+        row.flag === 'stall'
+          ? 'border-l-rose-400'
+          : row.flag === 'unassigned'
+            ? 'border-l-amber-400'
+            : 'border-l-slate-200'
+      } ${req.status === DONE_STATUS ? 'opacity-75' : ''}`}
     >
       <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
         {showBrandBadge && req.brand_name && (
           <span className="rounded bg-slate-900/85 px-1.5 py-0.5 text-[11px] font-medium text-white">
             {req.brand_name}
+          </span>
+        )}
+        {/* 채널은 기본값(자사몰)이 아닐 때만. 47건 중 44건이 자사몰이라
+            늘 그리면 그것이 소음이 된다(lib/listRow.js 의 같은 판단). */}
+        {row.channelBadge && (
+          <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[11px] text-indigo-700">
+            {row.channelBadge}
           </span>
         )}
         {/* 보드에서도 유형이 보여야 한다. 카드에 상태는 컬럼이 대신하므로
@@ -99,6 +116,12 @@ export function RequirementCard({
             눈에 안 든다. 미정 건은 대시보드 '손볼 것'이 따로 센다. */}
         <span className="flex items-center gap-1.5 text-[11px] text-slate-400">
           <span>{req.category?.category_name ?? '-'}</span>
+          {/* 정체 일수. 목록·상세·회의 화면과 같은 함수를 본다. */}
+          {row.elapsed && (
+            <span className={row.flag === 'stall' ? 'font-medium text-rose-600' : ''}>
+              {row.elapsed}
+            </span>
+          )}
           {req.expected_release_date && (
             <span
               className={
