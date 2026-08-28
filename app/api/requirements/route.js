@@ -10,6 +10,7 @@ import { isValidType } from '@/lib/requirementTypes';
 import { CHANNELS, DEFAULT_CHANNEL } from '@/lib/channels';
 import { STALL_DAYS, groupByRequirement, stalledDays } from '@/lib/stalled';
 import { closureReason } from '@/lib/closureReason';
+import { requestDateRange } from '@/lib/dateRange';
 
 const BASE_COLUMNS =
   'id, priority, urgency, request_date, created_at, status, title, is_confidential, sprint_tag, duplicate_count, ' +
@@ -43,6 +44,13 @@ export async function GET(request) {
     const priority = searchParams.get('priority');
     const project = searchParams.get('project');
     const channel = searchParams.get('channel');
+    // 요청일 범위. 키를 그대로 받아 서버에서 날짜로 푼다 — 화면이 계산한
+    // 날짜를 받으면 사용자의 시계에 따라 결과가 갈리고, 주소를 고쳐 임의
+    // 범위를 넣는 길도 열린다. 모르는 키는 requestDateRange 가 null 을 준다.
+    //
+    // 기준은 KST 다. 서버가 UTC 라 그대로 쓰면 한국 시각 자정 직후에
+    // "이번 주"가 어제로 잡힌다.
+    const requestRange = requestDateRange(searchParams.get('requestRange'), todayInKst());
     const q = searchParams.get('q');
     // 대시보드 '손볼 것'에서 링크로만 들어오는 값. 필터바에는 노출하지 않는다 —
     // 평소에 아무도 안 쓰는 셀렉트를 하나 더 만들 이유가 없다.
@@ -99,6 +107,11 @@ export async function GET(request) {
       if (category) query = query.eq('category', category);
       if (priority) query = query.eq('priority', priority);
       if (project) query = query.eq('project_id', project);
+      if (requestRange) {
+        query = query
+          .gte('request_date', requestRange.from)
+          .lte('request_date', requestRange.to);
+      }
       if (withChannel && channel) query = query.eq('channel', channel);
       if (missing === 'assignee') query = query.is('assignee', null);
       if (missing === 'expectedDate') query = query.is('expected_release_date', null);

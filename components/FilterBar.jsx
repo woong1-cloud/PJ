@@ -155,12 +155,12 @@ export function FilterBar({
           )}
         </div>
 
-        {/* 일곱 개를 격자로 세운다. 라벨을 셀렉트 위에 따로 다는 것이 요점이다 —
+        {/* 여덟 개를 격자로 세운다. 4의 배수라 두 폭 모두 줄이 고르게 찬다. 라벨을 셀렉트 위에 따로 다는 것이 요점이다 —
             지금까지 라벨은 placeholder 였고, 값을 고르면 그 자리에 값이 들어오면서
             라벨이 사라졌다. '전시'라고만 적힌 칸을 보고 그게 카테고리인지 유형인지
             알 방법이 없었다. 접혀 있어서 못 쓴 것 절반, 이것 때문에 못 쓴 것
             절반이다. */}
-        <div className="grid grid-cols-4 gap-2 lg:grid-cols-7">
+        <div className="grid grid-cols-4 gap-2 lg:grid-cols-8">
           {fields.map((field) => (
             <div key={field.key} className="flex min-w-0 flex-col gap-1">
               <span className="px-0.5 text-[11px] font-medium text-slate-500">{field.label}</span>
