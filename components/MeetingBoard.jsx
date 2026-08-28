@@ -8,6 +8,7 @@ const FILTERS = [
   { key: 'all', label: '오래 멈춘 순' },
   { key: 'unassigned', label: '담당 없는 것만' },
   { key: 'incoming', label: '이번 주 신규' },
+  { key: 'done', label: '이번 주 완료' },
 ];
 
 // 회의 화면 본체.
@@ -110,6 +111,10 @@ export function MeetingBoard({ identity }) {
 
   const stallDays = data.stallDays;
   const rows = data.items.filter((item) => {
+    // 완료는 따로 볼 때만 나온다. 기본 보기에 섞이면 "지금 손볼 것"이 흐려진다 —
+    // 이 화면은 회의에서 밀린 것을 훑는 자리가 먼저다.
+    if (filter === 'done') return item.isDone;
+    if (item.isDone) return false;
     if (filter === 'unassigned') return !item.assignee;
     if (filter === 'incoming') return item.isNew;
     return true;
@@ -124,10 +129,13 @@ export function MeetingBoard({ identity }) {
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
         <Stat label={`${stallDays}일+ 멈춤`} value={data.summary.stalled} tone="rose" />
         <Stat label="담당 없음" value={data.summary.unassigned} tone="amber" />
         <Stat label="이번 주 신규" value={data.summary.incoming} tone="slate" />
+        {/* 넷 중 하나는 좋은 소식이어야 한다. 나머지 셋이 전부 문제를 세는
+            숫자라, 회의가 나쁜 소식으로만 시작하고 있었다. */}
+        <Stat label="이번 주 완료" value={data.summary.done} tone="emerald" />
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -158,13 +166,23 @@ export function MeetingBoard({ identity }) {
 
       <ul className="flex flex-col">
         {rows.length === 0 && (
-          <li className="py-6 text-sm text-slate-500">이 조건에 해당하는 건이 없습니다.</li>
+          <li className="py-6 text-sm text-slate-500">
+            {/* 완료 0건은 조건이 안 맞는 것이 아니라 그 주의 사실이다.
+                회의가 알아야 할 소식이므로 다르게 말한다. */}
+            {filter === 'done'
+              ? '이번 주에 완료된 건이 없습니다.'
+              : '이 조건에 해당하는 건이 없습니다.'}
+          </li>
         )}
         {rows.map((item) => (
           <li
             key={item.id}
             className={`flex flex-wrap items-start gap-3 border-b border-l-2 border-slate-100 py-3 pl-3 ${
-              item.assignee ? 'border-l-slate-200' : 'border-l-rose-400'
+              item.isDone
+                ? 'border-l-emerald-400'
+                : item.assignee
+                  ? 'border-l-slate-200'
+                  : 'border-l-rose-400'
             }`}
           >
             <div className="min-w-0 flex-1">
@@ -172,7 +190,11 @@ export function MeetingBoard({ identity }) {
                 {item.title}
               </Link>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
-                {item.stalledDays >= stallDays ? (
+                {item.isDone ? (
+                  <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700">
+                    {item.tookDays === null ? '완료' : `${item.tookDays}일 걸림`}
+                  </span>
+                ) : item.stalledDays >= stallDays ? (
                   <span className="rounded bg-rose-50 px-1.5 py-0.5 text-rose-700">
                     {item.stalledDays}일 멈춤
                   </span>
@@ -182,50 +204,63 @@ export function MeetingBoard({ identity }) {
                 <span className="text-slate-500">
                   {item.status} · {item.requester?.name ?? '요청자 없음'} 요청
                 </span>
+                {/* 승인 확인 내용. 회의에서 "그래서 뭘 확인했나"가 바로 보인다. */}
+                {item.isDone && item.closure && (
+                  <span className="truncate text-slate-400">· {item.closure.reason}</span>
+                )}
               </div>
               {rowError[item.id] && (
                 <p className="mt-1 text-xs text-red-600">{rowError[item.id]}</p>
               )}
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <select
-                aria-label={`${item.title} 담당자`}
-                value={item.assignee?.id ?? ''}
-                onChange={(e) => {
-                  const id = e.target.value || null;
-                  const person = people.find((p) => p.id === id);
-                  save(
-                    item.id,
-                    `/api/requirements/${item.id}/assignee`,
-                    { assignee: id },
-                    { assignee: id ? { id, name: person?.name ?? '' } : null }
-                  );
-                }}
-                className="h-8 rounded border border-slate-200 px-2 text-xs"
-              >
-                <option value="">담당 지정</option>
-                {people.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="date"
-                aria-label={`${item.title} 배포예상일`}
-                value={item.expectedDate ?? ''}
-                onChange={(e) => {
-                  const value = e.target.value || null;
-                  save(
-                    item.id,
-                    `/api/requirements/${item.id}/expected-date`,
-                    { expectedReleaseDate: value },
-                    { expectedDate: value }
-                  );
-                }}
-                className="h-8 rounded border border-slate-200 px-2 text-xs"
-              />
-            </div>
+            {/* 완료 건에서는 감춘다. 끝난 건의 담당자를 바꿀 일이 없고,
+                바꾸면 PATCH .../assignee 가 통과해 버려 완료된 건의 담당자가
+                조용히 달라진다. */}
+            {item.isDone ? (
+              <span className="shrink-0 text-xs text-slate-400">
+                {item.assignee?.name ?? '담당자 없음'}
+              </span>
+            ) : (
+              <div className="flex shrink-0 items-center gap-2">
+                <select
+                  aria-label={`${item.title} 담당자`}
+                  value={item.assignee?.id ?? ''}
+                  onChange={(e) => {
+                    const id = e.target.value || null;
+                    const person = people.find((p) => p.id === id);
+                    save(
+                      item.id,
+                      `/api/requirements/${item.id}/assignee`,
+                      { assignee: id },
+                      { assignee: id ? { id, name: person?.name ?? '' } : null }
+                    );
+                  }}
+                  className="h-8 rounded border border-slate-200 px-2 text-xs"
+                >
+                  <option value="">담당 지정</option>
+                  {people.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="date"
+                  aria-label={`${item.title} 배포예상일`}
+                  value={item.expectedDate ?? ''}
+                  onChange={(e) => {
+                    const value = e.target.value || null;
+                    save(
+                      item.id,
+                      `/api/requirements/${item.id}/expected-date`,
+                      { expectedReleaseDate: value },
+                      { expectedDate: value }
+                    );
+                  }}
+                  className="h-8 rounded border border-slate-200 px-2 text-xs"
+                />
+              </div>
+            )}
           </li>
         ))}
       </ul>
@@ -254,6 +289,7 @@ function Stat({ label, value, tone }) {
     rose: 'bg-rose-50 text-rose-700',
     amber: 'bg-amber-50 text-amber-800',
     slate: 'bg-slate-100 text-slate-700',
+    emerald: 'bg-emerald-50 text-emerald-700',
   };
   return (
     <div className={`rounded px-3 py-2 ${tones[tone]}`}>
