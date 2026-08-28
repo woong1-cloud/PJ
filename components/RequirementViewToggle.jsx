@@ -3,7 +3,14 @@
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
-// 목록 ↔ 보드 전환. 두 화면 모두에 같은 모양으로 놓는다.
+// 목록 ↔ 표 ↔ 보드 전환. 세 화면 모두에 같은 모양으로 놓는다.
+//
+// 이름을 다시 짰다. 예전에는 표를 '목록'이라 불렀는데, 행 기반이 들어오면서
+// 둘이 무엇이 다른지 알 수 없게 됐다. 지금 표를 '표'라고 부르는 것이 정직하다.
+//
+// 표를 별도 주소가 아니라 쿼리로 두는 이유: 목록과 표는 같은 페이지의 다른
+// 렌더다. 필터·검색·정렬·기억이 전부 같고 데이터도 같다. 주소를 나누면 그
+// 전부를 두 벌로 들고 다녀야 한다.
 //
 // 예전에는 목록에만 '보드' 버튼이 있어서 한 번 보드로 가면 돌아올 길이
 // 눈에 보이지 않았다. 상단 메뉴의 '요구사항'을 누르면 되긴 하지만, 보드도
@@ -14,14 +21,24 @@ import { useSearchParams } from 'next/navigation';
 // 필터가 보드로 넘어가는 순간 사라져서, 뷰 전환처럼 생긴 버튼이 실제로는
 // 초기화 버튼이 된다.
 export function RequirementViewToggle({ current }) {
-  const search = useSearchParams().toString();
-  const suffix = search ? `?${search}` : '';
+  // view 는 빼고 다시 붙인다. 안 그러면 표에서 목록으로 갈 때 ?view=table 이
+  // 따라와서 눌러도 아무 일이 안 일어난다.
+  const params = new URLSearchParams(useSearchParams().toString());
+  params.delete('view');
+  const rest = params.toString();
+  const to = (path, extra) => {
+    const merged = [rest, extra].filter(Boolean).join('&');
+    return merged ? `${path}?${merged}` : path;
+  };
   return (
     <div className="inline-flex rounded-lg border border-slate-300 p-0.5">
-      <ToggleLink href={`/requirements${suffix}`} active={current === 'list'}>
+      <ToggleLink href={to('/requirements', '')} active={current === 'list'}>
         목록
       </ToggleLink>
-      <ToggleLink href={`/requirements/board${suffix}`} active={current === 'board'}>
+      <ToggleLink href={to('/requirements', 'view=table')} active={current === 'table'}>
+        표
+      </ToggleLink>
+      <ToggleLink href={to('/requirements/board', '')} active={current === 'board'}>
         보드
       </ToggleLink>
     </div>
