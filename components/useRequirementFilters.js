@@ -32,6 +32,7 @@ export function useRequirementFilters() {
     mine,
     missing,
     overdue,
+    stalled,
   } = useMemo(() => parseFilterParams(new URLSearchParams(searchKey)), [searchKey]);
 
   // 입력창은 즉시 반응해야 하므로 로컬 상태로 둔다. 키 입력마다 주소를 바꾸면
@@ -106,11 +107,11 @@ export function useRequirementFilters() {
     // 기다리면 300ms 동안 지운 검색어로 걸러진 결과가 남는다.
     setQuery('');
     setDebouncedQuery('');
-    // mine·missing·overdue 도 함께 지운다. EMPTY_FILTERS 는 FILTER_KEYS 만
-    // 담으므로 이 셋은 여기서 직접 비워야 한다 — 빠뜨리면 '필터 초기화'를 눌러도
-    // 내 요청만이나 빠른 필터 칩이 켜진 채 남고, 사용자는 초기화가 안 먹는다고
-    // 본다(mine 이 실제로 그랬다).
-    replaceParams({ ...EMPTY_FILTERS, q: '', mine: '', missing: '', overdue: '' });
+    // mine·missing·overdue·stalled 도 함께 지운다. EMPTY_FILTERS 는 FILTER_KEYS
+    // 만 담으므로 이 넷은 여기서 직접 비워야 한다 — 빠뜨리면 '필터 초기화'를
+    // 눌러도 내 요청만이나 빠른 필터 칩이 켜진 채 남고, 사용자는 초기화가 안
+    // 먹는다고 본다(mine 이 실제로 그랬다).
+    replaceParams({ ...EMPTY_FILTERS, q: '', mine: '', missing: '', overdue: '', stalled: '' });
   }, [replaceParams]);
 
   return {
@@ -123,6 +124,8 @@ export function useRequirementFilters() {
     missing,
     // 빠른 필터 '지연'. 칩이 켜고 끈다.
     overdue,
+    // 빠른 필터 '멈춘 것'. 판정은 서버가 한다(change_logs·코멘트를 봐야 나온다).
+    stalled,
     searchKey,
     setFilters,
     setQuery,

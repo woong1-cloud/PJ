@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { requirementsToCsv, csvFileName } from '@/lib/csv';
 import { useIdentity } from '@/components/IdentityProvider';
 import { RequirementViewToggle } from '@/components/RequirementViewToggle';
+import { RequirementRows } from '@/components/RequirementRows';
 import { canProcess } from '@/lib/tiers';
 import { sortRequirements, DEFAULT_SORT_DIR } from '@/lib/sortRequirements';
 import { toLocalDateString } from '@/lib/overdue';
@@ -76,9 +77,15 @@ function RequirementsView() {
     setMine,
     missing,
     overdue,
+    stalled,
     searchKey,
   } = useRequirementFilters();
   const { teamMembers, categories, projects } = useRequirementFilterOptions(identity.brandId);
+
+  // 'table' 하나만 받는다. 목록이 기본이라 주소에 아무것도 없는 상태가 곧
+  // 목록이다 — 기본값을 주소에 남기면 "?" 가 붙어 있다는 것이 곧 조건이
+  // 걸렸다는 신호라는 규칙이 깨진다.
+  const view = new URLSearchParams(searchKey).get('view') === 'table' ? 'table' : 'list';
 
   // 마지막으로 보던 조건을 되살린다. 주소에 조건이 있으면(공유 링크·대시보드
   // 링크) 되살리지 않는다 — 링크가 항상 이긴다.
@@ -89,6 +96,7 @@ function RequirementsView() {
     mine,
     includeDone,
     sort,
+    view,
     setFilters,
     setSort,
   });
@@ -102,8 +110,13 @@ function RequirementsView() {
     memberId: identity.memberId,
     missing,
     overdue,
+    stalled,
   });
   const currentKey = `${reloadToken}|${apiQuery}`;
+  // 표와 목록이 같은 판정을 쓴다. 뷰마다 다른 빈 화면을 보여주면 뷰를 바꿨을
+  // 때 데이터가 달라진 것처럼 읽힌다.
+  const filteredNow =
+    hasActiveFilters({ filters, query, mine, overdue, stalled }) || Boolean(missing);
   const loading = loadedKey !== currentKey;
 
   // 빠른 필터 칩. 등급에 따라 칩 구성이 다르다(lib/quickFilters.js).
@@ -114,7 +127,12 @@ function RequirementsView() {
   // missing 은 filters 밖에 따로 오므로(대시보드 링크 전용 파라미터) 여기서
   // 합쳐 넘긴다 — activeChipKey 는 한 덩어리로 본다.
   const chips = quickFilterChips(identity);
-  const activeKey = activeChipKey(identity, { filters: { ...filters, missing }, mine, overdue });
+  const activeKey = activeChipKey(identity, {
+    filters: { ...filters, missing },
+    mine,
+    overdue,
+    stalled,
+  });
   const chipCounts = useQuickFilterCounts({
     brandId: identity.brandId,
     identity,
@@ -259,7 +277,7 @@ function RequirementsView() {
       <div className="hidden items-center justify-between md:flex">
         <h1 className="text-lg font-semibold text-slate-900">요구사항 목록</h1>
         <div className="flex items-center gap-2">
-          {processAllowed && <RequirementViewToggle current="list" />}
+          {processAllowed && <RequirementViewToggle current={view} />}
           {/* 지금 화면에 보이는 것을 그대로 내려받는다. 서버에 다시 물으면
               필터가 어긋날 수 있고, 사용자는 "화면과 다른 파일"을 받는다. */}
           <button
@@ -319,7 +337,7 @@ function RequirementsView() {
           있던 것"은 다르다. 어제 걸어 둔 필터를 잊은 채 오늘 들어와 "요구사항이
           세 건뿐이네?" 하는 것을 막는 게 이 한 줄이다.
           필터가 없어지면(초기화·전체 보기) 조건이 거짓이 되어 저절로 사라진다. */}
-      {restored && hasActiveFilters({ filters, query, mine, overdue }) && (
+      {restored && hasActiveFilters({ filters, query, mine, overdue, stalled }) && (
         <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
           <span className="flex-1 break-keep">지난번에 보던 조건으로 열었습니다.</span>
           <button
@@ -353,7 +371,7 @@ function RequirementsView() {
       {error && <p className="text-sm text-red-600">{error}</p>}
       {loading ? (
         <p className="text-sm text-slate-500">불러오는 중...</p>
-      ) : (
+      ) : view === 'table' ? (
         <RequirementList
           requirements={sortedRequirements}
           sort={sort}
@@ -364,7 +382,13 @@ function RequirementsView() {
           onPatch={processAllowed ? patchRequirement : undefined}
           // missing 도 조건이다. 대시보드 '손볼 것'에서 넘어와 0건이면 그건
           // 아직 아무것도 없는 게 아니라 그 조건에 걸리는 게 없는 것이다.
-          filtered={hasActiveFilters({ filters, query, mine, overdue }) || Boolean(missing)}
+          filtered={filteredNow}
+          onCreate={() => setDialogOpen(true)}
+        />
+      ) : (
+        <RequirementRows
+          requirements={sortedRequirements}
+          filtered={filteredNow}
           onCreate={() => setDialogOpen(true)}
         />
       )}

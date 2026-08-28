@@ -27,6 +27,7 @@ export function useFilterMemory({
   mine,
   includeDone,
   sort,
+  view,
   setFilters,
   setSort,
 }) {
@@ -55,6 +56,10 @@ export function useFilterMemory({
     appliedRef.current = true;
     // 정렬은 조건이 없어도 되살린다. "예상일 순"을 매번 다시 누르는 것이 귀찮다.
     if (pending.sort) setSort?.(pending.sort);
+    // 뷰도 같은 이유로 조건과 무관하게 되살린다. 다만 안내 문구
+    // (hasRestorableFilters)에는 넣지 않는다 — 뷰는 조건이 아니라 보는 방식이라
+    // "지난번 조건을 되살렸습니다"라고 말하면 거짓말이 된다.
+    if (pending.view === 'table') setFilters({ view: 'table' });
     if (hasRestorableFilters(pending)) setFilters(filterMemoryToParams(pending));
   }, [pending, setFilters, setSort]);
 
@@ -64,8 +69,8 @@ export function useFilterMemory({
   useEffect(() => {
     if (!brandId) return;
     if (restorable && searchKey === mountKeyRef.current) return;
-    writeFilterMemory(brandId, packFilterMemory({ filters, mine, includeDone, sort }));
-  }, [brandId, searchKey, restorable, filters, mine, includeDone, sort]);
+    writeFilterMemory(brandId, packFilterMemory({ filters, mine, includeDone, sort, view }));
+  }, [brandId, searchKey, restorable, filters, mine, includeDone, sort, view]);
 
   // '필터 초기화'를 따로 다루지 않는다. 초기화가 주소를 비우면 위 저장 effect 가
   // 빈 기억을 덮어쓰므로 다음에 되살아나지 않는다 — 지운 필터가 되살아나는 것은
