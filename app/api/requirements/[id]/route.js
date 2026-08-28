@@ -63,6 +63,9 @@ export async function GET(request, { params }) {
       .from('requirement_images')
       .select('id, storage_path, content_type, file_name, sort_order')
       .eq('requirement_id', id)
+      // 코멘트 시안은 여기 오면 안 된다. 원래 요청의 증거(화면 캡처·기획서)와
+      // 논의 중 나온 안이 한 칸에 섞이는 것이 이 기능을 만든 이유다.
+      .is('comment_id', null)
       .order('sort_order', { ascending: true });
     if (imgError) throw imgError;
     const images = await toSignedImageList(imageRows);

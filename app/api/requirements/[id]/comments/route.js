@@ -1,7 +1,13 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { errorResponse, ApiError } from '@/lib/apiError';
 import { requireRequirementAccess } from '@/lib/requirementAccess';
-import { COMMENT_SELECT, MAX_COMMENT_BODY, normalizeCommentBody } from '@/lib/comments';
+import {
+  COMMENT_SELECT,
+  COMMENT_SELECT_WITH_IMAGES,
+  MAX_COMMENT_BODY,
+  normalizeCommentBody,
+} from '@/lib/comments';
+import { signCommentImages } from '@/lib/storage';
 import { notifyComment } from '@/lib/notify';
 
 // 요구사항 코멘트 목록/등록.
@@ -27,12 +33,15 @@ export async function GET(request, { params }) {
     // 정렬 방향이 다르면 합치는 쪽에서 한 번 더 뒤집어야 한다.
     const { data, error } = await supabase
       .from('requirement_comments')
-      .select(COMMENT_SELECT)
+      .select(COMMENT_SELECT_WITH_IMAGES)
       .eq('requirement_id', id)
       .order('created_at', { ascending: true });
     if (error) throw error;
 
-    return Response.json({ comments: data ?? [] });
+    // 서명은 짧게 살아 있는 URL 이라 매번 새로 만든다. 코멘트 전부의 시안을
+    // 한 번에 서명한다 — 코멘트마다 부르면 대화 길이만큼 요청이 나간다.
+    const comments = await signCommentImages(data ?? []);
+    return Response.json({ comments });
   } catch (error) {
     return errorResponse(error);
   }
@@ -64,7 +73,9 @@ export async function POST(request, { params }) {
     // 다시 만든 브랜드 팀 목록으로 판정한다(화면이 보낸 목록을 믿지 않는다).
     await notifyComment({ requirementId: id, actorId: memberId, body: trimmed });
 
-    return Response.json({ comment: data }, { status: 201 });
+    // 방금 만든 코멘트에는 아직 시안이 없다. 화면이 이 id 로 이어서 올린다 —
+    // 코멘트가 먼저 있어야 붙일 곳이 생기므로 순서를 뒤집을 수 없다.
+    return Response.json({ comment: { ...data, images: [] } }, { status: 201 });
   } catch (error) {
     return errorResponse(error);
   }

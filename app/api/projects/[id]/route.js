@@ -38,6 +38,8 @@ export async function GET(request, { params }) {
             'requirement_images(count)',
         )
         .eq('project_id', id)
+        // 목록과 같다 — 첨부 개수에서 코멘트 시안을 뺀다.
+        .is('requirement_images.comment_id', null)
         .order('request_date', { ascending: false }),
       supabase.from('user_brand_roles').select('brand_id, tier').eq('team_member_id', memberId),
     ]);

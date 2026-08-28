@@ -80,6 +80,10 @@ export async function GET(request) {
         .from('requirements')
         .select(columns)
         .eq('brand_id', brandId)
+        // 첨부 개수에서 코멘트 시안을 뺀다. 안 빼면 목록에 "첨부 3" 이 뜨는데
+        // 들어가 보면 첨부 칸이 비어 있다 — 시안은 대화 안에 있기 때문이다.
+        // 이 필터는 embed 안쪽에만 걸리므로 바깥 행 수는 그대로다(검증함).
+        .is('requirement_images.comment_id', null)
         .order('request_date', { ascending: false });
 
       if (!canSeeConfidential) query = query.eq('is_confidential', false);

@@ -7,6 +7,7 @@ import {
   canModifyComment,
   normalizeCommentBody,
 } from '@/lib/comments';
+import { IMAGE_BUCKET } from '@/lib/storage';
 
 // 코멘트 수정/삭제.
 //
@@ -85,8 +86,26 @@ export async function DELETE(request, { params }) {
     const existing = await loadComment(supabase, id, commentId);
     requireAuthor(existing, memberId);
 
+    // 붙은 시안의 저장 경로를 먼저 읽어 둔다. DB 행은 comment_id 의 cascade 로
+    // 함께 사라지지만 Storage 는 FK 를 모른다 — 행이 먼저 없어지면 그 파일을
+    // 가리키는 것이 아무것도 없어서 영원히 남는다.
+    const { data: imageRows, error: imgListError } = await supabase
+      .from('requirement_images')
+      .select('storage_path')
+      .eq('comment_id', commentId);
+    if (imgListError) throw imgListError;
+
     const { error } = await supabase.from('requirement_comments').delete().eq('id', commentId);
     if (error) throw error;
+
+    // 파일 정리는 마지막이고, 실패해도 500 으로 돌리지 않는다. 코멘트는 이미
+    // 지워졌으므로 다시 눌러 봐야 404 만 본다. 남은 파일은 서명 URL 없이는
+    // 열 수도 없다 — 요구사항 영구 삭제와 같은 판단이다.
+    const paths = (imageRows ?? []).map((r) => r.storage_path).filter(Boolean);
+    if (paths.length) {
+      const { error: storageError } = await supabase.storage.from(IMAGE_BUCKET).remove(paths);
+      if (storageError) console.error('코멘트 삭제 후 시안 정리 실패', commentId, storageError);
+    }
 
     return Response.json({ ok: true });
   } catch (error) {
