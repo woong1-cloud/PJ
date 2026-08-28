@@ -6,6 +6,8 @@ import { useState } from 'react';
 import { useIdentity } from './IdentityProvider';
 import { BrandSwitcher } from './BrandSwitcher';
 import { NotificationBell } from './NotificationBell';
+import { NewsMenu } from './NewsMenu';
+import { FeedbackDialog } from './FeedbackDialog';
 import { canManageBrand, canProcess, isGlobalAdmin } from '@/lib/tiers';
 
 function NavLink({ href, active, children }) {
@@ -44,6 +46,9 @@ export function TopBar() {
   const { identity, logout } = useIdentity();
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  // 의견 창의 열림 상태를 NewsMenu 가 아니라 여기서 갖는다. 입구가 둘이라
+  // (소식 팝오버 하단, 계정 메뉴) 한쪽 안에 두면 다른 쪽에서 열 수 없다.
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const manageBrand = canManageBrand(identity);
   const process = canProcess(identity);
   const globalAdmin = isGlobalAdmin(identity);
@@ -121,8 +126,10 @@ export function TopBar() {
       </div>
 
       <div className="relative flex shrink-0 items-center gap-3">
-        {/* 벨은 계정 메뉴 왼쪽이다 — 이름/아바타는 "나"에 대한 것이고 벨은
-            "나에게 온 것"이라 둘을 붙여 두되, 로그아웃 옆에 두면 잘못 누른다. */}
+        {/* 오른쪽으로 갈수록 "나" 쪽이다 — 아바타(나) · 이름(나) · 벨(나에게
+            온 것) · 소식(앱에 생긴 것) 순으로 멀어진다.
+            소식을 벨에 합치지 않는 이유는 NewsMenu 주석에 있다. */}
+        <NewsMenu onOpenFeedback={() => setFeedbackOpen(true)} />
         <NotificationBell />
         {/* 이름은 데스크톱에서만. 아바타에 첫 글자가 이미 들어 있고, 폰에서는
             그 한 조각이 브랜드명 자리를 뺏는다. */}
@@ -203,11 +210,29 @@ export function TopBar() {
                   팀원 관리
                 </MenuLink>
               )}
+              {globalAdmin && (
+                <MenuLink href="/admin/feedback" onClick={closeMenu}>
+                  받은 의견
+                </MenuLink>
+              )}
               {/* 등급과 무관하게 누구나 볼 수 있다 — 설명이 가장 필요한 사람이
                   권한이 가장 낮은 요청자이기 때문이다. */}
               <MenuLink href="/help" onClick={closeMenu}>
                 도움말
               </MenuLink>
+              {/* 주 입구는 소식 팝오버 하단이다. 여기에도 한 줄 남기는 이유:
+                  "설정 비슷한 것"을 계정 메뉴에서 찾는 사람이 실제로 있고,
+                  한 줄 값이면 두 곳에 두는 편이 낫다. 같은 창을 연다. */}
+              <button
+                type="button"
+                onClick={() => {
+                  closeMenu();
+                  setFeedbackOpen(true);
+                }}
+                className="flex min-h-11 items-center px-3 text-left text-sm text-slate-600 hover:bg-slate-50 md:min-h-0 md:py-1.5"
+              >
+                의견 보내기
+              </button>
               <MenuLink href="/change-password" onClick={closeMenu}>
                 비밀번호 변경
               </MenuLink>
@@ -222,6 +247,9 @@ export function TopBar() {
           </>
         )}
       </div>
+
+      {/* 입구 둘이 같은 창을 연다. */}
+      <FeedbackDialog open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </header>
   );
 }

@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -9,60 +8,33 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { NEWS, unseenNews } from '@/lib/newsItems';
 
-// 안 본 업데이트 소식이 있으면 로그인 후 한 번 뜬다.
+// 안 본 업데이트 소식을 로그인 후 한 번 보여준다.
 //
-// 이 기능이 있는 이유: 3주 동안 큰 변화가 네 번 나갔는데 안내가 한 번도 없었다.
-// 그중 하나는 목록의 기본 화면이 표에서 행으로 바뀌는 것이라, 쓰던 사람은
-// 로그인했다가 고장인지 바뀐 것인지 알 수 없었다.
+// 이 기능이 있는 이유: 3주 동안 큰 변화가 다섯 번 나갔는데 안내가 한 번도
+// 없었다. 그중 하나는 목록의 기본 화면이 표에서 행으로 바뀌는 것이라, 쓰던
+// 사람은 로그인했다가 고장인지 바뀐 것인지 알 수 없었다.
 //
-// 첫 로그인 안내(WelcomeDialog)와 겹치면 안내가 먼저다 — 처음 온 사람에게
-// "뭐가 바뀌었습니다"는 아무 뜻이 없다. 그래서 onboardedAt 이 없으면 여기서
-// 아무것도 안 띄우고, 안내를 닫는 쪽이 news_seen_at 까지 함께 찍는다.
-export function NewsDialog() {
-  const [items, setItems] = useState([]);
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch('/api/me')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((me) => {
-        if (cancelled || !me) return;
-        // 비밀번호를 바꿔야 하는 사람에게는 아무것도 안 띄운다. 그 사람은
-        // 지금 로그인 절차 한가운데에 있다.
-        if (me.mustChangePassword) return;
-        // 첫 로그인 안내가 먼저다.
-        if (!me.onboardedAt) return;
-        const unseen = unseenNews(NEWS, me.newsSeenAt);
-        if (unseen.length > 0) {
-          setItems(unseen);
-          setOpen(true);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  function finish() {
-    // 닫기가 먼저다. 기록에 실패해도 창은 닫힌다 — 소식을 한 번 더 보는 것보다
-    // "닫기를 눌렀는데 안 닫힌다" 가 훨씬 나쁘다.
-    setOpen(false);
-    fetch('/api/me/news-seen', { method: 'POST' }).catch(() => {});
-  }
-
-  if (!open || items.length === 0) return null;
+// 열지 말지는 여기서 안 정한다. NewsMenu 가 정하고 이 컴포넌트는 받은 것을
+// 그리기만 한다 — 아이콘의 점과 팝업이 같은 상태를 봐야 하기 때문이다.
+//
+// props:
+//   items      — 보여줄 소식(날짜 내림차순)
+//   onConfirm  — '확인했습니다'. 읽었다는 뜻이라 서버에 기록하고 점도 없앤다
+//   onDismiss  — X · Esc · 바깥. 팝업만 멈추고 점은 남긴다
+export function NewsDialog({ items = [], onConfirm, onDismiss }) {
+  if (items.length === 0) return null;
 
   return (
     <Dialog
       open
       onOpenChange={(next) => {
-        // Esc 나 바깥 클릭으로 닫아도 본 것으로 친다. 다 안 읽었다고 다음에 또
-        // 띄우면, 닫고 싶은 사람은 매번 같은 창을 다시 만난다.
-        if (!next) finish();
+        // 닫는 방법이 둘이고 뜻이 다르다.
+        //
+        // 예전에는 둘을 구분하지 않아서, 반사적으로 X 를 누른 사람이 안 읽음
+        // 표시까지 함께 잃었다. 팝업은 멈추되 헤더의 점은 남겨 두면 그가
+        // 궁금해지는 순간에 갈 곳이 한 번의 클릭 거리에 있다.
+        if (!next) onDismiss();
       }}
     >
       <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-lg">
@@ -85,7 +57,7 @@ export function NewsDialog() {
         </ul>
 
         <DialogFooter>
-          <Button type="button" onClick={finish} className="bg-indigo-600 hover:bg-indigo-700">
+          <Button type="button" onClick={onConfirm} className="bg-indigo-600 hover:bg-indigo-700">
             확인했습니다
           </Button>
         </DialogFooter>

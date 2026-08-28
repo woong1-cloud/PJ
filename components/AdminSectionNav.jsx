@@ -7,9 +7,12 @@ import { usePathname } from 'next/navigation';
 // 시작한다. 둘을 한 화면에 겹쳐 두면 열 때마다 "지금 보는 게 뭐였지"부터
 // 시작하게 되므로 화면을 갈라 놓았다. 대신 어느 쪽도 막다른 길이 되지 않도록
 // 두 화면 모두 이 탭을 머리에 달고 있는다.
+// 셋째로 '의견'이 붙었다. 브랜드도 사람도 아닌 축이지만, 여기 없으면
+// 계정 메뉴 한 줄이 유일한 입구가 되어 위 주석이 말하는 막다른 길이 된다.
 const TABS = [
   { href: '/admin/brands', label: '브랜드' },
   { href: '/admin/members', label: '팀원' },
+  { href: '/admin/feedback', label: '받은 의견' },
 ];
 
 export function AdminSectionNav() {
