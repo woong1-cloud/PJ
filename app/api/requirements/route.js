@@ -8,9 +8,11 @@ import { notifySubmitted } from '@/lib/notify';
 import { HANDOFF_STATUSES } from '@/lib/redmineLink';
 import { isValidType } from '@/lib/requirementTypes';
 import { CHANNELS, DEFAULT_CHANNEL } from '@/lib/channels';
+import { STALL_DAYS, groupByRequirement, stalledDays } from '@/lib/stalled';
+import { closureReason } from '@/lib/closureReason';
 
 const BASE_COLUMNS =
-  'id, priority, urgency, request_date, status, title, is_confidential, sprint_tag, duplicate_count, ' +
+  'id, priority, urgency, request_date, created_at, status, title, is_confidential, sprint_tag, duplicate_count, ' +
   'completed_at, expected_release_date, redmine_url, requirement_type, ' +
   'project_id, project:projects(id, name), ' +
   'requester:team_members!requirements_requester_fkey(id, name), ' +
@@ -50,6 +52,8 @@ export async function GET(request) {
     const missing = searchParams.get('missing');
     // 빠른 필터 '지연'. 예상일이 지났는데 아직 종결되지 않은 건이다.
     const overdue = searchParams.get('overdue') === 'true';
+    // '멈춘 것' 칩. 정체는 SQL 한 줄로 못 재므로 아래에서 계산해 거른다.
+    const stalled = searchParams.get('stalled') === 'true';
     // 이름은 'includeDone' 이지만 실제 의미는 "완료를 포함한 종결 상태 전체"다
     // (완료·반려·취소·중복). 목록 페이지와 보드가 이미 이 이름으로 쿼리를
     // 만들고 있어 지금 바꾸면 세 파일을 함께 고쳐야 하므로 이름은 둔다.
@@ -131,10 +135,69 @@ export async function GET(request) {
     }
     if (error) throw error;
 
-    const requirements = (data ?? []).map((row) => {
+    const rows = (data ?? []).map((row) => {
       const { requirement_images, ...rest } = row;
       return { ...rest, image_count: requirement_images?.[0]?.count ?? 0 };
     });
+
+    // 정체와 종결 사유를 여기서 계산해 실어 보낸다.
+    //
+    // /api/meeting 이 이미 정확히 이 모양이다. 새 방식이 아니라 같은 방식을
+    // 한 곳 더 쓰는 것이다.
+    //
+    // updated_at 으로 때우지 않는 이유: 그 값은 아홉 라우트가 갱신하는데
+    // 코멘트가 그중에 없다. 그러면 목록이 '15일째'라고 말하는 건을 회의 화면과
+    // 상세는 '20일째'라고 말한다. 숫자가 갈리면 둘 다 못 믿게 된다.
+    //
+    // .in() 에 빈 배열을 넘기면 PostgREST 가 400 을 낸다. 필터 결과가 0건인
+    // 흔한 경우에 목록이 통째로 깨지는 자리다.
+    const ids = rows.map((r) => r.id);
+    let changeLogs = [];
+    let comments = [];
+    if (ids.length > 0) {
+      // created_at 만 있으면 정체는 재지만 종결 사유는 못 만든다. 같은 쿼리에
+      // 컬럼 셋을 더하는 것은 행이 늘지 않으므로 거의 공짜다.
+      const { data: logs, error: logError } = await supabase
+        .from('change_logs')
+        .select('requirement_id, created_at, field_name, new_value, comment')
+        .in('requirement_id', ids);
+      if (logError) throw logError;
+      changeLogs = logs ?? [];
+
+      const { data: cmts, error: cmtError } = await supabase
+        .from('requirement_comments')
+        .select('requirement_id, created_at')
+        .in('requirement_id', ids);
+      if (cmtError) throw cmtError;
+      comments = cmts ?? [];
+    }
+
+    const logsBy = groupByRequirement(changeLogs);
+    const commentsBy = groupByRequirement(comments);
+    const nowIso = new Date().toISOString();
+    const withStall = rows.map((row) => {
+      const rowLogs = logsBy.get(row.id) ?? [];
+      return {
+        ...row,
+        stalledDays: stalledDays({
+          requirement: row,
+          changeLogs: rowLogs,
+          comments: commentsBy.get(row.id) ?? [],
+          now: nowIso,
+        }),
+        // 종결 사유. 목록을 훑는 요청자가 '반려' 세 글자만 보던 것을 막는다.
+        // 상세 배너와 같은 함수를 쓰므로 문구가 갈리지 않는다.
+        closure: closureReason({ requirement: row, changeLogs: rowLogs }),
+      };
+    });
+
+    // '멈춘 것' 칩의 필터도 여기서 건다. 다른 칩이 전부 서버에서 걸리므로
+    // (missing·overdue 는 SQL 로) 이것만 화면에서 거르면 동작이 갈린다 —
+    // 칩을 눌렀는데 주소는 바뀌고 목록은 그대로인 식이다.
+    const requirements = stalled
+      ? withStall.filter((r) => r.stalledDays !== null && r.stalledDays >= STALL_DAYS)
+      : withStall;
+
     return Response.json({ requirements });
   } catch (error) {
     return errorResponse(error);
