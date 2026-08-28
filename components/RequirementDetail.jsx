@@ -186,22 +186,26 @@ export function RequirementDetail({ id }) {
     return changeStatus(primary.to);
   }
 
-  // 종결(반려·취소)은 상태 변경과 다른 라우트를 쓴다. BOARD_STATUSES 밖의
+  // 보류·반려·취소는 상태 변경과 다른 라우트를 쓴다. BOARD_STATUSES 밖의
   // 상태이고 사유가 필수라서, PATCH .../status 로는 보낼 수 없다.
+  //
+  // 실패를 페이지 배너가 아니라 { ok, error } 로 돌려준다. 사유를 적는 창이
+  // 떠 있는 동안에는 사람의 눈이 거기 있고, 페이지 맨 위 배너는 스크롤 밖일
+  // 수 있다. 무엇보다 예전에는 창이 "종결하지 못했습니다"로 뭉개서 진짜
+  // 이유(상태 CHECK 위반 등)가 어디에도 안 보였다.
   async function closeRequirement(status, reason) {
     setActionError('');
     const res = await fetch(`/api/requirements/${id}/close`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ brandId: requirementBrandId, status, reason }),
-    });
-    if (!res.ok) {
-      const d = await res.json();
-      setActionError(d.error ?? '종결 실패');
-      return false;
+    }).catch(() => null);
+    if (!res?.ok) {
+      const d = await res?.json().catch(() => ({}));
+      return { ok: false, error: d?.error ?? '처리하지 못했습니다.' };
     }
     load();
-    return true;
+    return { ok: true };
   }
 
   // 배포예상일. 비우면 null 로 보내 해제한다 — 빈 문자열을 보내면 API 의

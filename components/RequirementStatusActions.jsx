@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { CloseReasonDialog } from '@/components/CloseReasonDialog';
 import { STATUS_META } from '@/lib/statusMeta';
 import { menuTransitions } from '@/lib/statusActions';
 import { MERGED_STATUS, REJECTED_STATUS, CANCELLED_STATUS, HOLD_STATUS } from '@/lib/statuses';
@@ -35,10 +35,12 @@ export function RequirementStatusActions({
   compact = false,
 }) {
   const [open, setOpen] = useState(false);
-  const [closing, setClosing] = useState(null); // null | '보류' | '반려' | '취소'
-  const [reason, setReason] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  // 사유를 받을 상태. null | '보류' | '반려' | '취소'
+  //
+  // 예전에는 이 자리에 인라인 폼이 떴다. 그 자리가 상세 사이드바라 폭이
+  // 200px 남짓인데, 사유는 두 줄짜리 예시를 보여줘야 쓸 수 있는 칸이라
+  // 플레이스홀더가 통째로 안 보였다. 창으로 뺀다(CloseReasonDialog).
+  const [closing, setClosing] = useState(null);
 
   const primary = STATUS_META[status]?.primary ?? null;
   const transitions = menuTransitions({ status, identity });
@@ -57,67 +59,6 @@ export function RequirementStatusActions({
   const showMenu =
     !merged &&
     (transitions.length > 0 || canReject || canHold || Boolean(onMerge) || Boolean(onEdit));
-
-  async function submitClose(event) {
-    event.preventDefault();
-    if (!reason.trim()) {
-      setError('사유를 입력해 주세요.');
-      return;
-    }
-    setSaving(true);
-    const ok = await onClose(closing, reason.trim());
-    setSaving(false);
-    if (ok) {
-      setClosing(null);
-      setReason('');
-      setError('');
-    } else {
-      setError(`${closing} 처리를 하지 못했습니다.`);
-    }
-  }
-
-  // 사유를 받는 동안에는 다른 버튼을 감춘다. 종결은 되돌리기 번거로운
-  // 행동이라, 사유를 쓰다가 옆의 상태 버튼을 눌러 버리면 안 된다.
-  if (closing) {
-    return (
-      <form onSubmit={submitClose} className="flex w-full flex-col gap-2">
-        <label htmlFor="close-reason" className="text-xs text-slate-500">
-          {closing} 사유
-        </label>
-        <textarea
-          id="close-reason"
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          rows={2}
-          className="rounded border border-slate-300 px-2 py-1.5 text-sm"
-          placeholder={
-            closing === HOLD_STATUS
-              ? '무엇이 풀려야 다시 움직이는지 적어 주세요. (예: API 개편 후, 사업자 신고 완료 후)'
-              : '한 달 뒤에 읽어도 알 수 있게 적어 주세요.'
-          }
-        />
-        {error && <p className="text-xs text-red-600">{error}</p>}
-        <div className="flex gap-2">
-          {/* 보류는 붉게 하지 않는다. 거절이 아니라 미루는 것이고, 붉은 확정
-              버튼은 누르는 사람에게 "돌이킬 수 없는 일"로 읽힌다. */}
-          <Button
-            type="submit"
-            disabled={saving}
-            className={
-              closing === HOLD_STATUS
-                ? 'bg-violet-600 hover:bg-violet-700'
-                : 'bg-rose-600 hover:bg-rose-700'
-            }
-          >
-            {saving ? '처리 중...' : `${closing} 확정`}
-          </Button>
-          <Button type="button" variant="outline" onClick={() => setClosing(null)}>
-            그만두기
-          </Button>
-        </div>
-      </form>
-    );
-  }
 
   const hasPrimary = action?.kind === 'primary' && primary;
   const tall = compact ? 'h-10' : 'h-8';
@@ -180,6 +121,12 @@ export function RequirementStatusActions({
           ▾
         </button>
       )}
+
+      <CloseReasonDialog
+        status={closing}
+        onSubmit={(reason) => onClose(closing, reason)}
+        onClose={() => setClosing(null)}
+      />
 
       {showMenu && (
         <>

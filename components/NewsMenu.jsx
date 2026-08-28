@@ -23,9 +23,11 @@ import { NewsDialog } from '@/components/NewsDialog';
 // 부르게 되고, 팝업에서 확인을 눌러도 아이콘의 점이 안 사라진다 — 각자 자기
 // 상태를 들고 있기 때문이다.
 //
-// props: onOpenFeedback — 의견 창을 여는 콜백. 창의 열림 상태는 TopBar 가
-// 갖는다(계정 메뉴에서도 같은 창을 열어야 한다).
-export function NewsMenu({ onOpenFeedback }) {
+// 의견 보내기는 여기 없다. 처음엔 팝오버 하단에 뒀는데, 이 팝오버는 점이
+// 떠 있을 때만 열리는 자리라 배포 직후 며칠만 존재하는 입구가 됐다. 헤더에
+// 아이콘을 따로 뒀고, 그것이 바로 옆(28px)에 있으므로 여기 한 번 더 두면
+// 같은 것이 두 번 보이는 소음이다.
+export function NewsMenu() {
   const [seenAt, setSeenAt] = useState(undefined); // undefined = 아직 모름
   const [ready, setReady] = useState(false);
   const [open, setOpen] = useState(false);
@@ -124,7 +126,7 @@ export function NewsMenu({ onOpenFeedback }) {
               ))}
             </ul>
 
-            <div className="flex items-center justify-between border-t border-slate-100 px-3 py-2">
+            <div className="border-t border-slate-100 px-3 py-2">
               <Link
                 href="/help#news"
                 onClick={() => setOpen(false)}
@@ -132,20 +134,6 @@ export function NewsMenu({ onOpenFeedback }) {
               >
                 전체 보기
               </Link>
-              {/* 바뀐 것을 읽은 직후가 "이건 이렇게 해줬으면"을 말하기 가장
-                  좋은 순간이다. 지금은 그 생각을 받을 곳이 없다. */}
-              {onOpenFeedback && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpen(false);
-                    onOpenFeedback();
-                  }}
-                  className="text-xs font-medium text-indigo-600 hover:underline"
-                >
-                  의견 보내기 →
-                </button>
-              )}
             </div>
           </div>
         </>

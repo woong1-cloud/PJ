@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { useIdentity } from './IdentityProvider';
 import { BrandSwitcher } from './BrandSwitcher';
 import { NotificationBell } from './NotificationBell';
+import { MessageSquarePlusIcon } from 'lucide-react';
 import { NewsMenu } from './NewsMenu';
 import { FeedbackDialog } from './FeedbackDialog';
 import { canManageBrand, canProcess, isGlobalAdmin } from '@/lib/tiers';
@@ -127,9 +128,23 @@ export function TopBar() {
 
       <div className="relative flex shrink-0 items-center gap-3">
         {/* 오른쪽으로 갈수록 "나" 쪽이다 — 아바타(나) · 이름(나) · 벨(나에게
-            온 것) · 소식(앱에 생긴 것) 순으로 멀어진다.
-            소식을 벨에 합치지 않는 이유는 NewsMenu 주석에 있다. */}
-        <NewsMenu onOpenFeedback={() => setFeedbackOpen(true)} />
+            온 것) · 소식(앱이 나에게) · 의견(내가 앱에게) 순으로 멀어진다.
+            소식을 벨에 합치지 않는 이유는 NewsMenu 주석에 있다.
+
+            의견을 소식 팝오버 안에만 두었더니 안 보였다. 그 팝오버는 점이
+            떠 있을 때만 열리는 자리라, 배포 직후 며칠만 존재하는 입구가 된
+            셈이다. 소식은 가끔 밀어주는 것이고 의견은 아무 때나 열려 있어야
+            하는 것이라, 밀어주는 쪽에 얹으면 그 주기를 따라가 버린다. */}
+        <button
+          type="button"
+          onClick={() => setFeedbackOpen(true)}
+          aria-label="의견 보내기"
+          title="의견 보내기"
+          className="flex h-7 w-7 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+        >
+          <MessageSquarePlusIcon className="h-4 w-4" />
+        </button>
+        <NewsMenu />
         <NotificationBell />
         {/* 이름은 데스크톱에서만. 아바타에 첫 글자가 이미 들어 있고, 폰에서는
             그 한 조각이 브랜드명 자리를 뺏는다. */}
