@@ -8,8 +8,9 @@ const BASE_COLUMNS = 'id, name, must_change_password, can_view_all_projects';
 // onboarded_at(0020)을 BASE 가 아니라 이쪽에 둔다. BASE 는 마이그레이션이 안
 // 돌아간 DB 를 위한 최후의 보루라, 여기에 새 컬럼을 넣으면 폴백까지 같이
 // 죽어서 아무도 로그인하지 못한다.
+// news_seen_at(0025)도 같은 이유로 이쪽이다.
 const SIGNUP_COLUMNS =
-  `${BASE_COLUMNS}, affiliation, job_role, onboarded_at, ` +
+  `${BASE_COLUMNS}, affiliation, job_role, onboarded_at, news_seen_at, ` +
   'organization:organizations(name), ' +
   'jobRole:job_roles(name), ' +
   'requested_brand:brands!team_members_requested_brand_id_fkey(name)';
@@ -53,6 +54,8 @@ export async function GET() {
       requestedBrandName: member.requested_brand?.name ?? null,
       // null 이면 첫 로그인 안내를 아직 안 본 것이다.
       onboardedAt: member.onboarded_at ?? null,
+      // 업데이트 소식을 마지막으로 본 시각. null 이면 한 번도 안 봤다.
+      newsSeenAt: member.news_seen_at ?? null,
     });
   } catch (error) {
     return errorResponse(error);

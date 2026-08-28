@@ -1,6 +1,7 @@
 import { IdentityProvider } from '@/components/IdentityProvider';
 import { TopBar } from '@/components/TopBar';
 import { WelcomeDialog } from '@/components/WelcomeDialog';
+import { NewsDialog } from '@/components/NewsDialog';
 
 export default function RequirementsLayout({ children }) {
   return (
@@ -12,6 +13,10 @@ export default function RequirementsLayout({ children }) {
             요구사항 영역에만 붙인다 — 로그인 직후 도착하는 곳이 여기이고,
             설명을 읽자마자 시험해 볼 화면도 여기다. */}
         <WelcomeDialog />
+        {/* 안 본 업데이트 소식. 첫 로그인 안내를 이미 본 사람에게만 뜬다 —
+            둘이 겹치면 안내가 먼저이고, 안내를 닫는 쪽이 소식까지 본 것으로
+            찍는다(WelcomeDialog 의 finish). */}
+        <NewsDialog />
       </div>
     </IdentityProvider>
   );

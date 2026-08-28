@@ -1,5 +1,6 @@
 import { HelpSection } from '@/components/help/HelpSection';
 import { HelpToc } from '@/components/help/HelpToc';
+import { NewsBody } from '@/components/help/NewsBody';
 import { AboutBody } from '@/components/help/AboutBody';
 import { StatusBody } from '@/components/help/StatusBody';
 import { TierBody } from '@/components/help/TierBody';
@@ -11,6 +12,7 @@ import { APP_NAME } from '@/lib/branding';
 // 내용을 더할 때 하는 일은 둘이다 — lib/helpSections.js 에 항목 한 줄을 넣고,
 // 본문 컴포넌트를 하나 만들어 아래 BODIES 에 연결한다. 목차는 저절로 늘어난다.
 const BODIES = {
+  news: NewsBody,
   about: AboutBody,
   status: StatusBody,
   tier: TierBody,

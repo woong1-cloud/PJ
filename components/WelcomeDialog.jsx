@@ -48,6 +48,9 @@ export function WelcomeDialog() {
     // "닫기를 눌렀는데 안 닫힌다" 가 훨씬 나쁘다.
     setOpen(false);
     fetch('/api/me/onboarded', { method: 'POST' }).catch(() => {});
+    // 업데이트 소식도 함께 본 것으로 찍는다. 방금 들어온 사람에게 "무엇이
+    // 바뀌었습니다" 는 아무 뜻이 없다 — 바뀌기 전을 본 적이 없으니까.
+    fetch('/api/me/news-seen', { method: 'POST' }).catch(() => {});
   }
 
   if (!open) return null;
