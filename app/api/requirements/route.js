@@ -10,11 +10,13 @@ import { isValidType } from '@/lib/requirementTypes';
 import { CHANNELS, DEFAULT_CHANNEL } from '@/lib/channels';
 import { groupByRequirement, isStalled, stalledDays } from '@/lib/stalled';
 import { closureReason } from '@/lib/closureReason';
+import { awaitingAnswer } from '@/lib/awaitingAnswer';
 import { requestDateRange } from '@/lib/dateRange';
 
 const BASE_COLUMNS =
   'id, priority, urgency, request_date, created_at, status, title, is_confidential, sprint_tag, duplicate_count, ' +
   'completed_at, expected_release_date, redmine_url, requirement_type, ' +
+  'awaiting_answer_since, ' +
   'project_id, project:projects(id, name), ' +
   'requester:team_members!requirements_requester_fkey(id, name), ' +
   'assignee:team_members!requirements_assignee_fkey(id, name), ' +
@@ -205,6 +207,9 @@ export async function GET(request) {
         // 종결 사유. 목록을 훑는 요청자가 '반려' 세 글자만 보던 것을 막는다.
         // 상세 배너와 같은 함수를 쓰므로 문구가 갈리지 않는다.
         closure: closureReason({ requirement: row, changeLogs: rowLogs }),
+        // 확인 대기. 며칠째 기다리는지를 서버가 계산해 내려보낸다 — 화면이
+        // 다시 재면 목록과 회의 화면의 숫자가 갈린다.
+        awaiting: awaitingAnswer({ requirement: row, now: nowIso }),
       };
     });
 
@@ -212,7 +217,13 @@ export async function GET(request) {
     // (missing·overdue 는 SQL 로) 이것만 화면에서 거르면 동작이 갈린다 —
     // 칩을 눌렀는데 주소는 바뀌고 목록은 그대로인 식이다.
     const requirements = stalled
-      ? withStall.filter((r) => isStalled({ status: r.status, stalledDays: r.stalledDays }))
+      ? withStall.filter((r) =>
+          isStalled({
+            status: r.status,
+            stalledDays: r.stalledDays,
+            awaitingAnswer: Boolean(r.awaiting),
+          })
+        )
       : withStall;
 
     return Response.json({ requirements });

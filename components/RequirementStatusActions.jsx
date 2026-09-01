@@ -32,6 +32,7 @@ export function RequirementStatusActions({
   onClose,
   onMerge,
   onEdit,
+  onAsk,
   compact = false,
 }) {
   const [open, setOpen] = useState(false);
@@ -58,7 +59,12 @@ export function RequirementStatusActions({
   const canHold = canReject && status !== HOLD_STATUS;
   const showMenu =
     !merged &&
-    (transitions.length > 0 || canReject || canHold || Boolean(onMerge) || Boolean(onEdit));
+    (transitions.length > 0 ||
+      canReject ||
+      canHold ||
+      Boolean(onAsk) ||
+      Boolean(onMerge) ||
+      Boolean(onEdit));
 
   const hasPrimary = action?.kind === 'primary' && primary;
   const tall = compact ? 'h-10' : 'h-8';
@@ -154,6 +160,21 @@ export function RequirementStatusActions({
                     {s}(으)로
                   </button>
                 ))}
+                {/* 요건 확인이 메뉴 맨 위다. 회의에서 가장 자주 나오는 결론이
+                    "이게 뭔 얘기인지 확인이 필요하다"인데, 지금은 그걸 하려면
+                    코멘트로 내려가 @멘션을 쳐야 했다. */}
+                {onAsk && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      onAsk();
+                    }}
+                    className="px-3 py-1.5 text-left text-sm text-sky-700 hover:bg-sky-50"
+                  >
+                    요건 확인 요청
+                  </button>
+                )}
                 {onMerge && (
                   <button
                     type="button"

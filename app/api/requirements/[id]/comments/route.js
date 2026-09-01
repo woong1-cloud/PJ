@@ -8,7 +8,7 @@ import {
   normalizeCommentBody,
 } from '@/lib/comments';
 import { signCommentImages } from '@/lib/storage';
-import { notifyComment } from '@/lib/notify';
+import { notifyComment, notifyAnswered } from '@/lib/notify';
 
 // 요구사항 코멘트 목록/등록.
 //
@@ -73,10 +73,59 @@ export async function POST(request, { params }) {
     // 다시 만든 브랜드 팀 목록으로 판정한다(화면이 보낸 목록을 믿지 않는다).
     await notifyComment({ requirementId: id, actorId: memberId, body: trimmed });
 
+    // 요청자가 말하면 확인 대기를 푼다.
+    //
+    // 크론으로 미루지 않는다 — "답했는데 화면이 그대로"인 구간이 생기고,
+    // 그 구간에 요청자가 다시 답하면 같은 말이 두 번 올라온다.
+    //
+    // 판정은 여기서 안 한다(lib/awaitingAnswer.js 의 hasAnswered 와 같은
+    // 규칙이지만, 방금 단 코멘트 하나만 보면 되므로 조건이 더 단순하다).
+    // 실패해도 코멘트는 이미 등록됐다 — 조용히 넘어간다.
+    await releaseAwaitingAnswer(supabase, id, memberId);
+
     // 방금 만든 코멘트에는 아직 시안이 없다. 화면이 이 id 로 이어서 올린다 —
     // 코멘트가 먼저 있어야 붙일 곳이 생기므로 순서를 뒤집을 수 없다.
     return Response.json({ comment: { ...data, images: [] } }, { status: 201 });
   } catch (error) {
     return errorResponse(error);
+  }
+}
+
+// 요청자가 답했으면 확인 대기를 푼다.
+//
+// 이 함수는 절대 던지지 않는다. 코멘트는 이미 등록됐고, 여기서 500 을 돌리면
+// 화면은 "코멘트 등록 실패"를 띄우는데 실제로는 등록된 상태다.
+async function releaseAwaitingAnswer(supabase, requirementId, authorId) {
+  try {
+    const { data, error } = await supabase
+      .from('requirements')
+      .select('id, requester, awaiting_answer_since, awaiting_answer_comment_id')
+      .eq('id', requirementId)
+      .maybeSingle();
+    if (error) throw error;
+    // 확인 대기가 아니거나, 말한 사람이 요청자가 아니면 그대로 둔다.
+    if (!data?.awaiting_answer_since || data.requester !== authorId) return;
+
+    // 물어본 사람을 먼저 읽는다. 플래그를 지운 뒤에는 누구에게 알릴지 알 수
+    // 없다 — 질문 코멘트의 작성자가 그 사람이다.
+    let askedBy = null;
+    if (data.awaiting_answer_comment_id) {
+      const { data: q } = await supabase
+        .from('requirement_comments')
+        .select('author')
+        .eq('id', data.awaiting_answer_comment_id)
+        .maybeSingle();
+      askedBy = q?.author ?? null;
+    }
+
+    const { error: updError } = await supabase
+      .from('requirements')
+      .update({ awaiting_answer_since: null, awaiting_answer_comment_id: null })
+      .eq('id', requirementId);
+    if (updError) throw updError;
+
+    await notifyAnswered({ requirementId, askedBy, answeredBy: authorId });
+  } catch (error) {
+    console.error('확인 대기 해제 실패', requirementId, error);
   }
 }

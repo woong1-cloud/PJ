@@ -3,9 +3,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { AskDialog } from '@/components/AskDialog';
 
+// 기본 보기가 '이번 회의 안건'이다. 예전 기본은 '오래 멈춘 순'이었는데,
+// 그건 정렬이지 집합이 아니다 — 확인 대기 건이 빠져야 안건이 된다.
 const FILTERS = [
-  { key: 'all', label: '오래 멈춘 순' },
+  { key: 'all', label: '이번 회의 안건' },
+  { key: 'awaiting', label: '확인 대기' },
   { key: 'unassigned', label: '담당 없는 것만' },
   { key: 'incoming', label: '이번 주 신규' },
   { key: 'done', label: '이번 주 완료' },
@@ -21,6 +25,7 @@ export function MeetingBoard({ identity }) {
   const [filter, setFilter] = useState('all');
   const [people, setPeople] = useState([]);
   const [rowError, setRowError] = useState({});
+  const [asking, setAsking] = useState(null);
   const [ending, setEnding] = useState(false);
   const [ended, setEnded] = useState(null);
   const [error, setError] = useState('');
@@ -105,6 +110,23 @@ export function MeetingBoard({ identity }) {
     }
   }
 
+  // 요건 확인 요청. 보내고 나면 목록을 다시 받는다 — 그 건이 안건에서
+  // 빠지고 '확인 대기'로 옮겨가는 것이 곧 결과다.
+  async function askRequester(item, question) {
+    if (!item) return { ok: false, error: '대상을 찾지 못했습니다.' };
+    const res = await fetch(`/api/requirements/${item.id}/ask`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brandId, question }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      const d = await res?.json().catch(() => ({}));
+      return { ok: false, error: d?.error ?? '보내지 못했습니다.' };
+    }
+    await load();
+    return { ok: true };
+  }
+
   if (!brandId) return <p className="text-sm text-slate-500">브랜드를 먼저 선택해 주세요.</p>;
   if (error) return <p className="text-sm text-red-600">{error}</p>;
   if (!data) return <p className="text-sm text-slate-500">불러오는 중...</p>;
@@ -115,6 +137,11 @@ export function MeetingBoard({ identity }) {
     // 이 화면은 회의에서 밀린 것을 훑는 자리가 먼저다.
     if (filter === 'done') return item.isDone;
     if (item.isDone) return false;
+    // 확인 대기는 안건에서 빠진다. 공이 요청자에게 넘어가 있어서 이 회의에서
+    // 할 수 있는 일이 없다. 그래도 칩으로는 볼 수 있어야 한다 — 통째로
+    // 지우면 물어본 사실이 화면에서 사라진다.
+    if (filter === 'awaiting') return Boolean(item.awaiting);
+    if (item.awaiting) return false;
     if (filter === 'unassigned') return !item.assignee;
     if (filter === 'incoming') return item.isNew;
     return true;
@@ -129,9 +156,11 @@ export function MeetingBoard({ identity }) {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
         <Stat label={`${stallDays}일+ 멈춤`} value={data.summary.stalled} tone="rose" />
         <Stat label="담당 없음" value={data.summary.unassigned} tone="amber" />
+        {/* 나머지와 성격이 다르다. 우리가 손댈 것이 아니라 저쪽이 답할 것이다. */}
+        <Stat label="확인 대기" value={data.summary.awaiting ?? 0} tone="sky" />
         <Stat label="이번 주 신규" value={data.summary.incoming} tone="slate" />
         {/* 넷 중 하나는 좋은 소식이어야 한다. 나머지 셋이 전부 문제를 세는
             숫자라, 회의가 나쁜 소식으로만 시작하고 있었다. */}
@@ -194,6 +223,12 @@ export function MeetingBoard({ identity }) {
                   <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700">
                     {item.tookDays === null ? '완료' : `${item.tookDays}일 걸림`}
                   </span>
+                ) : item.awaiting ? (
+                  <span className="rounded bg-sky-50 px-1.5 py-0.5 text-sky-700">
+                    {item.awaiting.days === null
+                      ? '답 기다리는 중'
+                      : `${item.awaiting.days}일째 답 기다림`}
+                  </span>
                 ) : item.stalledDays >= stallDays ? (
                   <span className="rounded bg-rose-50 px-1.5 py-0.5 text-rose-700">
                     {item.stalledDays}일 멈춤
@@ -222,6 +257,19 @@ export function MeetingBoard({ identity }) {
               </span>
             ) : (
               <div className="flex shrink-0 items-center gap-2">
+                {/* 회의에서 가장 자주 나오는 결론이 "이게 뭔 얘기인지 확인이
+                    필요하다"인데, 지금까지 그걸 하려면 상세로 들어가 코멘트에
+                    @멘션을 쳐야 했다. 이 화면의 규칙(상세로 안 들어간다)을
+                    지키려면 여기 있어야 한다. */}
+                {!item.awaiting && item.requester && (
+                  <button
+                    type="button"
+                    onClick={() => setAsking(item)}
+                    className="rounded px-2 py-1 text-xs text-sky-700 hover:bg-sky-50"
+                  >
+                    질문하기
+                  </button>
+                )}
                 <select
                   aria-label={`${item.title} 담당자`}
                   value={item.assignee?.id ?? ''}
@@ -265,6 +313,13 @@ export function MeetingBoard({ identity }) {
         ))}
       </ul>
 
+      <AskDialog
+        open={Boolean(asking)}
+        requesterName={asking?.requester?.name}
+        onSubmit={(question) => askRequester(asking, question)}
+        onClose={() => setAsking(null)}
+      />
+
       {/* 회의 마치기가 루프를 닫는 지점이다. 이 회의에서 배정된 건의 요청자가
           "내가 올린 게 어떻게 됐는지"를 아는 유일한 통로다. */}
       <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-3">
@@ -289,6 +344,7 @@ function Stat({ label, value, tone }) {
     rose: 'bg-rose-50 text-rose-700',
     amber: 'bg-amber-50 text-amber-800',
     slate: 'bg-slate-100 text-slate-700',
+    sky: 'bg-sky-50 text-sky-700',
     emerald: 'bg-emerald-50 text-emerald-700',
   };
   return (

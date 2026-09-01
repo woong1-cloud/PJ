@@ -3,6 +3,7 @@ import { requireBrandAccess } from '@/lib/permissions';
 import { errorResponse, ApiError } from '@/lib/apiError';
 import { CLOSED_STATUSES, DONE_STATUS } from '@/lib/statuses';
 import { closureReason } from '@/lib/closureReason';
+import { awaitingAnswer } from '@/lib/awaitingAnswer';
 import { STALL_DAYS, groupByRequirement, isStalled, stalledDays } from '@/lib/stalled';
 
 // '이번 주'의 길이. meetingDigest 와 같은 값이라 화면과 메일이 같은 것을
@@ -33,6 +34,7 @@ export async function GET(request) {
       .from('requirements')
       .select(
         'id, title, status, created_at, completed_at, expected_release_date, ' +
+          'awaiting_answer_since, awaiting_answer_comment_id, ' +
           'assignee:team_members!requirements_assignee_fkey(id, name), ' +
           'requester:team_members!requirements_requester_fkey(id, name)'
       )
@@ -109,6 +111,10 @@ export async function GET(request) {
               : null,
           // 승인 확인 내용. 상세 배너와 같은 함수를 쓰므로 문구가 갈리지 않는다.
           closure: closureReason({ requirement: r, changeLogs: rowLogs }),
+          // 확인 대기. 이 건들은 안건에서 빠지지만 '확인 대기' 칩으로 볼 수
+          // 있어야 한다 — 목록에서 통째로 지우면 물어본 사실이 사라진다.
+          awaiting: awaitingAnswer({ requirement: r, now }),
+          askedCommentId: r.awaiting_answer_comment_id ?? null,
         };
       })
       // 오래 멈춘 것이 위. 여기서 정렬해 두면 화면의 기본 보기가 곧 회의
@@ -117,7 +123,16 @@ export async function GET(request) {
 
     return Response.json({
       summary: {
-        stalled: items.filter((i) => isStalled({ status: i.status, stalledDays: i.stalledDays })).length,
+        stalled: items.filter((i) =>
+          isStalled({
+            status: i.status,
+            stalledDays: i.stalledDays,
+            awaitingAnswer: Boolean(i.awaiting),
+          })
+        ).length,
+        // 답을 기다리는 건. 나머지 셋과 성격이 다르다 — 우리가 손댈 것이
+        // 아니라 저쪽이 답할 것이다.
+        awaiting: items.filter((i) => i.awaiting && !i.isDone).length,
         // 완료 건은 빼고 센다. 목록에 들어오면서 담당자 없이 끝난 건이
         // '담당 없음'으로 세어지는데, 그건 지금 손볼 일이 아니다.
         unassigned: items.filter((i) => !i.assignee && !i.isDone).length,

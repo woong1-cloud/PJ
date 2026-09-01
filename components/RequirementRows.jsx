@@ -28,6 +28,7 @@ export function RequirementRows({ requirements = [], filtered = false, onCreate 
           requirement: r,
           stalledDays: r.stalledDays,
           closure: r.closure,
+          awaiting: r.awaiting,
         });
         const bar =
           row.flag === 'stall'

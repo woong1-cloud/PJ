@@ -36,11 +36,13 @@ import { RequirementAttachments } from '@/components/RequirementAttachments';
 import { headline } from '@/lib/headline';
 import { closureReason } from '@/lib/closureReason';
 import { stalledDays } from '@/lib/stalled';
+import { awaitingAnswer } from '@/lib/awaitingAnswer';
 import { ActivityFeed } from '@/components/ActivityFeed';
 import { ChecklistSection } from '@/components/ChecklistSection';
 import { RequirementDangerZone } from '@/components/RequirementDangerZone';
 import { ApprovalDialog } from '@/components/ApprovalDialog';
 import { StartReviewDialog } from '@/components/StartReviewDialog';
+import { AskDialog } from '@/components/AskDialog';
 import { RedmineLinkSection } from '@/components/RedmineLinkSection';
 import { HelpHint } from '@/components/HelpHint';
 import { canDeleteRequirement } from '@/lib/deleteRequirement';
@@ -66,6 +68,7 @@ export function RequirementDetail({ id }) {
   // 병합은 목록·보드·프로젝트에만 있었다. 상세를 열어 읽다가 "이거 아까
   // 그거네" 하고 처리할 길이 없었다.
   const [mergeOpen, setMergeOpen] = useState(false);
+  const [askOpen, setAskOpen] = useState(false);
   const [data, setData] = useState(null);
   const [teamMembers, setTeamMembers] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -203,6 +206,25 @@ export function RequirementDetail({ id }) {
     if (!res?.ok) {
       const d = await res?.json().catch(() => ({}));
       return { ok: false, error: d?.error ?? '처리하지 못했습니다.' };
+    }
+    load();
+    return { ok: true };
+  }
+
+  // 요건 확인 요청. 코멘트를 달고 요청자에게 메일을 보내며 확인 대기로 둔다.
+  //
+  // closeRequirement 와 같이 { ok, error } 를 돌려준다 — 창이 떠 있는 동안
+  // 사람의 눈이 거기 있고, 페이지 맨 위 배너는 스크롤 밖일 수 있다.
+  async function askRequester(question) {
+    setActionError('');
+    const res = await fetch(`/api/requirements/${id}/ask`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brandId: requirementBrandId, question }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      const d = await res?.json().catch(() => ({}));
+      return { ok: false, error: d?.error ?? '보내지 못했습니다.' };
     }
     load();
     return { ok: true };
@@ -363,6 +385,8 @@ export function RequirementDetail({ id }) {
   // 종결 사유는 저장은 되는데 화면 어디에도 없었다 — 머리 줄은 상태만 말하고,
   // 활동 피드는 기본 탭이 '코멘트'라 한 번 더 눌러야 나온다.
   const closure = closureReason({ requirement: r, changeLogs: history ?? [] });
+  // 확인 대기. 물어봤고 답을 기다리는 중이라는 뜻이다.
+  const awaiting = awaitingAnswer({ requirement: r, now: new Date().toISOString() });
   const note = r.note?.trim() ?? '';
   const noteLines = note ? note.split(/\r?\n/).length : 0;
   const noteFirstLine = note ? note.split(/\r?\n/)[0] : '';
@@ -380,6 +404,9 @@ export function RequirementDetail({ id }) {
     // 3차 이상만. RequirementStatusActions 가 종결 상태에서는 메뉴 자체를
     // 감추므로 여기서 또 걸지 않는다.
     onMerge: processAllowed ? () => setMergeOpen(true) : null,
+    // 이미 확인 대기인 건에는 안 보여준다. 서버도 400 으로 막는다 — 두 번
+    // 물으면 첫 질문을 가리키던 포인터가 덮여 무엇을 물었는지가 사라진다.
+    onAsk: processAllowed && !awaiting && r.requester ? () => setAskOpen(true) : null,
   };
 
   return (
@@ -399,6 +426,23 @@ export function RequirementDetail({ id }) {
             &lsquo;{mergedInto.title}&rsquo;
           </Link>{' '}
           요청에 병합되었습니다.
+        </div>
+      )}
+
+      {/* 확인 대기 배너.
+          지금 이 건이 왜 안 움직이는지를 말하는 가장 중요한 문장이다 —
+          우리가 안 집은 것이 아니라 답을 기다리는 중이라는 뜻이고, 요청자는
+          이것을 봐야 자기가 할 일이 있다는 것을 안다. */}
+      {awaiting && (
+        <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
+          <p className="text-xs font-semibold opacity-80">
+            요건 확인 대기
+            {awaiting.days !== null && ` · ${awaiting.days}일째`}
+          </p>
+          <p className="mt-1">
+            {r.requester?.name ? `${r.requester.name}님의 ` : ''}답을 기다리는 중입니다. 아래
+            코멘트로 답하면 다시 진행됩니다.
+          </p>
         </div>
       )}
 
@@ -708,6 +752,13 @@ export function RequirementDetail({ id }) {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AskDialog
+        open={askOpen}
+        requesterName={r.requester?.name}
+        onSubmit={askRequester}
+        onClose={() => setAskOpen(false)}
+      />
 
       {/* 목록·보드가 쓰는 것을 그대로 쓴다. 병합 규칙이 두 곳으로 갈리면
           한쪽만 고쳐진다. 병합하면 이 건이 '중복'이 되고 mergedInto 배너가 뜬다. */}

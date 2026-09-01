@@ -38,7 +38,12 @@ export function RequirementCard({
   const style = { transform: CSS.Translate.toString(transform), opacity: isDragging ? 0.5 : 1 };
   // 목록의 행과 같은 함수를 본다. 뷰가 셋이 되면서 같은 판정이 세 곳에
   // 흩어지면 다음 개선 때 그중 한 곳은 반드시 빠진다.
-  const row = listRow({ requirement: req, stalledDays: req.stalledDays, closure: req.closure });
+  const row = listRow({
+    requirement: req,
+    stalledDays: req.stalledDays,
+    closure: req.closure,
+    awaiting: req.awaiting,
+  });
 
   return (
     <div
