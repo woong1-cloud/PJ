@@ -225,6 +225,26 @@ function RequirementsView() {
     setReloadToken((t) => t + 1);
   }
 
+  // 목록 행에서 바로 처분한다(보류·반려·취소). 사유가 필요해 전용 라우트를
+  // 쓴다 — PATCH .../status 는 BOARD_STATUSES 만 받고 사유를 안 받는다.
+  //
+  // { ok, error } 를 돌려준다. 창이 떠 있는 동안 사람의 눈이 거기 있고,
+  // 페이지 맨 위 배너는 스크롤 밖일 수 있다.
+  async function closeFromRow(requirement, status, reason) {
+    setError('');
+    const res = await fetch(`/api/requirements/${requirement.id}/close`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brandId: identity.brandId, status, reason }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      const d = await res?.json().catch(() => ({}));
+      return { ok: false, error: d?.error ?? '처리하지 못했습니다.' };
+    }
+    setReloadToken((t) => t + 1);
+    return { ok: true };
+  }
+
   // CSV 는 본문(As-Is·To-Be·비고)까지 담는다. 제목만으로는 "우리가 뭘
   // 요청했는지"를 알 수 없어서, 정리해 공유하는 문서로 쓸 수가 없다.
   //
@@ -390,6 +410,9 @@ function RequirementsView() {
           requirements={sortedRequirements}
           filtered={filteredNow}
           onCreate={() => setDialogOpen(true)}
+          identity={identity}
+          onClose={closeFromRow}
+          onMerge={processAllowed ? setMergeSource : undefined}
         />
       )}
       {/* 보드와 같은 다이얼로그를 그대로 쓴다. 병합 규칙이 두 곳에 갈리면

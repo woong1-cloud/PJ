@@ -8,6 +8,9 @@ import { STALL_DAYS, groupByRequirement, isStalled, stalledDays } from '@/lib/st
 
 // '이번 주'의 길이. meetingDigest 와 같은 값이라 화면과 메일이 같은 것을
 // '신규'라고 부른다.
+//
+// 이제 신규 판정에만 쓴다. 완료는 시간이 아니라 확인 여부로 고른다 —
+// 아래 조회의 meeting_reviewed_at 참고.
 const PERIOD_DAYS = 7;
 
 // 회의 화면이 필요한 것을 한 번에 준다.
@@ -29,30 +32,31 @@ export async function GET(request) {
     // FK 이름을 명시한다. team_members(id, name) 처럼 짧게 쓰면 PostgREST 가
     // 어느 관계를 타야 할지 못 고르고 PGRST201 로 죽는다 — requirements 에서
     // team_members 로 가는 FK 가 assignee·requester 둘이다.
-    const doneSince = new Date(Date.now() - PERIOD_DAYS * 86400000).toISOString();
     const { data: rows, error } = await supabase
       .from('requirements')
       .select(
         'id, title, status, created_at, completed_at, expected_release_date, ' +
-          'awaiting_answer_since, awaiting_answer_comment_id, ' +
+          'awaiting_answer_since, awaiting_answer_comment_id, meeting_reviewed_at, ' +
           'assignee:team_members!requirements_assignee_fkey(id, name), ' +
           'requester:team_members!requirements_requester_fkey(id, name)'
       )
       .eq('brand_id', brandId)
-      // 미종결 + 지난 7일 안에 완료된 것.
+      // 미종결 + 아직 회의에서 확인 안 한 완료 건.
       //
-      // 완료를 함께 가져오는 이유: 회의 화면이 밀린 것만 보여주고 있었다.
-      // 요약 칩 셋이 전부 문제를 세는 숫자라 회의가 나쁜 소식으로만 시작한다.
+      // 예전에는 '지난 7일 안에 완료된 것'이었다. 그런데 이 칸의 목적은
+      // "이번 주에 뭘 끝냈나"가 아니라 "완료된 것을 회의에서 한 번 더 확인
+      // 하는 것"이다. 목적이 그렇다면 기준이 시간이면 안 된다 — 7일 창은
+      // 확인 안 한 건도 8일째에 조용히 사라지게 만든다.
       //
-      // 종결 전체를 가져오지는 않는다. 완료 11건이 다 딸려오면 목록이 흐려진다 —
-      // 회의는 "이번 주에 뭘 끝냈나"를 보는 자리이지 완료 이력을 보는 자리가
-      // 아니다.
+      // 상한을 두지 않는다. 회의를 몇 달 안 하면 완료가 쌓여 화면이
+      // 무거워지는데, 그 무거움이 곧 "회의가 안 돌고 있다"는 신호다. 상한을
+      // 두면 그 위가 조용히 사라진다.
       //
       // 반려·취소·중복은 넣지 않는다. 끝낸 것이 아니라 안 하기로 한 것이라,
-      // 성과 칸에 섞이면 숫자가 거짓말을 한다.
+      // 확인할 성과가 아니다.
       .or(
         `status.not.in.(${CLOSED_STATUSES.join(',')}),` +
-          `and(status.eq.${DONE_STATUS},completed_at.gte.${doneSince})`
+          `and(status.eq.${DONE_STATUS},meeting_reviewed_at.is.null)`
       );
     if (error) throw error;
 
@@ -115,6 +119,9 @@ export async function GET(request) {
           // 있어야 한다 — 목록에서 통째로 지우면 물어본 사실이 사라진다.
           awaiting: awaitingAnswer({ requirement: r, now }),
           askedCommentId: r.awaiting_answer_comment_id ?? null,
+          // 여기 오는 완료 건은 정의상 전부 미확인이다. 그래도 화면이
+          // 되돌리기(확인 해제) 직후 상태를 그릴 수 있게 값을 함께 준다.
+          reviewedAt: r.meeting_reviewed_at ?? null,
         };
       })
       // 오래 멈춘 것이 위. 여기서 정렬해 두면 화면의 기본 보기가 곧 회의

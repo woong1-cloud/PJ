@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { StatusDot } from '@/components/ui/StatusDot';
 import { RequirementEmpty } from '@/components/RequirementEmpty';
 import { listRow } from '@/lib/listRow';
+import { RowDispositionMenu } from '@/components/RowDispositionMenu';
 
 // 목록(행) 뷰.
 //
@@ -13,8 +14,19 @@ import { listRow } from '@/lib/listRow';
 // 한 줄 40px 을 지킨다. 두 줄이 되면 세로 리듬이 깨져 훑기가 느려지고, 47건이
 // 한 화면에 안 들어온다.
 //
-// props: requirements, filtered, onCreate
-export function RequirementRows({ requirements = [], filtered = false, onCreate }) {
+// props: requirements, filtered, onCreate, identity, onClose, onMerge
+//
+// onClose·onMerge 가 없으면 '⋯' 이 안 그려진다. 이 뷰가 기본 화면인데
+// 오랫동안 제목 링크 말고 아무 행동도 없었다 — 보류·반려는 전부 상세로
+// 들어가야 했다.
+export function RequirementRows({
+  requirements = [],
+  filtered = false,
+  onCreate,
+  identity,
+  onClose,
+  onMerge,
+}) {
   if (requirements.length === 0) {
     return <RequirementEmpty filtered={filtered} onCreate={onCreate} />;
   }
@@ -37,10 +49,15 @@ export function RequirementRows({ requirements = [], filtered = false, onCreate 
               ? 'border-l-amber-400'
               : 'border-l-transparent';
         return (
-          <li key={r.id} className={`border-b border-l-2 border-b-slate-100 ${bar} last:border-b-0`}>
+          <li
+            key={r.id}
+            className={`flex items-center border-b border-l-2 border-b-slate-100 pr-1.5 ${bar} last:border-b-0`}
+          >
+            {/* '⋯' 은 Link 밖이다. 앵커 안에 버튼을 넣으면 누를 때마다 상세로
+                따라 들어간다. */}
             <Link
               href={`/requirements/${r.id}`}
-              className="flex min-h-10 items-center gap-3 py-1.5 pr-3 pl-2.5 hover:bg-slate-50"
+              className="flex min-h-10 min-w-0 flex-1 items-center gap-3 py-1.5 pr-2 pl-2.5 hover:bg-slate-50"
             >
               <span className="w-20 shrink-0">
                 <StatusDot status={r.status} tone={row.tone} />
@@ -73,6 +90,14 @@ export function RequirementRows({ requirements = [], filtered = false, onCreate 
                 {row.assignee?.initial ?? '＋'}
               </span>
             </Link>
+            {onClose && (
+              <RowDispositionMenu
+                requirement={r}
+                identity={identity}
+                onClose={onClose}
+                onMerge={onMerge ? () => onMerge(r) : undefined}
+              />
+            )}
           </li>
         );
       })}

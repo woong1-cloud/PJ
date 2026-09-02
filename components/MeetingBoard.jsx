@@ -12,7 +12,9 @@ const FILTERS = [
   { key: 'awaiting', label: '확인 대기' },
   { key: 'unassigned', label: '담당 없는 것만' },
   { key: 'incoming', label: '이번 주 신규' },
-  { key: 'done', label: '이번 주 완료' },
+  // '이번 주 완료'가 아니다. 기준이 시간이 아니라 확인 여부라서, 이름도
+  // 그대로 말해야 한다 — 확인할 때까지 남는다.
+  { key: 'done', label: '확인할 완료' },
 ];
 
 // 회의 화면 본체.
@@ -26,6 +28,7 @@ export function MeetingBoard({ identity }) {
   const [people, setPeople] = useState([]);
   const [rowError, setRowError] = useState({});
   const [asking, setAsking] = useState(null);
+  const [reviewing, setReviewing] = useState(false);
   const [ending, setEnding] = useState(false);
   const [ended, setEnded] = useState(null);
   const [error, setError] = useState('');
@@ -127,6 +130,29 @@ export function MeetingBoard({ identity }) {
     return { ok: true };
   }
 
+  // 완료 건을 회의에서 확인했다고 표시한다.
+  //
+  // 건별이 기본이다. '회의 마치기'로 한꺼번에 처리하지 않는 이유는 안 본
+  // 것까지 확인됨이 되면 이 칸을 만든 뜻이 사라져서다. '전부 확인'은 사람이
+  // 그렇게 하겠다고 누르는 것이라 다르다.
+  async function markReviewed(ids, reviewed = true) {
+    if (ids.length === 0) return;
+    setReviewing(true);
+    setError('');
+    const res = await fetch('/api/meeting/review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brandId, ids, reviewed }),
+    }).catch(() => null);
+    setReviewing(false);
+    if (!res?.ok) {
+      const d = await res?.json().catch(() => ({}));
+      setError(d?.error ?? '확인 처리를 하지 못했습니다.');
+      return;
+    }
+    await load();
+  }
+
   if (!brandId) return <p className="text-sm text-slate-500">브랜드를 먼저 선택해 주세요.</p>;
   if (error) return <p className="text-sm text-red-600">{error}</p>;
   if (!data) return <p className="text-sm text-slate-500">불러오는 중...</p>;
@@ -152,7 +178,8 @@ export function MeetingBoard({ identity }) {
       <div>
         <h1 className="text-lg font-semibold text-slate-900">주간회의</h1>
         <p className="mt-1 text-sm text-slate-500">
-          오래 멈춘 것부터 봅니다. 담당자와 예상일은 이 목록에서 바로 정할 수 있습니다.
+          오래 멈춘 것부터 봅니다. 담당자·예상일을 바로 정하고, 요건이 불명확하면 이 자리에서
+          물어볼 수 있습니다.
         </p>
       </div>
 
@@ -164,7 +191,7 @@ export function MeetingBoard({ identity }) {
         <Stat label="이번 주 신규" value={data.summary.incoming} tone="slate" />
         {/* 넷 중 하나는 좋은 소식이어야 한다. 나머지 셋이 전부 문제를 세는
             숫자라, 회의가 나쁜 소식으로만 시작하고 있었다. */}
-        <Stat label="이번 주 완료" value={data.summary.done} tone="emerald" />
+        <Stat label="확인할 완료" value={data.summary.done} tone="emerald" />
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -185,6 +212,24 @@ export function MeetingBoard({ identity }) {
         ))}
       </div>
 
+      {/* 확인할 완료가 여럿일 때. 회의에서 훑고 넘어가는 경우가 실제로
+          있으므로 한 번에 처리하는 길을 준다 — 다만 사람이 눌러야 한다. */}
+      {filter === 'done' && rows.length > 1 && (
+        <div className="flex items-center justify-between gap-3 rounded border border-emerald-200 bg-emerald-50 px-3 py-2">
+          <p className="text-xs text-emerald-900">
+            확인하면 이 목록에서 빠집니다. 확인 전에는 기간이 지나도 계속 남습니다.
+          </p>
+          <button
+            type="button"
+            disabled={reviewing}
+            onClick={() => markReviewed(rows.map((r) => r.id))}
+            className="shrink-0 rounded bg-emerald-600 px-2.5 py-1 text-xs text-white hover:bg-emerald-700 disabled:opacity-40"
+          >
+            {reviewing ? '처리 중...' : `${rows.length}건 전부 확인`}
+          </button>
+        </div>
+      )}
+
       {ended && (
         <p className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
           {ended.assigned === 0
@@ -199,8 +244,10 @@ export function MeetingBoard({ identity }) {
             {/* 완료 0건은 조건이 안 맞는 것이 아니라 그 주의 사실이다.
                 회의가 알아야 할 소식이므로 다르게 말한다. */}
             {filter === 'done'
-              ? '이번 주에 완료된 건이 없습니다.'
-              : '이 조건에 해당하는 건이 없습니다.'}
+              ? '확인할 완료 건이 없습니다.'
+              : filter === 'awaiting'
+                ? '요청자 답을 기다리는 건이 없습니다.'
+                : '이 조건에 해당하는 건이 없습니다.'}
           </li>
         )}
         {rows.map((item) => (
@@ -252,9 +299,19 @@ export function MeetingBoard({ identity }) {
                 바꾸면 PATCH .../assignee 가 통과해 버려 완료된 건의 담당자가
                 조용히 달라진다. */}
             {item.isDone ? (
-              <span className="shrink-0 text-xs text-slate-400">
-                {item.assignee?.name ?? '담당자 없음'}
-              </span>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="text-xs text-slate-400">
+                  {item.assignee?.name ?? '담당자 없음'}
+                </span>
+                <button
+                  type="button"
+                  disabled={reviewing}
+                  onClick={() => markReviewed([item.id])}
+                  className="rounded border border-emerald-200 px-2 py-1 text-xs text-emerald-700 hover:bg-emerald-50 disabled:opacity-40"
+                >
+                  확인함
+                </button>
+              </div>
             ) : (
               <div className="flex shrink-0 items-center gap-2">
                 {/* 회의에서 가장 자주 나오는 결론이 "이게 뭔 얘기인지 확인이
