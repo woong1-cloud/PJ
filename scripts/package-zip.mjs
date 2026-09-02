@@ -261,6 +261,13 @@ async function packSource() {
   }
 
   const { size } = await stat(zip);
+  // 압축이 끝나면 스테이징 폴더를 지운다.
+  //
+  // 안 지우면 배포할 때마다 압축 전 사본이 한 벌씩 남는다. 17번 배포하니
+  // dist 가 75MB 가 됐고 그중 66MB 가 이 폴더들이었다. ZIP 이 있으면 이
+  // 폴더로 할 수 있는 일이 없다 — 다음 실행이 어차피 새로 만든다.
+  await rm(stage, { recursive: true, force: true });
+
   console.log(`\n완료: dist/${path.basename(zip)} (${(size / 1024 / 1024).toFixed(1)} MB)`);
   console.log('플랫폼이 install + build 를 실행하는 배포용입니다.');
   console.log(
@@ -315,6 +322,9 @@ async function packBuilt() {
   await compress(stage, zip);
 
   const { size } = await stat(zip);
+  // 소스 모드와 같은 이유로 지운다. 위 packSource 의 주석 참고.
+  await rm(stage, { recursive: true, force: true });
+
   console.log(`\n완료: dist/${path.basename(zip)} (${(size / 1024 / 1024).toFixed(1)} MB)`);
   console.log('풀어서 `node server.js` 로 실행합니다. 자세한 건 ZIP 안의 배포안내.md.');
   console.log(BUILT_MODE_WARNING);
