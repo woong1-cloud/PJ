@@ -4,14 +4,21 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { AskDialog } from '@/components/AskDialog';
+import { RowDispositionMenu } from '@/components/RowDispositionMenu';
+import { agendaRule, isAgendaItem } from '@/lib/meetingAgenda';
 
-// 기본 보기가 '이번 회의 안건'이다. 예전 기본은 '오래 멈춘 순'이었는데,
-// 그건 정렬이지 집합이 아니다 — 확인 대기 건이 빠져야 안건이 된다.
+// 칩은 넷이다.
+//
+// 예전에는 다섯이었고 그중 '이번 회의 안건'이 사실은 미종결 전부였다.
+// 21건이 전부 안건이면 그건 안건이 아니라 목록이라, 이름이 약속하는 것과
+// 화면이 주는 것이 달랐다(lib/meetingAgenda.js).
+//
+// '담당 없는 것만'·'신규'는 칩에서 뺐다. 위 요약 카드를 누르면 그 집합으로
+// 좁혀지므로 같은 길이 두 벌이 될 이유가 없다.
 const FILTERS = [
-  { key: 'all', label: '이번 회의 안건' },
+  { key: 'agenda', label: '이번 회의 안건' },
+  { key: 'all', label: '진행 중 전체' },
   { key: 'awaiting', label: '확인 대기' },
-  { key: 'unassigned', label: '담당 없는 것만' },
-  { key: 'incoming', label: '이번 주 신규' },
   // '이번 주 완료'가 아니다. 기준이 시간이 아니라 확인 여부라서, 이름도
   // 그대로 말해야 한다 — 확인할 때까지 남는다.
   { key: 'done', label: '확인할 완료' },
@@ -24,7 +31,7 @@ const FILTERS = [
 export function MeetingBoard({ identity }) {
   const brandId = identity?.brandId ?? null;
   const [data, setData] = useState(null);
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState('agenda');
   const [people, setPeople] = useState([]);
   const [rowError, setRowError] = useState({});
   const [asking, setAsking] = useState(null);
@@ -153,6 +160,24 @@ export function MeetingBoard({ identity }) {
     await load();
   }
 
+  // 행에서 바로 보류·반려·취소. 목록 화면과 같은 라우트·같은 창을 쓴다.
+  //
+  // 처분한 건은 다음 load 에서 안건에서 빠진다 — 종결 상태가 되어 서버 조회에
+  // 안 걸린다. 그것이 곧 결과 표시다.
+  async function closeFromRow(requirement, status, reason) {
+    const res = await fetch(`/api/requirements/${requirement.id}/close`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brandId, status, reason }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      const d = await res?.json().catch(() => ({}));
+      return { ok: false, error: d?.error ?? '처리하지 못했습니다.' };
+    }
+    await load();
+    return { ok: true };
+  }
+
   if (!brandId) return <p className="text-sm text-slate-500">브랜드를 먼저 선택해 주세요.</p>;
   if (error) return <p className="text-sm text-red-600">{error}</p>;
   if (!data) return <p className="text-sm text-slate-500">불러오는 중...</p>;
@@ -168,6 +193,10 @@ export function MeetingBoard({ identity }) {
     // 지우면 물어본 사실이 화면에서 사라진다.
     if (filter === 'awaiting') return Boolean(item.awaiting);
     if (item.awaiting) return false;
+    // 안건은 손이 필요한 것만이다. 나머지는 '진행 중 전체'에 있다.
+    if (filter === 'agenda') return isAgendaItem({ item });
+    // 아래 셋은 요약 카드를 눌렀을 때다.
+    if (filter === 'stalled') return item.stalledDays >= stallDays;
     if (filter === 'unassigned') return !item.assignee;
     if (filter === 'incoming') return item.isNew;
     return true;
@@ -178,20 +207,55 @@ export function MeetingBoard({ identity }) {
       <div>
         <h1 className="text-lg font-semibold text-slate-900">주간회의</h1>
         <p className="mt-1 text-sm text-slate-500">
-          오래 멈춘 것부터 봅니다. 담당자·예상일을 바로 정하고, 요건이 불명확하면 이 자리에서
+          손이 필요한 것부터 봅니다. 담당자·예상일을 바로 정하고, 요건이 불명확하면 이 자리에서
           물어볼 수 있습니다.
         </p>
       </div>
 
       <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
-        <Stat label={`${stallDays}일+ 멈춤`} value={data.summary.stalled} tone="rose" />
-        <Stat label="담당 없음" value={data.summary.unassigned} tone="amber" />
+        {/* 카드가 곧 필터다. 예전에는 숫자만 보여주고 아무 일도 안 했는데,
+            "담당 없음 6"을 보고 그 여섯을 보려면 아래 칩에서 다시 골라야 했다.
+            다시 누르면 안건으로 돌아간다. */}
+        <Stat
+          label={`${stallDays}일+ 멈춤`}
+          value={data.summary.stalled}
+          tone="rose"
+          active={filter === 'stalled'}
+          onClick={() => setFilter(filter === 'stalled' ? 'agenda' : 'stalled')}
+        />
+        <Stat
+          label="담당 없음"
+          value={data.summary.unassigned}
+          tone="amber"
+          active={filter === 'unassigned'}
+          onClick={() => setFilter(filter === 'unassigned' ? 'agenda' : 'unassigned')}
+        />
         {/* 나머지와 성격이 다르다. 우리가 손댈 것이 아니라 저쪽이 답할 것이다. */}
-        <Stat label="확인 대기" value={data.summary.awaiting ?? 0} tone="sky" />
-        <Stat label="이번 주 신규" value={data.summary.incoming} tone="slate" />
-        {/* 넷 중 하나는 좋은 소식이어야 한다. 나머지 셋이 전부 문제를 세는
+        <Stat
+          label="확인 대기"
+          value={data.summary.awaiting ?? 0}
+          tone="sky"
+          active={filter === 'awaiting'}
+          onClick={() => setFilter(filter === 'awaiting' ? 'agenda' : 'awaiting')}
+        />
+        {/* '이번 주'가 아니라 최근 7일이다. 완료에서 고친 것과 같은 거짓말이
+            여기 남아 있었다. */}
+        <Stat
+          label="최근 7일 신규"
+          value={data.summary.incoming}
+          tone="slate"
+          active={filter === 'incoming'}
+          onClick={() => setFilter(filter === 'incoming' ? 'agenda' : 'incoming')}
+        />
+        {/* 다섯 중 하나는 좋은 소식이어야 한다. 나머지가 전부 문제를 세는
             숫자라, 회의가 나쁜 소식으로만 시작하고 있었다. */}
-        <Stat label="확인할 완료" value={data.summary.done} tone="emerald" />
+        <Stat
+          label="확인할 완료"
+          value={data.summary.done}
+          tone="emerald"
+          active={filter === 'done'}
+          onClick={() => setFilter(filter === 'done' ? 'agenda' : 'done')}
+        />
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -211,6 +275,20 @@ export function MeetingBoard({ identity }) {
           </button>
         ))}
       </div>
+
+      {/* 칩 이름만으로는 무엇이 들어오는지 알 수 없다. 기준을 화면에 쓴다 —
+          '안건'이라는 말이 무엇을 가리키는지 짐작하게 두면 안 된다. */}
+      <p className="-mt-2 text-xs text-slate-400">
+        {filter === 'agenda'
+          ? `${agendaRule(stallDays)}. 잘 굴러가는 건은 '진행 중 전체'에 있습니다.`
+          : filter === 'all'
+            ? '종결되지 않은 건 전부입니다. 확인 대기는 빠집니다.'
+            : filter === 'awaiting'
+              ? '요청자에게 묻고 답을 기다리는 건입니다. 답이 오면 안건으로 돌아옵니다.'
+              : filter === 'done'
+                ? '확인하면 이 목록에서 빠집니다. 확인 전에는 기간이 지나도 계속 남습니다.'
+                : '요약 카드로 좁힌 화면입니다. 카드를 다시 누르면 안건으로 돌아갑니다.'}
+      </p>
 
       {/* 확인할 완료가 여럿일 때. 회의에서 훑고 넘어가는 경우가 실제로
           있으므로 한 번에 처리하는 길을 준다 — 다만 사람이 눌러야 한다. */}
@@ -247,7 +325,9 @@ export function MeetingBoard({ identity }) {
               ? '확인할 완료 건이 없습니다.'
               : filter === 'awaiting'
                 ? '요청자 답을 기다리는 건이 없습니다.'
-                : '이 조건에 해당하는 건이 없습니다.'}
+                : filter === 'agenda'
+                  ? '이번 회의에서 손볼 건이 없습니다. 잘 굴러가고 있습니다.'
+                  : '이 조건에 해당하는 건이 없습니다.'}
           </li>
         )}
         {rows.map((item) => (
@@ -364,6 +444,19 @@ export function MeetingBoard({ identity }) {
                   }}
                   className="h-8 rounded border border-slate-200 px-2 text-xs"
                 />
+                {/* 회의에서 "이건 지금 못 한다"가 나오면 그 자리에서 끝나야
+                    한다. 코드 주석은 "상세로 들어가지 않는다"고 약속해 놓고
+                    보류·반려만 상세로 보내고 있었다. 목록 행과 같은 것을 쓴다. */}
+                <RowDispositionMenu
+                  requirement={{
+                    id: item.id,
+                    title: item.title,
+                    status: item.status,
+                    requester: item.requester,
+                  }}
+                  identity={identity}
+                  onClose={closeFromRow}
+                />
               </div>
             )}
           </li>
@@ -396,7 +489,7 @@ export function MeetingBoard({ identity }) {
   );
 }
 
-function Stat({ label, value, tone }) {
+function Stat({ label, value, tone, active, onClick }) {
   const tones = {
     rose: 'bg-rose-50 text-rose-700',
     amber: 'bg-amber-50 text-amber-800',
@@ -405,9 +498,16 @@ function Stat({ label, value, tone }) {
     emerald: 'bg-emerald-50 text-emerald-700',
   };
   return (
-    <div className={`rounded px-3 py-2 ${tones[tone]}`}>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={Boolean(active)}
+      className={`rounded px-3 py-2 text-left hover:brightness-95 ${tones[tone]} ${
+        active ? 'ring-2 ring-slate-900/25' : ''
+      }`}
+    >
       <div className="text-xs opacity-80">{label}</div>
       <div className="text-xl font-semibold">{value}</div>
-    </div>
+    </button>
   );
 }
