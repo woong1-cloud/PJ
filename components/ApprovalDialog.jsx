@@ -20,6 +20,14 @@ const MAX_REASON = 500;
 // "누가 눌렀다"만 남고 "무엇을 확인했다"가 안 남는다. 마찰이 있는 것은 이
 // 단계의 성질이지 결함이 아니다.
 //
+// 그런데 필수로 받는 것만으로는 모자랐다 — 운영 12건 중 4건의 확인 내용이
+// '.' 한 글자다. 창이 "확인 내용"이라고만 하고 그 문장이 어디로 가는지를
+// 안 말해서, 아무도 안 볼 칸이라고 생각하면 형식만 채운다.
+//
+// 그래서 라벨과 안내를 독자 중심으로 바꿨다. "주간회의에서 다시 확인합니다"
+// 같은 안심시키는 말은 넣지 않는다 — 안 챙기는 사람은 그 줄도 안 읽는다.
+// 누가 읽는지를 말하는 것과 안심시키는 것은 다르다.
+//
 // props:
 //   requirement — { id, title, status }
 //   brandId     — 요청에 실을 브랜드(요구사항 자신의 브랜드)
@@ -88,7 +96,7 @@ export function ApprovalDialog({ open, onOpenChange, requirement, brandId, onApp
 
           <div className="flex flex-col gap-1">
             <label htmlFor="approval-reason" className="text-slate-600">
-              무엇을 확인하셨나요?
+              무엇을 확인했나요
             </label>
             <textarea
               id="approval-reason"
@@ -96,12 +104,14 @@ export function ApprovalDialog({ open, onOpenChange, requirement, brandId, onApp
               onChange={(e) => setReason(e.target.value)}
               rows={3}
               maxLength={MAX_REASON}
-              placeholder="예: 요청한 데이터 파이프라인이 설계대로 동작하는 것을 확인했습니다."
+              placeholder="예: 배포 후 상품 상세에서 정렬 순서 확인. 모바일도 같음."
               className="rounded-lg border border-slate-300 px-3 py-2 text-sm placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none"
               required
             />
+            {/* 독자를 말한다. 이 문장이 어디로 가는지 알면 형식만 채우기가
+                어려워진다 — '.' 을 적고 요청자에게 보낼 수는 없다. */}
             <p className="text-xs text-slate-400">
-              나중에 요구사항을 정리할 때 이 기록이 재료가 됩니다.
+              이 문장은 요청자에게 그대로 가고, 주간회의에서 함께 읽습니다.
             </p>
           </div>
 

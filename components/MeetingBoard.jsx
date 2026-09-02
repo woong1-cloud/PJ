@@ -296,6 +296,13 @@ export function MeetingBoard({ identity }) {
         <div className="flex items-center justify-between gap-3 rounded border border-emerald-200 bg-emerald-50 px-3 py-2">
           <p className="text-xs text-emerald-900">
             확인하면 이 목록에서 빠집니다. 확인 전에는 기간이 지나도 계속 남습니다.
+            {/* 몇 건이 확인 내용 없이 완료됐는지 머리에서 먼저 말한다.
+                회의에서 어디를 물어야 하는지가 목록을 훑기 전에 보인다. */}
+            {rows.filter((r) => !r.closure).length > 0 && (
+              <span className="ml-1 font-medium text-amber-800">
+                확인 내용 없음 {rows.filter((r) => !r.closure).length}건.
+              </span>
+            )}
           </p>
           <button
             type="button"
@@ -366,10 +373,20 @@ export function MeetingBoard({ identity }) {
                 <span className="text-slate-500">
                   {item.status} · {item.requester?.name ?? '요청자 없음'} 요청
                 </span>
-                {/* 승인 확인 내용. 회의에서 "그래서 뭘 확인했나"가 바로 보인다. */}
-                {item.isDone && item.closure && (
-                  <span className="truncate text-slate-400">· {item.closure.reason}</span>
-                )}
+                {/* 승인 확인 내용. 회의에서 "그래서 뭘 확인했나"가 바로 보인다.
+                    없으면 없다고 말한다 — closureReason 이 두 글자 미만을
+                    걸러내므로 '.' 한 글자는 여기 null 로 온다.
+                    운영 12건 중 4건이 그렇다. 점 하나를 그냥 붙여 놓으면
+                    훑을 때 안 보이고, 그러면 회의에서 물을 일도 없다.
+                    막지 않고 드러낸다 — 최소 글자수를 강제하면 '..' 을 친다. */}
+                {item.isDone &&
+                  (item.closure ? (
+                    <span className="truncate text-slate-400">· {item.closure.reason}</span>
+                  ) : (
+                    <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-700">
+                      확인 내용 없음
+                    </span>
+                  ))}
               </div>
               {rowError[item.id] && (
                 <p className="mt-1 text-xs text-red-600">{rowError[item.id]}</p>
