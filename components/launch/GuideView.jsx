@@ -9,8 +9,8 @@ import { useMemo, useState } from 'react';
 // 이 화면은 훑는 목록이 아니라 찾아 들어가는 문서다. 403건이라 검색이
 // 없으면 못 쓴다.
 //
-// props: guide, items, roles
-export function GuideView({ guide, items = [], roles = [] }) {
+// props: guide, items, roles, onDeleted
+export function GuideView({ guide, items = [], roles = [], onDeleted }) {
   const [query, setQuery] = useState('');
   const [closed, setClosed] = useState(() => new Set());
   const [showRoles, setShowRoles] = useState(false);
@@ -46,6 +46,24 @@ export function GuideView({ guide, items = [], roles = [] }) {
   }
 
   const criticalCount = items.filter((i) => i.is_critical).length;
+
+  // 지우는 일은 드물지만, 손으로 넣어 보다 잘못 넣은 것을 치울 길은 있어야
+  // 한다. 이미 복제된 런칭 항목은 안 지워진다 — 연결만 끊긴다.
+  async function remove(item) {
+    const ok = window.confirm(
+      [`${item.code} ${item.title}`, '', '가이드에서 지웁니다. 되돌릴 수 없습니다.'].join('\n'),
+    );
+    if (!ok) return;
+    const res = await fetch(`/api/launch/guides/${guide.id}/items/${item.id}`, {
+      method: 'DELETE',
+    }).catch(() => null);
+    if (!res?.ok) {
+      const d = await res?.json().catch(() => ({}));
+      window.alert(d?.error ?? '지우지 못했습니다.');
+      return;
+    }
+    onDeleted?.();
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -109,7 +127,7 @@ export function GuideView({ guide, items = [], roles = [] }) {
       {groups.length === 0 && (
         <p className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-400">
           {items.length === 0
-            ? '아직 항목이 없습니다. 엑셀에서 가져오세요.'
+            ? '아직 항목이 없습니다. ＋ 항목으로 하나씩 넣거나, 정리된 엑셀을 통째로 가져오세요.'
             : '찾는 항목이 없습니다.'}
         </p>
       )}
@@ -133,7 +151,8 @@ export function GuideView({ guide, items = [], roles = [] }) {
             {open && (
               <ul className="divide-y divide-slate-100 border-t border-slate-100">
                 {list.map((item) => (
-                  <li key={item.id} className="px-4 py-3">
+                  <li key={item.id} className="group flex gap-2 px-4 py-3">
+                    <div className="min-w-0 flex-1">
                     <p className="flex flex-wrap items-baseline gap-1.5 text-sm text-slate-900">
                       {item.is_critical && (
                         <span className="rounded bg-amber-50 px-1.5 text-[11px] font-medium text-amber-700">
@@ -169,6 +188,17 @@ export function GuideView({ guide, items = [], roles = [] }) {
                         <span className="tabular-nums">· 선행 {item.depends_on.join(', ')}</span>
                       )}
                     </div>
+                    </div>
+                    {onDeleted && (
+                      <button
+                        type="button"
+                        onClick={() => remove(item)}
+                        aria-label={`${item.code} 지우기`}
+                        className="hidden h-6 shrink-0 rounded px-2 text-xs text-slate-400 hover:bg-rose-50 hover:text-rose-600 group-hover:block"
+                      >
+                        지우기
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>

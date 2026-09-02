@@ -5,6 +5,7 @@ import { useIdentity } from '@/components/IdentityProvider';
 import { isGlobalAdmin } from '@/lib/tiers';
 import { GuideView } from '@/components/launch/GuideView';
 import { ImportDialog } from '@/components/launch/ImportDialog';
+import { GuideItemDialog } from '@/components/launch/GuideItemDialog';
 import { Button } from '@/components/ui/button';
 
 // 런칭 가이드 화면.
@@ -23,6 +24,7 @@ export default function LaunchGuidePage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [importOpen, setImportOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   const [done, setDone] = useState(null);
   // 가져오기 뒤에 다시 부르는 손잡이. useQuickFilterCounts 와 같은 방식이다 —
   // effect 밖의 useCallback 을 effect 에서 부르면 그 안의 setState 가 동기
@@ -99,13 +101,19 @@ export default function LaunchGuidePage() {
             브랜드와 무관한 지식입니다. 런칭이 끝날 때마다 자랍니다.
           </p>
         </div>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <Button type="button" variant="outline" onClick={() => setImportOpen(true)}>
+            엑셀에서 가져오기
+          </Button>
+          {/* 주 버튼이 '＋ 항목'이다. 가져오기는 한 번 하고 마는 일이지만
+              항목을 더하는 것은 계속 일어난다 — 런칭 중에 빠진 것을 발견하면
+              그 자리에서 넣는다. */}
           <Button
             type="button"
-            onClick={() => setImportOpen(true)}
+            onClick={() => setAddOpen(true)}
             className="bg-indigo-600 hover:bg-indigo-700"
           >
-            엑셀에서 항목 가져오기
+            ＋ 항목
           </Button>
         </div>
       </div>
@@ -120,7 +128,27 @@ export default function LaunchGuidePage() {
       )}
       {loading && <p className="text-sm text-slate-500">불러오는 중...</p>}
 
-      {!loading && <GuideView guide={guide} items={items} roles={roles} />}
+      {!loading && (
+        <GuideView
+          guide={guide}
+          items={items}
+          roles={roles}
+          onDeleted={() => setReloadToken((t) => t + 1)}
+        />
+      )}
+
+      <GuideItemDialog
+        open={addOpen}
+        guideId={guide?.id}
+        workstreams={[...new Set(items.map((i) => i.workstream))].sort()}
+        roles={roles}
+        existingCodes={items.map((i) => i.code)}
+        onClose={() => setAddOpen(false)}
+        onCreated={() => {
+          setDone(null);
+          setReloadToken((t) => t + 1);
+        }}
+      />
 
       <ImportDialog
         open={importOpen}
