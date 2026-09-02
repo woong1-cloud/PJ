@@ -110,6 +110,14 @@ export function TopBar() {
           <NavLink href="/projects" active={pathname.startsWith('/projects')}>
             프로젝트
           </NavLink>
+          {/* 브랜드 런칭. 403건짜리 새 개념이라 (beta) 를 붙여 무게를 낮춘다 —
+              요구사항·주간회의와 같은 무게로 보이면 안 된다.
+              1단계에서는 가이드와 가져오기뿐이라 전체 관리자에게만 보인다. */}
+          {globalAdmin && (
+            <NavLink href="/launch" active={pathname.startsWith('/launch')}>
+              런칭 <span className="text-[10px] text-slate-400">beta</span>
+            </NavLink>
+          )}
           {globalAdmin && (
             <NavLink href="/admin/dashboard" active={pathname.startsWith('/admin/dashboard')}>
               대시보드
@@ -194,6 +202,11 @@ export function TopBar() {
                 >
                   프로젝트
                 </MenuLink>
+                {globalAdmin && (
+                  <MenuLink href="/launch" onClick={closeMenu} active={pathname.startsWith('/launch')}>
+                    런칭 (beta)
+                  </MenuLink>
+                )}
                 {globalAdmin && (
                   <MenuLink
                     href="/admin/dashboard"
