@@ -140,6 +140,26 @@ export async function POST(request, { params }) {
       if (error) throw error;
     }
 
+    // 양식이 "이건 안 함"이라고 표시한 것. 이미 있는 항목이라 계획 열만
+    // 덮으면 그 표시가 통째로 무시된다 — 브랜드가 양식을 채우는 흐름이
+    // 바로 이것이라, 여기가 빠지면 양식을 만든 의미가 없다.
+    //
+    // 사유는 양식의 비고에서 온다. 사람이 쓴 문장이라 '양식에서 빠짐' 과
+    // 구분되고, 그래서 다음 가져오기가 되살리지 않는다.
+    for (const m of plan.markNa) {
+      const { error } = await supabase
+        .from('launch_tasks')
+        .update({
+          status: NA_STATUS,
+          excluded_reason: m.excluded_reason || '양식에서 제외 표시됨',
+          excluded_at: now,
+          excluded_by: memberId,
+          updated_at: now,
+        })
+        .eq('id', m.id);
+      if (error) throw error;
+    }
+
     for (const r of plan.restore) {
       const { error } = await supabase
         .from('launch_tasks')
@@ -172,7 +192,12 @@ export async function POST(request, { params }) {
       created: plan.create.length,
       updated: plan.update.length,
       excluded: plan.exclude,
+      markedNa: plan.markNa.length,
       restored: plan.restore.length,
+      // 양식은 해당없음이라는데 사람이 이미 붙어 있는 것. 자동으로 안 바꾸고
+      // 알리기만 한다 — 양식이 늦게 반영된 것일 수 있고, 진행 중인 일을
+      // 파일이 지우면 안 된다. 사람이 보고 정한다.
+      busy: plan.busy,
       untouched: plan.untouched,
     });
   } catch (error) {
