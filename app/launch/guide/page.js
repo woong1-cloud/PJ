@@ -152,7 +152,7 @@ export default function LaunchGuidePage() {
 
       <ImportDialog
         open={importOpen}
-        guideId={guide?.id}
+        target={{ kind: 'guide', id: guide?.id }}
         onClose={() => setImportOpen(false)}
         onDone={(body) => {
           setDone(body);

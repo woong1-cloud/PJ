@@ -12,8 +12,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { parseWorkbook } from '@/lib/launchImport';
 import { parseRoles } from '@/lib/launchRoles';
+import { parseContext } from '@/lib/launchContext';
 
-// 체크리스트 엑셀을 가이드로 가져온다.
+// 체크리스트 엑셀을 가져온다 — 가이드로도, 런칭으로도.
 //
 // 파일을 서버에 올리지 않는다. 브라우저에서 읽어 JSON 만 보내므로 저장소도
 // 업로드 배관도 필요 없다. 대신 서버가 같은 함수로 다시 검증한다 — 화면이
@@ -23,7 +24,10 @@ import { parseRoles } from '@/lib/launchRoles';
 // 때문에 무거워지면 안 된다.
 //
 // 403건이 확인 없이 그냥 들어가면 무섭다. 읽은 것을 먼저 보여주고 사람이 누른다.
-export function ImportDialog({ open, guideId, onClose, onDone }) {
+//
+// target 은 { kind: 'guide' | 'launch', id } 다. 가이드는 브랜드와 무관한
+// 지식이고 런칭은 이 브랜드의 실행이라, 같은 파일이 양쪽으로 간다.
+export function ImportDialog({ open, target, onClose, onDone }) {
   const [file, setFile] = useState(null);
   const [reading, setReading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -64,12 +68,21 @@ export function ImportDialog({ open, guideId, onClose, onDone }) {
       const roleSheet = sheets.find((s) => /^24_/.test(s.name));
       const roles = parseRoles(roleSheet?.rows ?? []);
 
+      // 전제 7줄. 00_개요 에 있고, 항목 시트가 아니라 건너뛴 시트에서 온다 —
+      // 시트 이름을 가정하지 않고 [제반사항] 을 가진 시트를 찾는다.
+      const overview = sheets.find((s) =>
+        (s.rows ?? []).some((r) =>
+          (r ?? []).some((c) => String(c ?? '').trim().startsWith('[제반사항]')),
+        ),
+      );
+      const context = parseContext(overview?.rows ?? []);
+
       if (parsed.items.length === 0) {
         setError(
-          '읽을 항목이 없습니다. 워크스트림 시트(01~18)와 머리 행(ID · 체크 항목 · D-day)이 있는지 확인해 주세요.',
+          '읽을 항목이 없습니다. ID · 체크 항목 · D-day 세 열이 있는 머리 행을 가진 시트가 필요합니다.',
         );
       }
-      setPreview({ ...parsed, roles, sheetCount: sheets.length });
+      setPreview({ ...parsed, roles, context, sheetCount: sheets.length });
     } catch (err) {
       setError(`파일을 읽지 못했습니다. ${err?.message ?? ''}`);
     } finally {
@@ -78,15 +91,23 @@ export function ImportDialog({ open, guideId, onClose, onDone }) {
   }
 
   async function submit() {
-    if (!preview?.items?.length) return;
+    if (!preview?.items?.length || !target?.id) return;
     setSaving(true);
     setError('');
-    const res = await fetch(`/api/launch/guides/${guideId}/import`, {
+    const url =
+      target.kind === 'launch'
+        ? `/api/launch/${target.id}/import`
+        : `/api/launch/guides/${target.id}/import`;
+
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         items: preview.items,
-        roles: preview.roles,
+        // 역할 사전은 가이드에만 있다. 런칭에 보내도 쓰이지 않는다.
+        roles: target.kind === 'guide' ? preview.roles : undefined,
+        // 전제는 런칭에만 있다. 가이드는 브랜드가 없어서 전제도 없다.
+        context: target.kind === 'launch' ? preview.context : undefined,
         sourceVersion: file?.name ?? null,
       }),
     }).catch(() => null);
@@ -147,8 +168,14 @@ export function ImportDialog({ open, guideId, onClose, onDone }) {
               <p className="text-xs text-slate-500">
                 ★ {preview.items.filter((i) => i.is_critical).length} · 선행조건{' '}
                 {preview.items.filter((i) => i.depends_on?.length).length} · 산출물{' '}
-                {preview.items.filter((i) => i.deliverable).length}
+                {preview.items.filter((i) => i.deliverable).length} · 해당없음{' '}
+                {preview.items.filter((i) => i.not_applicable).length}
               </p>
+              {preview.context?.length > 0 && (
+                <p className="text-xs text-slate-500">
+                  전제 {preview.context.length}줄을 함께 가져옵니다.
+                </p>
+              )}
               {preview.duplicates > 0 && (
                 <p className="text-xs text-amber-700">
                   같은 코드가 {preview.duplicates}건 겹쳐 뒤엣것을 씁니다.
