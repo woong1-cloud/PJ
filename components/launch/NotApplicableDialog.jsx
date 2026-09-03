@@ -20,8 +20,8 @@ const QUICK = [
   '신규 법인이 아니라 불필요',
 ];
 
-// props: open, title, onClose, onSubmit(reason)
-export function NotApplicableDialog({ open, title, onClose, onSubmit }) {
+// props: open, count, title, onClose, onSubmit(reason)
+export function NotApplicableDialog({ open, count = 1, title, onClose, onSubmit }) {
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -52,7 +52,9 @@ export function NotApplicableDialog({ open, title, onClose, onSubmit }) {
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>해당없음으로 두기</DialogTitle>
-          <DialogDescription>{title}</DialogDescription>
+          <DialogDescription>
+            {count > 1 ? `${count}건을 한 번에 처리합니다. 사유는 모두 같게 들어갑니다.` : title}
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={submit} className="flex flex-col gap-2">
@@ -87,7 +89,7 @@ export function NotApplicableDialog({ open, title, onClose, onSubmit }) {
               그만두기
             </Button>
             <Button type="submit" disabled={saving} className="bg-indigo-600 hover:bg-indigo-700">
-              {saving ? '저장 중...' : '해당없음으로'}
+              {saving ? '저장 중...' : count > 1 ? `${count}건 해당없음으로` : '해당없음으로'}
             </Button>
           </DialogFooter>
         </form>

@@ -39,7 +39,13 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged, onReload }) 
   // 줄이 사라지는데, 잘못 눌렀을 때 되돌릴 자리가 없어진다. 새로고침 전까지는
   // 남겨 둔다 — 숫자(위 칩)는 진짜 상태 그대로다.
   const [touched, setTouched] = useState(() => new Set());
-  // 해당없음 사유 창을 띄운 항목. 한 번에 하나만 연다.
+  // 체크박스로 고른 항목. 18건을 한 번에 해당없음으로 보내려고 있다.
+  const [picked, setPicked] = useState(() => new Set());
+  // 다중 처리(해당없음/되돌리기) 중임을 표시. task.id 를 담는 busy 와
+  // 섞으면 우연히 id 가 'bulk' 인 항목과 부딪힐 수 있어 따로 둔다.
+  const [bulkBusy, setBulkBusy] = useState(false);
+  // 해당없음 사유 창을 띄운 항목. 단건·다중 모두 { ids, title } 모양으로
+  // 통일한다 — 다이얼로그 하나가 양쪽을 다 받게 하려고.
   const [naFor, setNaFor] = useState(null);
   // ⋯ 메뉴가 열린 항목. 마찬가지로 한 번에 하나만 연다.
   const [menuFor, setMenuFor] = useState(null);
@@ -163,6 +169,53 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged, onReload }) 
     await patchTask(task, { status: TODO_STATUS });
   }
 
+  // 여러 줄을 한 번에. 한 줄씩 갈아 끼울 수 없어서 목록을 다시 받는다.
+  async function bulkAction(ids, action, reason) {
+    setBulkBusy(true);
+    const res = await fetch(`/api/launch/${launch.id}/tasks/bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskIds: ids, action, ...(reason ? { reason } : {}) }),
+    }).catch(() => null);
+    setBulkBusy(false);
+
+    if (!res?.ok) {
+      const d = await res?.json().catch(() => ({}));
+      setError(d?.error ?? '바꾸지 못했습니다.');
+      return;
+    }
+    setError('');
+    setPicked(new Set());
+    onReload?.();
+  }
+
+  async function bulkRestore() {
+    await bulkAction([...picked], 'restore');
+  }
+
+  // 한 줄 고르기/놓기.
+  function togglePick(id) {
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  // 워크스트림 전체 고르기. 이미 다 골랐으면 전부 놓고, 아니면 전부 담는다 —
+  // '지금 보이는 줄' 기준이라 접힌 그룹이나 다른 보기의 줄은 안 건드린다.
+  function toggleGroupPick(list) {
+    setPicked((prev) => {
+      const next = new Set(prev);
+      const ids = list.map((t) => t.id);
+      const allIn = ids.every((id) => next.has(id));
+      if (allIn) ids.forEach((id) => next.delete(id));
+      else ids.forEach((id) => next.add(id));
+      return next;
+    });
+  }
+
   async function remove(task) {
     const ok = window.confirm(
       [`${task.code} ${task.title}`, '', '지웁니다. 상태와 사유가 함께 사라집니다.',
@@ -191,6 +244,8 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged, onReload }) 
               // 보기를 옮기면 남겨 두던 것을 놓는다. 안 그러면 '이번 주'에서
               // 완료한 줄이 '막힘' 목록에 따라 들어온다.
               setTouched(new Set());
+              // 안 보이는 줄이 고른 채로 남으면 "N건 골랐습니다"가 거짓말이 된다.
+              setPicked(new Set());
             }}
             className={`rounded-full border px-3 py-1.5 text-sm ${
               view === v.key
@@ -205,11 +260,46 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged, onReload }) 
         <input
           type="search"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setPicked(new Set());
+          }}
           placeholder="항목·역할로 찾기"
           className="ml-auto h-9 w-56 rounded-lg border border-slate-300 px-3 text-sm focus:border-indigo-400 focus:outline-none"
         />
       </div>
+
+      {picked.size > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5">
+          <span className="text-sm text-indigo-800">{picked.size}건 골랐습니다</span>
+          {view === 'na' ? (
+            <button
+              type="button"
+              disabled={bulkBusy}
+              onClick={() => bulkRestore()}
+              className="rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-xs text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+            >
+              다시 해당으로
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={bulkBusy}
+              onClick={() => setNaFor({ ids: [...picked], title: '' })}
+              className="rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-xs text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+            >
+              해당없음으로
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setPicked(new Set())}
+            className="ml-auto text-xs text-slate-500 hover:text-slate-700"
+          >
+            선택 해제
+          </button>
+        </div>
+      )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
@@ -226,29 +316,45 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged, onReload }) 
       {groups.map(([ws, list]) => {
         const closed = closedGroups.has(ws);
         const wsStat = progress({ tasks: list, openDate, today });
+        // 이 워크스트림의 '지금 보이는' 줄 기준. 앱 18건처럼 워크스트림
+        // 하나에 몰린 항목을 18번 클릭 대신 1번으로 고르게 하려고 있다.
+        const groupIds = list.map((t) => t.id);
+        const allChecked = groupIds.length > 0 && groupIds.every((id) => picked.has(id));
+        const someChecked = groupIds.some((id) => picked.has(id));
         return (
           <section key={ws} className="rounded-xl border border-slate-200 bg-white">
-            <button
-              type="button"
-              onClick={() => toggleGroup(ws)}
-              className="flex w-full items-center gap-2 px-4 py-2.5 text-left"
-            >
-              <span className="text-xs text-slate-400">{closed ? '▸' : '▾'}</span>
-              <span className="font-medium text-slate-800">{ws}</span>
-              <span className="text-xs tabular-nums text-slate-400">
-                {wsStat.done}/{wsStat.total}
-              </span>
-              {wsStat.late > 0 && (
-                <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[11px] text-rose-700">
-                  지남 {wsStat.late}
+            <div className="flex w-full items-center gap-2 px-4 py-2.5">
+              {/* 접기 단추 안에 넣으면 클릭이 접기/펴기와 싸운다 — 밖에 둔다. */}
+              <input
+                type="checkbox"
+                ref={(el) => { if (el) el.indeterminate = someChecked && !allChecked; }}
+                checked={allChecked}
+                onChange={() => toggleGroupPick(list)}
+                aria-label={`${ws} 전체 고르기`}
+                className="h-3.5 w-3.5 shrink-0 accent-indigo-600"
+              />
+              <button
+                type="button"
+                onClick={() => toggleGroup(ws)}
+                className="flex flex-1 items-center gap-2 text-left"
+              >
+                <span className="text-xs text-slate-400">{closed ? '▸' : '▾'}</span>
+                <span className="font-medium text-slate-800">{ws}</span>
+                <span className="text-xs tabular-nums text-slate-400">
+                  {wsStat.done}/{wsStat.total}
                 </span>
-              )}
-              {wsStat.blocked > 0 && (
-                <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700">
-                  막힘 {wsStat.blocked}
-                </span>
-              )}
-            </button>
+                {wsStat.late > 0 && (
+                  <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[11px] text-rose-700">
+                    지남 {wsStat.late}
+                  </span>
+                )}
+                {wsStat.blocked > 0 && (
+                  <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700">
+                    막힘 {wsStat.blocked}
+                  </span>
+                )}
+              </button>
+            </div>
 
             {!closed && (
               <ul className="divide-y divide-slate-100 border-t border-slate-100">
@@ -260,12 +366,14 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged, onReload }) 
                     openDate={openDate}
                     today={today}
                     busy={busy === task.id}
+                    checked={picked.has(task.id)}
+                    onCheck={togglePick}
                     onStatus={(status) => setStatus(task, status)}
                     menuOpen={menuFor === task.id}
                     onToggleMenu={() => setMenuFor((prev) => (prev === task.id ? null : task.id))}
                     onAskNa={() => {
                       setMenuFor(null);
-                      setNaFor(task);
+                      setNaFor({ ids: [task.id], title: `${task.code} ${task.title}` });
                     }}
                     onRestore={() => {
                       setMenuFor(null);
@@ -285,9 +393,20 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged, onReload }) 
 
       <NotApplicableDialog
         open={Boolean(naFor)}
-        title={naFor ? `${naFor.code} ${naFor.title}` : ''}
+        count={naFor?.ids.length ?? 1}
+        title={naFor?.title ?? ''}
         onClose={() => setNaFor(null)}
-        onSubmit={(reason) => markNotApplicable(naFor, reason)}
+        onSubmit={(reason) => {
+          if (!naFor) return undefined;
+          // 단건은 PATCH 로 남긴다 — onChanged 로 그 줄만 바뀌어서 화면이
+          // 안 튄다. 다중은 bulk 라우트를 쓰고 onReload 로 전체를 다시
+          // 받는다. 회의 중에 스크롤이 튀면 보던 자리를 잃는다.
+          if (naFor.ids.length === 1) {
+            const task = tasks.find((t) => t.id === naFor.ids[0]);
+            return task ? markNotApplicable(task, reason) : undefined;
+          }
+          return bulkAction(naFor.ids, 'not_applicable', reason);
+        }}
       />
     </div>
   );
@@ -303,7 +422,7 @@ const TONE_BAR = {
 };
 
 function TaskRow({
-  task, tasks, openDate, today, busy, onStatus, menuOpen, onToggleMenu, onAskNa, onRestore, onDelete,
+  task, tasks, openDate, today, busy, checked, onCheck, onStatus, menuOpen, onToggleMenu, onAskNa, onRestore, onDelete,
 }) {
   const tone = taskTone({ task, openDate, today, tasks });
   const due = dueDate(openDate, task.day_offset);
@@ -314,6 +433,14 @@ function TaskRow({
 
   return (
     <li className="relative flex flex-wrap items-start gap-x-3 gap-y-1.5 px-4 py-2.5">
+      {/* 고르는 일이 읽는 일보다 먼저 눈에 닿아야 해서 색 점 앞에 둔다. */}
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={() => onCheck(task.id)}
+        aria-label={`${task.code} 고르기`}
+        className="mt-1 h-3.5 w-3.5 shrink-0 accent-indigo-600"
+      />
       <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${TONE_BAR[tone]}`} aria-hidden />
 
       <div className="min-w-0 flex-1">
