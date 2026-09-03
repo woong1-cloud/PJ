@@ -1,10 +1,10 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { requireGlobalAdmin } from '@/lib/permissions';
 import { errorResponse, ApiError } from '@/lib/apiError';
-import { LAUNCH_STATUSES, DONE_STATUS, BLOCKED_STATUS } from '@/lib/launchTask';
+import { LAUNCH_STATUSES, DONE_STATUS, BLOCKED_STATUS, NA_STATUS } from '@/lib/launchTask';
 
 const TASK_SELECT =
-  'id, code, workstream, category, title, channel, decision_org, owner_org, owner_role, support_role, depends_on, day_offset, deliverable, note, is_critical, sort_order, status, blocked_reason, done_at, assignee:team_members!launch_tasks_assignee_fkey(id, name)';
+  'id, code, workstream, category, title, channel, decision_org, owner_org, owner_role, support_role, depends_on, day_offset, deliverable, note, is_critical, sort_order, status, blocked_reason, done_at, excluded_reason, source, assignee:team_members!launch_tasks_assignee_fkey(id, name)';
 
 // 항목 하나를 고친다 — 보드에서 상태를 누르는 것이 대부분이다.
 //
@@ -15,13 +15,30 @@ const TASK_SELECT =
 //    그대로 붙어 나온다.
 export async function PATCH(request, { params }) {
   try {
-    await requireGlobalAdmin();
+    const { memberId } = await requireGlobalAdmin();
     const { id, taskId } = await params;
     const body = await request.json();
     const patch = {};
 
     if (body.status !== undefined) {
       if (!LAUNCH_STATUSES.includes(body.status)) throw new ApiError(400, '알 수 없는 상태입니다.');
+
+      // 해당없음은 사유가 필수다. 사유 없는 해당없음은 6개월 뒤 아무 말도
+      // 못 한다 — 다음 브랜드가 "HOKA는 왜 앱을 뺐지"에 답해야 한다.
+      if (body.status === NA_STATUS) {
+        const reason = String(body.excludedReason ?? '').trim();
+        if (!reason) throw new ApiError(400, '해당없음 사유를 적어 주세요.');
+        patch.excluded_reason = reason;
+        patch.excluded_at = new Date().toISOString();
+        patch.excluded_by = memberId;
+      } else {
+        // 되돌아오면 사유도 지운다. 남겨 두면 다음에 뺄 때 지난 사유가
+        // 그대로 붙어 나온다.
+        patch.excluded_reason = null;
+        patch.excluded_at = null;
+        patch.excluded_by = null;
+      }
+
       patch.status = body.status;
       patch.done_at = body.status === DONE_STATUS ? new Date().toISOString() : null;
       if (body.status !== BLOCKED_STATUS) patch.blocked_reason = null;
@@ -51,6 +68,30 @@ export async function PATCH(request, { params }) {
     if (!data) throw new ApiError(404, '항목을 찾을 수 없습니다.');
 
     return Response.json({ task: data });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
+
+// 항목을 지운다.
+//
+// 해당없음과 다른 일이다. 해당없음은 "이 브랜드에는 안 하는 일"이라 이유가
+// 남고 다음 브랜드를 위한 기록이 되지만, 지우기는 잘못 넣은 것을 치우는
+// 일이다. 화면에서도 구분선 아래에 둔다.
+export async function DELETE(request, { params }) {
+  try {
+    await requireGlobalAdmin();
+    const { id, taskId } = await params;
+    const supabase = getSupabaseAdmin();
+    const { error } = await supabase
+      .from('launch_tasks')
+      .delete()
+      .eq('id', taskId)
+      // 런칭 id 도 함께 건다. 주소를 손으로 고쳐 다른 런칭의 항목을
+      // 지우는 것을 막는다.
+      .eq('launch_id', id);
+    if (error) throw error;
+    return Response.json({ ok: true });
   } catch (error) {
     return errorResponse(error);
   }
