@@ -25,6 +25,10 @@ export default function LaunchDetailPage({ params }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [importOpen, setImportOpen] = useState(false);
+  // 가져오기 결과. 476건을 올렸는데 아무 숫자도 안 뜨면 무엇이 들어갔는지
+  // 알 길이 없다 — 특히 시트에서 빠진 것과 진행 중이라 안 바꾼 것은
+  // 여기서만 보인다.
+  const [done, setDone] = useState(null);
   // 가져오기(엑셀) · 지우기 뒤에 다시 부르는 손잡이. app/launch/guide/page.js 와
   // 같은 방식이다 — effect 밖의 함수를 effect 에서 부르면 그 안의 setState 가
   // 동기 호출로 보여 cascading render 경고가 난다.
@@ -161,6 +165,8 @@ export default function LaunchDetailPage({ params }) {
         </div>
       ) : null}
 
+      <ImportReport report={done} onClose={() => setDone(null)} />
+
       <LaunchContext context={launch.context} />
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3">
@@ -200,11 +206,100 @@ export default function LaunchDetailPage({ params }) {
         open={importOpen}
         target={{ kind: 'launch', id }}
         onClose={() => setImportOpen(false)}
-        onDone={() => setReloadToken((t) => t + 1)}
+        onDone={(body) => {
+          setDone(body);
+          setReloadToken((t) => t + 1);
+        }}
       />
     </div>
   );
 }
+
+// 가져오기가 무엇을 했는지.
+//
+// 476건이 말없이 들어가면 무섭다. 그리고 이 화면이 아니면 다음 셋을 볼 자리가
+// 아예 없다 — 시트에서 빠져 해당없음이 된 것, 양식이 해당없음이라는데 사람이
+// 이미 붙어 있어 안 바꾼 것, 손대지 않은 것.
+//
+// 사람이 닫을 때까지 남긴다. 몇 초 뒤 사라지면 회의 중에 놓친다.
+function ImportReport({ report, onClose }) {
+  if (!report) return null;
+
+  const excluded = report.excluded ?? [];
+  const busy = report.busy ?? [];
+  const untouched = report.untouched ?? [];
+
+  return (
+    <section className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1 text-sm text-emerald-900">
+          <p>
+            새로 <b className="tabular-nums">{report.created ?? 0}</b>건 · 갱신{' '}
+            <b className="tabular-nums">{report.updated ?? 0}</b>건
+            {report.markedNa > 0 && (
+              <>
+                {' · '}양식이 해당없음으로 표시한 <b className="tabular-nums">{report.markedNa}</b>건
+              </>
+            )}
+            {report.restored > 0 && (
+              <>
+                {' · '}되살림 <b className="tabular-nums">{report.restored}</b>건
+              </>
+            )}
+          </p>
+
+          {excluded.length > 0 && (
+            <p className="mt-1.5 text-[13px] text-amber-800">
+              시트에서 사라져 해당없음으로 둔 <b className="tabular-nums">{excluded.length}</b>건 —{' '}
+              <span className="tabular-nums">{excluded.slice(0, 6).map((e) => e.code).join(', ')}</span>
+              {excluded.length > 6 && ` 외 ${excluded.length - 6}건`}
+            </p>
+          )}
+
+          {/* 사람이 이미 붙어 있는 일은 파일이 못 지운다. 대신 반드시 알린다 —
+              양식과 실제가 어긋난 지점이라 회의에서 확인할 것이다. */}
+          {busy.length > 0 && (
+            <p className="mt-1.5 text-[13px] text-amber-800">
+              양식은 해당없음이라는데 <b>진행 중</b>이라 그대로 둔{' '}
+              <b className="tabular-nums">{busy.length}</b>건 —{' '}
+              <span className="tabular-nums">
+                {busy.slice(0, 6).map((b) => `${b.code}(${b.status})`).join(', ')}
+              </span>
+              {busy.length > 6 && ` 외 ${busy.length - 6}건`}
+            </p>
+          )}
+
+          {untouched.length > 0 && (
+            <p className="mt-1.5 text-[13px] text-emerald-800">
+              손대지 않음 <b className="tabular-nums">{untouched.length}</b>건 —{' '}
+              {UNTOUCHED_LABELS.map(([why, label]) => {
+                const n = untouched.filter((u) => u.why === why).length;
+                return n > 0 ? `${label} ${n}` : null;
+              })
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="shrink-0 text-xs text-emerald-700 hover:text-emerald-900"
+        >
+          닫기
+        </button>
+      </div>
+    </section>
+  );
+}
+
+// planReimport 의 why 값. 사람이 읽는 말로 바꾼다.
+const UNTOUCHED_LABELS = [
+  ['done', '이미 완료'],
+  ['already', '이미 해당없음'],
+  ['manual', '손으로 넣은 것'],
+];
 
 const TONE = {
   rose: 'text-rose-600',
