@@ -5,6 +5,7 @@ import { use, useEffect, useMemo, useState } from 'react';
 import { useIdentity } from '@/components/IdentityProvider';
 import { isGlobalAdmin } from '@/lib/tiers';
 import { LaunchBoard } from '@/components/launch/LaunchBoard';
+import { LaunchContext } from '@/components/launch/LaunchContext';
 import { dDay, dDayLabel } from '@/lib/launchDate';
 import { progress } from '@/lib/launchTask';
 import { todayInKst } from '@/lib/overdue';
@@ -58,6 +59,22 @@ export default function LaunchDetailPage({ params }) {
     [tasks, launch, today],
   );
 
+  // 준비 ↔ 진행 중 — 엑셀 문의 열쇠. app/api/launch/[id]/route.js PATCH 참고.
+  async function setStatus(next) {
+    const res = await fetch(`/api/launch/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: next }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      const d = await res?.json().catch(() => ({}));
+      setError(d?.error ?? '바꾸지 못했습니다.');
+      return;
+    }
+    const body = await res.json();
+    setLaunch(body.launch);
+  }
+
   if (!admin) {
     return <p className="text-sm text-slate-500">전체 관리자만 볼 수 있는 화면입니다.</p>;
   }
@@ -87,6 +104,40 @@ export default function LaunchDetailPage({ params }) {
         </div>
       </div>
 
+      {launch.status === '준비' ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <span>📋</span>
+          <div>
+            <b>아직 준비 단계입니다.</b> 엑셀로 요건을 정리해 올린 뒤 시작합니다.
+          </div>
+          <div className="ml-auto flex gap-2">
+            <button
+              type="button"
+              onClick={() => setStatus('진행 중')}
+              className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
+            >
+              시작하기
+            </button>
+          </div>
+        </div>
+      ) : launch.status === '진행 중' ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <span>🚀</span>
+          <div>
+            <b>진행 중입니다.</b> 이제부터는 모아에서 관리합니다 — 엑셀 문은 닫혔습니다.
+          </div>
+          <button
+            type="button"
+            onClick={() => setStatus('준비')}
+            className="ml-auto text-xs text-emerald-700 underline hover:text-emerald-900"
+          >
+            준비로 되돌리기
+          </button>
+        </div>
+      ) : null}
+
+      <LaunchContext context={launch.context} />
+
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3">
         <Stat label="완료" value={`${stat.done}/${stat.total}`} sub={`${stat.percent}%`} />
         <Stat label="이번 주" value={stat.thisWeek} />
@@ -94,6 +145,9 @@ export default function LaunchDetailPage({ params }) {
             구분할 수 없다. */}
         <Stat label="지남" value={stat.late} tone={stat.late > 0 ? 'rose' : undefined} />
         <Stat label="막힘" value={stat.blocked} tone={stat.blocked > 0 ? 'amber' : undefined} />
+        {/* progress() 가 notApplicable 을 아직 안 줄 수 있다 — 다른 에이전트가
+            lib/launchTask.js 에 붙이는 중이다. 옵셔널하게 읽는다. */}
+        {stat.notApplicable > 0 && <Stat label="해당없음" value={stat.notApplicable} />}
         <div className="ml-auto h-1.5 w-40 overflow-hidden rounded-full bg-slate-100">
           <div
             className="h-full rounded-full bg-indigo-500"

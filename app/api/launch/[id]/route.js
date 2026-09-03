@@ -16,7 +16,7 @@ export async function GET(request, { params }) {
 
     const { data: launch, error } = await supabase
       .from('launches')
-      .select('id, name, open_date, kind, status, note, guide_id, brand_id, created_at')
+      .select('id, name, open_date, kind, status, note, guide_id, brand_id, created_at, context')
       .eq('id', id)
       .maybeSingle();
     if (error) throw error;
@@ -60,7 +60,17 @@ export async function PATCH(request, { params }) {
       }
       patch.open_date = body.openDate;
     }
-    if (body.status !== undefined) patch.status = body.status;
+    if (body.status !== undefined) {
+      // 준비 ↔ 진행 중은 엑셀 문의 열쇠다.
+      //
+      // 준비 — 엑셀을 올릴 수 있다. 브랜드와 양식을 두세 번 주고받는 구간.
+      // 진행 중 — 문이 닫힌다. 그 뒤로는 모아에서만 관리한다.
+      //
+      // 되돌릴 수 있어야 한다. "엑셀 한 번 더 올려야 하는데"가 생겼을 때
+      // 막히면 사람이 다른 길을 찾는다. 되돌려도 상태·담당·막힌 이유는
+      // 그대로 둔다 — 이 update 는 launches 만 건드리므로 저절로 그렇다.
+      patch.status = body.status;
+    }
     if (body.note !== undefined) patch.note = body.note || null;
 
     if (Object.keys(patch).length === 0) throw new ApiError(400, '바꿀 내용이 없습니다.');
@@ -71,7 +81,7 @@ export async function PATCH(request, { params }) {
       .from('launches')
       .update(patch)
       .eq('id', id)
-      .select('id, name, open_date, kind, status, note, guide_id, brand_id, created_at')
+      .select('id, name, open_date, kind, status, note, guide_id, brand_id, created_at, context')
       .maybeSingle();
     // 23514 = check_violation. status 가 네 개 밖일 때다.
     if (error?.code === '23514') throw new ApiError(400, '알 수 없는 상태입니다.');
