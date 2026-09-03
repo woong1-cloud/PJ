@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { dueDate, dDay, dDayLabel } from '@/lib/launchDate';
 import {
-  LAUNCH_STATUSES,
+  BOARD_STATUSES,
   DONE_STATUS,
   BLOCKED_STATUS,
   isDone,
@@ -270,7 +270,7 @@ function TaskRow({ task, tasks, openDate, today, busy, onStatus }) {
       </div>
 
       <div className="flex shrink-0 gap-1">
-        {LAUNCH_STATUSES.map((status) => (
+        {BOARD_STATUSES.map((status) => (
           <button
             key={status}
             type="button"
