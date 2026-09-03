@@ -6,6 +6,7 @@ import { useIdentity } from '@/components/IdentityProvider';
 import { isGlobalAdmin } from '@/lib/tiers';
 import { LaunchBoard } from '@/components/launch/LaunchBoard';
 import { LaunchContext } from '@/components/launch/LaunchContext';
+import { ImportDialog } from '@/components/launch/ImportDialog';
 import { dDay, dDayLabel } from '@/lib/launchDate';
 import { progress } from '@/lib/launchTask';
 import { todayInKst } from '@/lib/overdue';
@@ -23,6 +24,11 @@ export default function LaunchDetailPage({ params }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [importOpen, setImportOpen] = useState(false);
+  // 가져오기(엑셀) · 지우기 뒤에 다시 부르는 손잡이. app/launch/guide/page.js 와
+  // 같은 방식이다 — effect 밖의 함수를 effect 에서 부르면 그 안의 setState 가
+  // 동기 호출로 보여 cascading render 경고가 난다.
+  const [reloadToken, setReloadToken] = useState(0);
 
   // 오늘은 화면 하나에서 한 번만 정한다. 아래로 그대로 내려보내 머리의
   // D-N 과 보드의 '이번 주'가 같은 날을 본다.
@@ -52,7 +58,7 @@ export default function LaunchDetailPage({ params }) {
     return () => {
       cancelled = true;
     };
-  }, [admin, id]);
+  }, [admin, id, reloadToken]);
 
   const stat = useMemo(
     () => progress({ tasks, openDate: launch?.open_date, today }),
@@ -113,6 +119,13 @@ export default function LaunchDetailPage({ params }) {
           <div className="ml-auto flex gap-2">
             <button
               type="button"
+              onClick={() => setImportOpen(true)}
+              className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100"
+            >
+              엑셀에서 가져오기
+            </button>
+            <button
+              type="button"
               onClick={() => setStatus('진행 중')}
               className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
             >
@@ -126,13 +139,25 @@ export default function LaunchDetailPage({ params }) {
           <div>
             <b>진행 중입니다.</b> 이제부터는 모아에서 관리합니다 — 엑셀 문은 닫혔습니다.
           </div>
-          <button
-            type="button"
-            onClick={() => setStatus('준비')}
-            className="ml-auto text-xs text-emerald-700 underline hover:text-emerald-900"
-          >
-            준비로 되돌리기
-          </button>
+          <div className="ml-auto flex items-center gap-3">
+            {/* 잠긴 채로 둔다. 눌러도 안 되는 것을 감추는 대신 왜 안 되는지가
+                보여야 한다. */}
+            <button
+              type="button"
+              disabled
+              title="진행 중 런칭은 엑셀로 덮어쓸 수 없습니다"
+              className="cursor-not-allowed rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-400 opacity-50"
+            >
+              엑셀에서 가져오기 🔒
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatus('준비')}
+              className="text-xs text-emerald-700 underline hover:text-emerald-900"
+            >
+              준비로 되돌리기
+            </button>
+          </div>
         </div>
       ) : null}
 
@@ -145,8 +170,8 @@ export default function LaunchDetailPage({ params }) {
             구분할 수 없다. */}
         <Stat label="지남" value={stat.late} tone={stat.late > 0 ? 'rose' : undefined} />
         <Stat label="막힘" value={stat.blocked} tone={stat.blocked > 0 ? 'amber' : undefined} />
-        {/* progress() 가 notApplicable 을 아직 안 줄 수 있다 — 다른 에이전트가
-            lib/launchTask.js 에 붙이는 중이다. 옵셔널하게 읽는다. */}
+        {/* 0건이면 안 보인다 — 완료 항목처럼 해당없음도 없는 게 정상인
+            런칭이 대부분이라, 늘 보이면 자리만 차지한다. */}
         {stat.notApplicable > 0 && <Stat label="해당없음" value={stat.notApplicable} />}
         <div className="ml-auto h-1.5 w-40 overflow-hidden rounded-full bg-slate-100">
           <div
@@ -166,6 +191,16 @@ export default function LaunchDetailPage({ params }) {
         onChanged={(task) =>
           setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, ...task } : t)))
         }
+        // 지우기는 한 줄만 갈아 끼울 수 없다 — 목록 자체가 짧아지므로
+        // 통째로 다시 부른다.
+        onReload={() => setReloadToken((t) => t + 1)}
+      />
+
+      <ImportDialog
+        open={importOpen}
+        target={{ kind: 'launch', id }}
+        onClose={() => setImportOpen(false)}
+        onDone={() => setReloadToken((t) => t + 1)}
       />
     </div>
   );

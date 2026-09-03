@@ -1,19 +1,22 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { dueDate, dDay, dDayLabel } from '@/lib/launchDate';
 import {
   BOARD_STATUSES,
   DONE_STATUS,
   BLOCKED_STATUS,
+  TODO_STATUS,
   isDone,
   isBlocked,
   isLate,
   isThisWeek,
   isWaitingOnDep,
+  isNotApplicable,
   taskTone,
   progress,
 } from '@/lib/launchTask';
+import { NotApplicableDialog } from '@/components/launch/NotApplicableDialog';
 
 // 런칭 보드.
 //
@@ -23,8 +26,8 @@ import {
 // 색은 lib/launchTask.js 의 taskTone 하나로 정한다. 화면마다 다르게 칠하면
 // 같은 항목이 여기서는 빨강, 저기서는 회색이 된다.
 //
-// props: launch, tasks, today, onChanged
-export function LaunchBoard({ launch, tasks = [], today, onChanged }) {
+// props: launch, tasks, today, onChanged, onReload
+export function LaunchBoard({ launch, tasks = [], today, onChanged, onReload }) {
   const [view, setView] = useState('week');
   const [query, setQuery] = useState('');
   const [closedGroups, setClosedGroups] = useState(() => new Set());
@@ -36,6 +39,18 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged }) {
   // 줄이 사라지는데, 잘못 눌렀을 때 되돌릴 자리가 없어진다. 새로고침 전까지는
   // 남겨 둔다 — 숫자(위 칩)는 진짜 상태 그대로다.
   const [touched, setTouched] = useState(() => new Set());
+  // 해당없음 사유 창을 띄운 항목. 한 번에 하나만 연다.
+  const [naFor, setNaFor] = useState(null);
+  // ⋯ 메뉴가 열린 항목. 마찬가지로 한 번에 하나만 연다.
+  const [menuFor, setMenuFor] = useState(null);
+
+  // 바깥을 누르면 열린 메뉴를 닫는다.
+  useEffect(() => {
+    if (!menuFor) return undefined;
+    const close = () => setMenuFor(null);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [menuFor]);
 
   const openDate = launch?.open_date;
   const all = useMemo(
@@ -45,12 +60,13 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged }) {
 
   const stat = useMemo(() => progress(all), [all]);
 
-  // 보기 넷. 세는 규칙은 전부 launchTask 에서 온다.
+  // 보기 다섯. 세는 규칙은 전부 launchTask 에서 온다.
   const views = useMemo(
     () => [
       { key: 'week', label: '이번 주', count: stat.thisWeek },
       { key: 'late', label: '지남', count: stat.late },
       { key: 'blocked', label: '막힘', count: stat.blocked },
+      { key: 'na', label: '해당없음', count: stat.notApplicable },
       { key: 'all', label: '전체', count: stat.total },
     ],
     [stat],
@@ -66,6 +82,10 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged }) {
     else if (view === 'late')
       list = list.filter((task) => isLate({ task, openDate, today }) || keep(task));
     else if (view === 'blocked') list = list.filter((task) => isBlocked(task) || keep(task));
+    else if (view === 'na') list = list.filter(isNotApplicable);
+    // '전체'에서는 해당없음을 뺀다. 451줄 사이에 섞이면 읽기 어렵다 —
+    // 해당없음은 'na' 보기에서만 본다.
+    else list = list.filter((task) => !isNotApplicable(task) || keep(task));
 
     if (q) {
       list = list.filter((task) =>
@@ -99,6 +119,27 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged }) {
     });
   }
 
+  // PATCH 하나로 모은다. 상태 단추·해당없음·되돌리기가 전부 이걸 쓴다.
+  async function patchTask(task, body) {
+    setBusy(task.id);
+    const res = await fetch(`/api/launch/${launch.id}/tasks/${task.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).catch(() => null);
+    setBusy(null);
+
+    if (!res?.ok) {
+      const d = await res?.json().catch(() => ({}));
+      setError(d?.error ?? '바꾸지 못했습니다.');
+      return;
+    }
+    const resBody = await res.json();
+    setError('');
+    setTouched((prev) => new Set(prev).add(task.id));
+    onChanged?.(resBody.task);
+  }
+
   // 상태를 바꾼다. 막힘으로 갈 때만 이유를 묻는다 — 이유 없는 막힘은
   // 회의에서 "그래서 뭐가 문제죠"로 시작하게 만든다.
   async function setStatus(task, status) {
@@ -109,24 +150,33 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged }) {
       if (answer === null) return;
       blockedReason = answer;
     }
+    await patchTask(task, { status, ...(blockedReason === undefined ? {} : { blockedReason }) });
+  }
 
-    setBusy(task.id);
-    const res = await fetch(`/api/launch/${launch.id}/tasks/${task.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status, ...(blockedReason === undefined ? {} : { blockedReason }) }),
-    }).catch(() => null);
-    setBusy(null);
+  // 해당없음은 사유를 받고 나서야 보낸다. 서버도 빈 사유를 400 으로 막지만,
+  // 화면에서 먼저 받는 것이 사람에게 낫다.
+  async function markNotApplicable(task, reason) {
+    await patchTask(task, { status: '해당없음', excludedReason: reason });
+  }
 
+  async function restore(task) {
+    await patchTask(task, { status: TODO_STATUS });
+  }
+
+  async function remove(task) {
+    const ok = window.confirm(
+      [`${task.code} ${task.title}`, '', '지웁니다. 상태와 사유가 함께 사라집니다.',
+       '이 브랜드에 안 하는 일이라면 지우기 대신 「해당없음」을 쓰세요.'].join('\n'),
+    );
+    if (!ok) return;
+    const res = await fetch(`/api/launch/${launch.id}/tasks/${task.id}`, { method: 'DELETE' })
+      .catch(() => null);
     if (!res?.ok) {
       const d = await res?.json().catch(() => ({}));
-      setError(d?.error ?? '바꾸지 못했습니다.');
+      setError(d?.error ?? '지우지 못했습니다.');
       return;
     }
-    const body = await res.json();
-    setError('');
-    setTouched((prev) => new Set(prev).add(task.id));
-    onChanged?.(body.task);
+    onReload?.();
   }
 
   return (
@@ -168,6 +218,7 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged }) {
           {view === 'week' && '이번 주에 할 것이 없습니다.'}
           {view === 'late' && '지난 항목이 없습니다.'}
           {view === 'blocked' && '막힌 항목이 없습니다.'}
+          {view === 'na' && '해당없음으로 둔 항목이 없습니다.'}
           {view === 'all' && '항목이 없습니다.'}
         </p>
       )}
@@ -210,6 +261,20 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged }) {
                     today={today}
                     busy={busy === task.id}
                     onStatus={(status) => setStatus(task, status)}
+                    menuOpen={menuFor === task.id}
+                    onToggleMenu={() => setMenuFor((prev) => (prev === task.id ? null : task.id))}
+                    onAskNa={() => {
+                      setMenuFor(null);
+                      setNaFor(task);
+                    }}
+                    onRestore={() => {
+                      setMenuFor(null);
+                      restore(task);
+                    }}
+                    onDelete={() => {
+                      setMenuFor(null);
+                      remove(task);
+                    }}
                   />
                 ))}
               </ul>
@@ -217,6 +282,13 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged }) {
           </section>
         );
       })}
+
+      <NotApplicableDialog
+        open={Boolean(naFor)}
+        title={naFor ? `${naFor.code} ${naFor.title}` : ''}
+        onClose={() => setNaFor(null)}
+        onSubmit={(reason) => markNotApplicable(naFor, reason)}
+      />
     </div>
   );
 }
@@ -230,65 +302,149 @@ const TONE_BAR = {
   flat: 'bg-transparent',
 };
 
-function TaskRow({ task, tasks, openDate, today, busy, onStatus }) {
+function TaskRow({
+  task, tasks, openDate, today, busy, onStatus, menuOpen, onToggleMenu, onAskNa, onRestore, onDelete,
+}) {
   const tone = taskTone({ task, openDate, today, tasks });
   const due = dueDate(openDate, task.day_offset);
   const days = dDay(due, today);
   const waiting = isWaitingOnDep({ task, tasks });
   const done = isDone(task);
+  const na = isNotApplicable(task);
 
   return (
-    <li className="flex flex-wrap items-start gap-x-3 gap-y-1.5 px-4 py-2.5">
+    <li className="relative flex flex-wrap items-start gap-x-3 gap-y-1.5 px-4 py-2.5">
       <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${TONE_BAR[tone]}`} aria-hidden />
 
       <div className="min-w-0 flex-1">
-        <p className={`text-sm ${done ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
-          {task.is_critical && <span className="mr-1 text-amber-500">★</span>}
+        {/* 해당없음은 취소선을 안 쓴다 — 완료와 다른 이유가 화면에서도
+            달라 보여야 한다. 완료는 끝난 것, 해당없음은 애초에 할 일이
+            아닌 것이다. */}
+        <p className={`text-sm ${done ? 'text-slate-400 line-through' : na ? 'text-slate-400' : 'text-slate-800'}`}>
+          {/* ★ 는 해당없음일 때 감춘다 — 할 일이 아니니 핵심 표시가 무의미하다. */}
+          {task.is_critical && !na && <span className="mr-1 text-amber-500">★</span>}
           <span className="mr-1.5 text-xs tabular-nums text-slate-400">{task.code}</span>
           {task.title}
-        </p>
-        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
-          {due && (
-            <span className="tabular-nums">
-              {due}
-              {!done && days !== null && (
-                <span className={days < 0 ? 'ml-1 text-rose-600' : 'ml-1 text-slate-400'}>
-                  {dDayLabel(days)}
-                </span>
-              )}
+          {na && (
+            <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-normal text-slate-500">
+              해당없음
             </span>
           )}
-          {task.owner_role && <span>{task.owner_role}</span>}
-          {task.decision_org && <span className="text-slate-400">결정 {task.decision_org}</span>}
-          {waiting && !done && (
-            <span className="text-slate-400">선행 {task.depends_on.join(', ')} 대기</span>
-          )}
-          {isBlocked(task) && task.blocked_reason && (
-            <span className="text-amber-700">막힘 — {task.blocked_reason}</span>
+        </p>
+        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
+          {na ? (
+            // 기한·역할 대신 사유를 보여준다. 이 브랜드에는 왜 없는가가
+            // 기한보다 중요하다.
+            <span className="text-slate-400">{task.excluded_reason || '사유 없음'}</span>
+          ) : (
+            <>
+              {due && (
+                <span className="tabular-nums">
+                  {due}
+                  {!done && days !== null && (
+                    <span className={days < 0 ? 'ml-1 text-rose-600' : 'ml-1 text-slate-400'}>
+                      {dDayLabel(days)}
+                    </span>
+                  )}
+                </span>
+              )}
+              {task.owner_role && <span>{task.owner_role}</span>}
+              {task.decision_org && <span className="text-slate-400">결정 {task.decision_org}</span>}
+              {waiting && !done && (
+                <span className="text-slate-400">선행 {task.depends_on.join(', ')} 대기</span>
+              )}
+              {isBlocked(task) && task.blocked_reason && (
+                <span className="text-amber-700">막힘 — {task.blocked_reason}</span>
+              )}
+            </>
           )}
         </p>
       </div>
 
-      <div className="flex shrink-0 gap-1">
-        {BOARD_STATUSES.map((status) => (
+      <div className="flex shrink-0 items-center gap-1">
+        {na ? (
           <button
-            key={status}
             type="button"
             disabled={busy}
-            onClick={() => onStatus(status)}
-            className={`rounded-md border px-2 py-1 text-xs disabled:opacity-50 ${
-              task.status === status
-                ? status === DONE_STATUS
-                  ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
-                  : status === BLOCKED_STATUS
-                    ? 'border-amber-400 bg-amber-50 text-amber-700'
-                    : 'border-indigo-400 bg-indigo-50 text-indigo-700'
-                : 'border-slate-200 text-slate-500 hover:bg-slate-50'
-            }`}
+            onClick={onRestore}
+            className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-50"
           >
-            {status}
+            되돌리기
           </button>
-        ))}
+        ) : (
+          BOARD_STATUSES.map((status) => (
+            <button
+              key={status}
+              type="button"
+              disabled={busy}
+              onClick={() => onStatus(status)}
+              className={`rounded-md border px-2 py-1 text-xs disabled:opacity-50 ${
+                task.status === status
+                  ? status === DONE_STATUS
+                    ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
+                    : status === BLOCKED_STATUS
+                      ? 'border-amber-400 bg-amber-50 text-amber-700'
+                      : 'border-indigo-400 bg-indigo-50 text-indigo-700'
+                  : 'border-slate-200 text-slate-500 hover:bg-slate-50'
+              }`}
+            >
+              {status}
+            </button>
+          ))
+        )}
+
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleMenu();
+          }}
+          className="rounded-md px-1.5 py-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          aria-label="더 보기"
+        >
+          ⋯
+        </button>
+
+        {menuOpen && (
+          <div
+            className="absolute right-0 top-7 z-20 w-56 rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {na ? (
+              <button
+                type="button"
+                onClick={onRestore}
+                className="w-full rounded-md px-2.5 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-50"
+              >
+                다시 해당으로
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={onAskNa}
+                  className="w-full rounded-md px-2.5 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  해당없음으로 두기
+                </button>
+                <p className="px-2.5 pb-1.5 text-[11px] text-slate-400">
+                  이 브랜드에는 안 하는 일. <b>사유를 받습니다.</b>
+                </p>
+              </>
+            )}
+            <hr className="my-1 border-slate-100" />
+            <button
+              type="button"
+              onClick={onDelete}
+              className="w-full rounded-md px-2.5 py-1.5 text-left text-sm text-rose-600 hover:bg-rose-50"
+            >
+              지우기
+            </button>
+            <p className="px-2.5 pt-0.5 text-[11px] text-slate-400">
+              잘못 넣은 것만. 상태와 사유가 함께 사라집니다.
+            </p>
+          </div>
+        )}
       </div>
     </li>
   );
