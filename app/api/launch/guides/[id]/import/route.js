@@ -3,9 +3,13 @@ import { requireGlobalAdmin } from '@/lib/permissions';
 import { errorResponse, ApiError } from '@/lib/apiError';
 import { planImport } from '@/lib/launchImport';
 
-// 한 번에 받을 수 있는 양. v10 이 403건이라 넉넉히 잡는다.
+// 한 번에 받을 수 있는 양. 통합 WBS 가 476건이라 넉넉히 잡는다.
 const MAX_ITEMS = 2000;
 const MAX_ROLES = 100;
+
+// 항목 코드. lib/launchImport.js 의 CODE 와 같아야 한다. 서버가 화면을 안
+// 믿고 다시 거르는 자리라, 여기가 좁으면 화면이 읽은 것이 서버에서 사라진다.
+const CODE = /^\d{2}[A-Z]?-\d{2}$/;
 
 // 가이드에 항목을 가져온다.
 //
@@ -45,7 +49,7 @@ export async function POST(request, { params }) {
       const dayOffset = Number(raw?.day_offset);
       // 코드·제목·워크스트림·D-day 가 없으면 항목이 아니다. 화면의 파서가
       // 이미 걸렀지만 여기가 관문이다.
-      if (!/^\d{2}-\d{2}$/.test(code) || !title || !workstream) continue;
+      if (!CODE.test(code) || !title || !workstream) continue;
       if (!Number.isFinite(dayOffset)) continue;
 
       clean.push({
@@ -60,7 +64,7 @@ export async function POST(request, { params }) {
         owner_role: raw?.owner_role ?? null,
         support_role: raw?.support_role ?? null,
         depends_on: Array.isArray(raw?.depends_on)
-          ? raw.depends_on.filter((c) => /^\d{2}-\d{2}$/.test(String(c)))
+          ? raw.depends_on.filter((c) => CODE.test(String(c)))
           : [],
         day_offset: Math.trunc(dayOffset),
         deliverable: raw?.deliverable ?? null,
