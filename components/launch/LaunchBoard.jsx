@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { dueDate, dDay, dDayLabel } from '@/lib/launchDate';
 import { matchesItem } from '@/lib/launchSearch';
+import { GROUP_MODES, groupTasks } from '@/lib/launchGroup';
 import {
   BOARD_STATUSES,
   DONE_STATUS,
@@ -97,6 +98,12 @@ export function LaunchBoard({
   // localStorage 읽기는 초기화 함수 안에 두면 effect 가 필요 없다.
   const [selectedRole, setSelectedRole] = useState(() => readStoredRole(launch?.id));
   const [roleTab, setRoleTab] = useState('owner');
+  // 담당자 필터. 역할과 다른 축이라(회의에서 "물류팀 것" 과 "이 사람 것"은
+  // 다른 질문이다) 따로 두고, 겹쳐 적용한다.
+  const [selectedAssignee, setSelectedAssignee] = useState('');
+  // 묶는 기준. 기본은 워크스트림 — 지금까지의 화면과 똑같이 동작해야
+  // 습관이 안 깨진다.
+  const [groupMode, setGroupMode] = useState('workstream');
 
   // 고른 역할을 런칭별로 기억한다. 서버 작업은 없다 — 이 브라우저에서 다음에
   // 같은 런칭을 열 때만 쓰는, 회의 준비용 편의다.
@@ -178,6 +185,17 @@ export function LaunchBoard({
     return [...set].sort((a, b) => a.localeCompare(b, 'ko'));
   }, [tasks]);
 
+  // 담당자 후보. 방금 생긴 값이라 대부분 비어 있다 — 드롭다운을 보일지
+  // 말지(하나라도 있을 때만) 이 길이로 정한다.
+  const assigneeOptions = useMemo(() => {
+    const set = new Set();
+    for (const task of tasks) {
+      const name = String(task.assignee_name ?? '').trim();
+      if (name) set.add(name);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, 'ko'));
+  }, [tasks]);
+
   // 채널은 런칭마다 다르다 — HOKA 는 공통·자사몰·외부몰·무신사·네이버 다.
   // lib/channels.js 의 고정 5종은 요구사항용이라 여기 쓰면 무신사·네이버가
   // 사라진다.
@@ -195,59 +213,74 @@ export function LaunchBoard({
     return [...set].filter(Boolean).sort((a, b) => a.localeCompare(b, 'ko'));
   }, [tasks]);
 
+  // 담당자 필터까지 겹친 기준선. 역할 탭 건수와 역할 필터 결과가 둘 다
+  // 이걸 base 로 삼아야 "물류팀 것" 이 "이 사람 것" 과 항상 같이 걸린다.
+  const assigneeFilteredShown = useMemo(() => {
+    if (!selectedAssignee) return shown;
+    return shown.filter((task) => task.assignee_name === selectedAssignee);
+  }, [shown, selectedAssignee]);
+
   // 역할 탭 셋. 이름에 고른 역할이 들어가야 한다 — 화면 띄운 사람이
   // 브랜드PM인데 물류팀 것을 보고 있을 수 있어 '내가 할 것'은 거짓말이다.
+  // 역할을 드롭다운으로 이미 골랐으니 라벨에 역할 이름을 반복하지 않는다.
   const roleTabs = useMemo(() => {
     if (!selectedRole) return [];
     return [
       {
         key: 'owner',
-        label: `${selectedRole}이 할 것`,
-        count: shown.filter((task) => hasRole(task.owner_role, selectedRole)).length,
+        label: '할 것',
+        count: assigneeFilteredShown.filter((task) => hasRole(task.owner_role, selectedRole)).length,
       },
       {
         key: 'support',
-        label: `${selectedRole}이 도울 것`,
-        count: shown.filter((task) => hasRole(task.support_role, selectedRole)).length,
+        label: '도울 것',
+        count: assigneeFilteredShown.filter((task) => hasRole(task.support_role, selectedRole)).length,
       },
       {
         key: 'all',
-        label: '전부',
-        count: shown.filter(
+        label: '둘 다',
+        count: assigneeFilteredShown.filter(
           (task) => hasRole(task.owner_role, selectedRole) || hasRole(task.support_role, selectedRole),
         ).length,
       },
     ];
-  }, [shown, selectedRole]);
+  }, [assigneeFilteredShown, selectedRole]);
 
-  // 역할 필터는 기존 보기 칩과 겹쳐 적용된다 — '물류팀이 할 것' + '이번 주'가
-  // 함께 걸린다. 안 고르면 지금과 똑같이 동작해야 하니 그대로 통과시킨다.
+  // 역할·담당자 필터는 기존 보기 칩과 겹쳐 적용된다 — '물류팀이 할 것' +
+  // '이번 주'가 함께 걸린다. 둘 다 안 고르면 지금과 똑같이 동작해야 하니
+  // 그대로 통과시킨다.
   const roleFiltered = useMemo(() => {
-    if (!selectedRole) return shown;
-    if (roleTab === 'owner') return shown.filter((task) => hasRole(task.owner_role, selectedRole));
-    if (roleTab === 'support') return shown.filter((task) => hasRole(task.support_role, selectedRole));
-    return shown.filter(
+    const base = assigneeFilteredShown;
+    if (!selectedRole) return base;
+    if (roleTab === 'owner') return base.filter((task) => hasRole(task.owner_role, selectedRole));
+    if (roleTab === 'support') return base.filter((task) => hasRole(task.support_role, selectedRole));
+    return base.filter(
       (task) => hasRole(task.owner_role, selectedRole) || hasRole(task.support_role, selectedRole),
     );
-  }, [shown, selectedRole, roleTab]);
+  }, [assigneeFilteredShown, selectedRole, roleTab]);
 
-  const groups = useMemo(() => {
-    const map = new Map();
-    for (const task of roleFiltered) {
-      if (!map.has(task.workstream)) map.set(task.workstream, []);
-      map.get(task.workstream).push(task);
-    }
-    // 기한 순으로 세운다. 워크스트림 안에서 sort_order 는 시트의 줄 순서일
-    // 뿐이고, 회의에서 보는 순서는 언제까지인가다.
-    for (const list of map.values()) list.sort((a, b) => a.day_offset - b.day_offset);
-    return [...map.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
-  }, [roleFiltered]);
+  // 묶는 기준은 여기 하나로 — lib/launchGroup.js. 워크스트림 하나만 있던
+  // 자리에 담당자·주·안 묶음이 더해졌다. 세는 규칙은 그대로 launchTask.js
+  // 에서 온 progress() 를 그룹별로 다시 부른다(아래).
+  const groups = useMemo(
+    () => groupTasks({ tasks: roleFiltered, mode: groupMode, openDate, today }),
+    [roleFiltered, groupMode, openDate, today],
+  );
 
-  function toggleGroup(ws) {
+  // 묶는 기준을 바꾸면 접힘·선택을 놓는다. 다른 기준의 그룹 키(예:
+  // 워크스트림 이름과 담당자 이름이 우연히 같음)가 엉뚱하게 접힌 채로
+  // 넘어오는 것을 막고, 안 보이게 된 줄이 '골랐다'고 남는 것도 막는다.
+  function changeGroupMode(mode) {
+    setGroupMode(mode);
+    setClosedGroups(new Set());
+    setPicked(new Set());
+  }
+
+  function toggleGroup(key) {
     setClosedGroups((prev) => {
       const next = new Set(prev);
-      if (next.has(ws)) next.delete(ws);
-      else next.add(ws);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }
@@ -364,15 +397,15 @@ export function LaunchBoard({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* 역할 필터. 모아의 조직과 런칭의 역할은 다른 축이라 이을 데이터가
-          없다 — 그래서 자동으로 안 고르고 사람이 고른다. 회의에서 화면 띄운
-          사람이 "물류팀 것 봅시다" 하고 누르는 자리다. */}
+      {/* 보기 칩 줄. 역할·담당자 필터가 왼쪽 끝, 보기 칩, 오른쪽 끝에
+          만들기·찾기·묶기. 예전에는 역할 필터가 따로 한 줄을 차지했다 —
+          그 줄과 이 줄이 결국 "무엇을 보여줄까"라는 같은 질문이라 합친다. */}
       <div className="flex flex-wrap items-center gap-2">
-        <label htmlFor="role-filter" className="text-xs text-slate-500">
-          역할로 보기
-        </label>
+        {/* 역할 필터. 모아의 조직과 런칭의 역할은 다른 축이라 이을 데이터가
+            없다 — 그래서 자동으로 안 고르고 사람이 고른다. 빈 값(역할 전체)이
+            예전의 '역할 해제' 단추를 대신한다. */}
         <select
-          id="role-filter"
+          aria-label="역할로 보기"
           value={selectedRole}
           onChange={(e) => {
             setSelectedRole(e.target.value);
@@ -381,41 +414,33 @@ export function LaunchBoard({
           }}
           className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-600 focus:border-indigo-400 focus:outline-none"
         >
-          <option value="">고르지 않음</option>
+          <option value="">역할 전체</option>
           {roleOptions.map((r) => (
             <option key={r} value={r}>
               {r}
             </option>
           ))}
         </select>
-        {selectedRole &&
-          roleTabs.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => setRoleTab(t.key)}
-              className={`rounded-full border px-2.5 py-1 text-xs ${
-                roleTab === t.key
-                  ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                  : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              {t.label}
-              <span className="ml-1 tabular-nums text-slate-400">{t.count}</span>
-            </button>
-          ))}
-        {selectedRole && (
-          <button
-            type="button"
-            onClick={() => setSelectedRole('')}
-            className="text-xs text-slate-400 hover:text-slate-600"
-          >
-            역할 해제
-          </button>
-        )}
-      </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+        {/* 담당자 필터. assignee_name 은 방금 생긴 값이라 대부분 비어
+            있다 — 이름이 하나라도 있을 때만 보인다. 다 비어 있으면 자리만
+            차지한다. */}
+        {assigneeOptions.length > 0 && (
+          <select
+            aria-label="담당자로 보기"
+            value={selectedAssignee}
+            onChange={(e) => setSelectedAssignee(e.target.value)}
+            className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-600 focus:border-indigo-400 focus:outline-none"
+          >
+            <option value="">담당자 전체</option>
+            {assigneeOptions.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        )}
+
         {views.map((v) => (
           <button
             key={v.key}
@@ -435,7 +460,15 @@ export function LaunchBoard({
             }`}
           >
             {v.label}
-            <span className="ml-1.5 text-xs tabular-nums text-slate-400">{v.count}</span>
+            {/* 지남만 붉게 — 완료를 눌러야 할 만큼 급한 것과 나머지를
+                한눈에 가르려고. 0건이면 굳이 안 붉힌다. */}
+            <span
+              className={`ml-1.5 text-xs tabular-nums ${
+                v.key === 'late' && v.count > 0 ? 'text-rose-600' : 'text-slate-400'
+              }`}
+            >
+              {v.count}
+            </span>
           </button>
         ))}
         <button
@@ -455,7 +488,42 @@ export function LaunchBoard({
           placeholder="항목·역할로 찾기"
           className="h-9 w-56 rounded-lg border border-slate-300 px-3 text-sm focus:border-indigo-400 focus:outline-none"
         />
+
+        {/* 묶는 기준. 기본은 워크스트림 — 안 건드리면 예전과 똑같이
+            동작한다. 담당자별·기한(주)별로 워크스트림을 넘나들며 "다음에
+            뭐 하지"를 보고 싶다는 요청이 있어 추가한다. */}
+        <select
+          aria-label="묶는 기준"
+          value={groupMode}
+          onChange={(e) => changeGroupMode(e.target.value)}
+          className="h-9 rounded-lg border border-slate-300 bg-white px-2 text-sm text-slate-600 focus:border-indigo-400 focus:outline-none"
+        >
+          {GROUP_MODES.map((m) => (
+            <option key={m.key} value={m.key}>
+              묶기 · {m.label}
+            </option>
+          ))}
+        </select>
       </div>
+
+      {/* 역할을 고른 뒤에만 나오는 얇은 줄. 역할 이름은 위 드롭다운에 이미
+          있으니 여기서는 반복하지 않는다(할 것/도울 것/둘 다). */}
+      {selectedRole && (
+        <div className="-mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 pl-1">
+          {roleTabs.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setRoleTab(t.key)}
+              className={`text-xs ${
+                roleTab === t.key ? 'font-medium text-indigo-700' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {t.label} <span className="tabular-nums">{t.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {picked.size > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5">
@@ -507,44 +575,44 @@ export function LaunchBoard({
         </p>
       )}
 
-      {groups.map(([ws, list]) => {
-        const closed = closedGroups.has(ws);
-        const wsStat = progress({ tasks: list, openDate, today });
-        // 이 워크스트림의 '지금 보이는' 줄 기준. 앱 18건처럼 워크스트림
-        // 하나에 몰린 항목을 18번 클릭 대신 1번으로 고르게 하려고 있다.
-        const groupIds = list.map((t) => t.id);
+      {groups.map((group) => {
+        const closed = closedGroups.has(group.key);
+        const groupStat = progress({ tasks: group.tasks, openDate, today });
+        // 이 그룹의 '지금 보이는' 줄 기준. 앱 18건처럼 한 그룹에 몰린
+        // 항목을 18번 클릭 대신 1번으로 고르게 하려고 있다.
+        const groupIds = group.tasks.map((t) => t.id);
         const allChecked = groupIds.length > 0 && groupIds.every((id) => picked.has(id));
         const someChecked = groupIds.some((id) => picked.has(id));
         return (
-          <section key={ws} className="rounded-xl border border-slate-200 bg-white">
+          <section key={group.key} className="rounded-xl border border-slate-200 bg-white">
             <div className="flex w-full items-center gap-2 px-4 py-2.5">
               {/* 접기 단추 안에 넣으면 클릭이 접기/펴기와 싸운다 — 밖에 둔다. */}
               <input
                 type="checkbox"
                 ref={(el) => { if (el) el.indeterminate = someChecked && !allChecked; }}
                 checked={allChecked}
-                onChange={() => toggleGroupPick(list)}
-                aria-label={`${ws} 전체 고르기`}
+                onChange={() => toggleGroupPick(group.tasks)}
+                aria-label={`${group.label} 전체 고르기`}
                 className="h-3.5 w-3.5 shrink-0 accent-indigo-600"
               />
               <button
                 type="button"
-                onClick={() => toggleGroup(ws)}
+                onClick={() => toggleGroup(group.key)}
                 className="flex flex-1 items-center gap-2 text-left"
               >
                 <span className="text-xs text-slate-400">{closed ? '▸' : '▾'}</span>
-                <span className="font-medium text-slate-800">{ws}</span>
+                <span className="font-medium text-slate-800">{group.label}</span>
                 <span className="text-xs tabular-nums text-slate-400">
-                  {wsStat.done}/{wsStat.total}
+                  {groupStat.done}/{groupStat.total}
                 </span>
-                {wsStat.late > 0 && (
+                {groupStat.late > 0 && (
                   <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[11px] text-rose-700">
-                    지남 {wsStat.late}
+                    지남 {groupStat.late}
                   </span>
                 )}
-                {wsStat.blocked > 0 && (
+                {groupStat.blocked > 0 && (
                   <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700">
-                    막힘 {wsStat.blocked}
+                    막힘 {groupStat.blocked}
                   </span>
                 )}
               </button>
@@ -552,7 +620,7 @@ export function LaunchBoard({
 
             {!closed && (
               <ul className="divide-y divide-slate-100 border-t border-slate-100">
-                {list.map((task) => (
+                {group.tasks.map((task) => (
                   <TaskRow
                     key={task.id}
                     task={task}

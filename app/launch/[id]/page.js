@@ -5,7 +5,7 @@ import { use, useEffect, useMemo, useState } from 'react';
 import { useIdentity } from '@/components/IdentityProvider';
 import { isGlobalAdmin } from '@/lib/tiers';
 import { LaunchBoard } from '@/components/launch/LaunchBoard';
-import { LaunchContext } from '@/components/launch/LaunchContext';
+import { LaunchContextButton, LaunchContextPanel } from '@/components/launch/LaunchContext';
 import { LaunchContextDialog } from '@/components/launch/LaunchContextDialog';
 import { ImportDialog } from '@/components/launch/ImportDialog';
 import { DecisionList } from '@/components/launch/DecisionList';
@@ -41,6 +41,12 @@ export default function LaunchDetailPage({ params }) {
   const [done, setDone] = useState(null);
   // 전제 고치기 창. 읽기 전용이던 LaunchContext 에 고치기가 붙으며 필요해졌다.
   const [contextOpen, setContextOpen] = useState(false);
+  // 전제 펼침 여부. 제목 줄의 '전제 N' 단추가 이걸 토글한다 — 매일 볼
+  // 것은 아니지만 찾을 때 반드시 있어야 해서 접어 둔다.
+  const [contextExpanded, setContextExpanded] = useState(false);
+  // 제목 줄의 드롭다운 둘(내보내기·⋯). 한 번에 하나만 연다 — 이름은
+  // LaunchBoard 의 menuFor 와 같은 뜻이다.
+  const [openMenu, setOpenMenu] = useState(null);
   // 가져오기(엑셀) · 지우기 뒤에 다시 부르는 손잡이. app/launch/guide/page.js 와
   // 같은 방식이다 — effect 밖의 함수를 effect 에서 부르면 그 안의 setState 가
   // 동기 호출로 보여 cascading render 경고가 난다.
@@ -49,6 +55,14 @@ export default function LaunchDetailPage({ params }) {
   // 오늘은 화면 하나에서 한 번만 정한다. 아래로 그대로 내려보내 머리의
   // D-N 과 보드의 '이번 주'가 같은 날을 본다.
   const today = useMemo(() => todayInKst(), []);
+
+  // 바깥을 누르면 열린 드롭다운을 닫는다. LaunchBoard 의 ⋯ 메뉴와 같은 방식.
+  useEffect(() => {
+    if (!openMenu) return undefined;
+    const close = () => setOpenMenu(null);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [openMenu]);
 
   useEffect(() => {
     if (!admin) return undefined;
@@ -153,25 +167,69 @@ export default function LaunchDetailPage({ params }) {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
-      <div>
-        <Link href="/launch" className="text-xs text-slate-500 hover:text-slate-700">
-          ← 런칭 목록
+      {/* 제목 줄 하나 — 예전에는 '← 목록'과 제목이 두 줄이었다. 첫 항목이
+          나오기까지 여섯 줄이던 것을 세 줄로 줄이려면 여기부터 합쳐야 한다. */}
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <Link href="/launch" className="shrink-0 text-xs text-slate-500 hover:text-slate-700">
+          ← 목록
         </Link>
-        <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h1 className="text-lg font-semibold text-slate-900">{launch.name}</h1>
-          {launch.kind && <span className="text-xs text-slate-400">{launch.kind}</span>}
-          <span className="text-sm tabular-nums text-slate-500">
-            오픈 {launch.open_date}
-            {days !== null && (
-              <b className={days < 0 ? 'ml-2 text-rose-600' : 'ml-2 text-slate-700'}>
-                {dDayLabel(days)}
-              </b>
-            )}
-          </span>
+        <h1 className="text-lg font-semibold text-slate-900">{launch.name}</h1>
+        {launch.kind && <span className="text-xs text-slate-400">{launch.kind}</span>}
+        <span className="text-sm tabular-nums text-slate-500">
+          오픈 {launch.open_date}
+          {days !== null && (
+            <b className={days < 0 ? 'ml-2 text-rose-600' : 'ml-2 text-slate-700'}>
+              {dDayLabel(days)}
+            </b>
+          )}
+        </span>
+
+        {/* 전제·내보내기·⋯ — 예전에는 상태 배너 안에 흩어져 있던 단추들과
+            전제 접기 상자가 여기 한 줄로 모인다. */}
+        <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
+          <LaunchContextButton
+            context={launch.context}
+            open={contextExpanded}
+            onToggle={() => setContextExpanded((v) => !v)}
+            onAdd={() => setContextOpen(true)}
+          />
+          <ExportMenu
+            id={id}
+            open={openMenu === 'export'}
+            onToggle={(e) => {
+              e.stopPropagation();
+              setOpenMenu((prev) => (prev === 'export' ? null : 'export'));
+            }}
+          />
+          <MoreMenu
+            open={openMenu === 'more'}
+            onToggle={(e) => {
+              e.stopPropagation();
+              setOpenMenu((prev) => (prev === 'more' ? null : 'more'));
+            }}
+            importLocked={launch.status === '진행 중'}
+            showRevert={launch.status !== '준비'}
+            onImport={() => {
+              setOpenMenu(null);
+              setImportOpen(true);
+            }}
+            onRevert={() => {
+              setOpenMenu(null);
+              setStatus('준비');
+            }}
+          />
         </div>
       </div>
 
-      {launch.status === '준비' ? (
+      {contextExpanded && (
+        <LaunchContextPanel context={launch.context} onEdit={() => setContextOpen(true)} />
+      )}
+
+      {/* 준비 상태의 배너만 남는다 — "엑셀로 정리해 올린 뒤 시작하세요"가
+          실제로 할 일을 알려준다. 진행 중일 때의 배너("이제부터 모아에서
+          관리합니다")는 상태가 안 바뀌는 한 매번 같은 말이라 정보가 0이라
+          없앴다 — 그 단추 셋(양식·가져오기·되돌리기)은 위 제목 줄로 옮겼다. */}
+      {launch.status === '준비' && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <span>📋</span>
           <div>
@@ -195,63 +253,15 @@ export default function LaunchDetailPage({ params }) {
             </button>
           </div>
         </div>
-      ) : launch.status === '진행 중' ? (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          <span>🚀</span>
-          <div>
-            <b>진행 중입니다.</b> 이제부터는 모아에서 관리합니다 — 엑셀 문은 닫혔습니다.
-          </div>
-          <div className="ml-auto flex flex-wrap items-center gap-3">
-            {/* 진행 중에도 뽑을 일이 있다 — 양식은 이 브랜드가 아니라 브랜드
-                쪽에 주는 것이라, 엑셀 문이 닫혀도 이 단추는 안 잠근다. */}
-            <TemplateLink id={id} tone="emerald" />
-            {/* 잠긴 채로 둔다. 눌러도 안 되는 것을 감추는 대신 왜 안 되는지가
-                보여야 한다. */}
-            <button
-              type="button"
-              disabled
-              title="진행 중 런칭은 엑셀로 덮어쓸 수 없습니다"
-              className="cursor-not-allowed rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-400 opacity-50"
-            >
-              엑셀에서 가져오기 🔒
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatus('준비')}
-              className="text-xs text-emerald-700 underline hover:text-emerald-900"
-            >
-              준비로 되돌리기
-            </button>
-          </div>
-        </div>
-      ) : null}
+      )}
 
       <ImportReport report={done} onClose={() => setDone(null)} />
 
-      <LaunchContext context={launch.context} onEdit={() => setContextOpen(true)} />
-
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3">
-        <Stat label="완료" value={`${stat.done}/${stat.total}`} sub={`${stat.percent}%`} />
-        <Stat label="이번 주" value={stat.thisWeek} />
-        {/* 지남과 막힘은 0 이어도 자리를 지킨다. 사라지면 "0인가 안 세는가"를
-            구분할 수 없다. */}
-        <Stat label="지남" value={stat.late} tone={stat.late > 0 ? 'rose' : undefined} />
-        <Stat label="막힘" value={stat.blocked} tone={stat.blocked > 0 ? 'amber' : undefined} />
-        {/* 0건이면 안 보인다 — 완료 항목처럼 해당없음도 없는 게 정상인
-            런칭이 대부분이라, 늘 보이면 자리만 차지한다. */}
-        {stat.notApplicable > 0 && <Stat label="해당없음" value={stat.notApplicable} />}
-        <div className="ml-auto h-1.5 w-40 overflow-hidden rounded-full bg-slate-100">
-          <div
-            className="h-full rounded-full bg-indigo-500"
-            style={{ width: `${stat.percent}%` }}
-            aria-hidden
-          />
-        </div>
-      </div>
-
-      {/* 탭 셋 — 보드 · 결정 대기 · 주간 진척. 기본은 보드다. 건수를 붙이는
-          이유: 안 열어봐도 몇 건인지 보여야 한다. */}
-      <div className="flex flex-wrap items-center gap-2">
+      {/* 탭 셋(보드 · 결정 대기 · 주간 진척)과 완료 통계를 한 줄로 —
+          이번 주·지남·막힘·해당없음은 여기서 뺐다. 보드의 보기 칩이 이미
+          같은 숫자를 말하고 있어서(views), 두 자리에서 같은 넷을 말하는
+          게 이 페이지가 여섯 줄이던 이유 중 하나였다. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5">
         {tabs.map((t) => (
           <button
             key={t.key}
@@ -269,6 +279,19 @@ export default function LaunchDetailPage({ params }) {
             )}
           </button>
         ))}
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-sm font-medium tabular-nums text-slate-800">
+            완료 {stat.done}/{stat.total}
+            <span className="ml-1.5 text-xs font-normal text-slate-400">{stat.percent}%</span>
+          </span>
+          <div className="h-1.5 w-28 overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full rounded-full bg-indigo-500"
+              style={{ width: `${stat.percent}%` }}
+              aria-hidden
+            />
+          </div>
+        </div>
       </div>
 
       {tab === 'board' && (
@@ -486,30 +509,14 @@ function formatChangeValue(field, value) {
   return truncate(value, 40);
 }
 
-const TONE = {
-  rose: 'text-rose-600',
-  amber: 'text-amber-700',
-};
-
-function Stat({ label, value, sub, tone }) {
-  return (
-    <div className="flex flex-col">
-      <span className="text-[11.5px] text-slate-500">{label}</span>
-      <span className={`text-sm font-medium tabular-nums ${TONE[tone] ?? 'text-slate-800'}`}>
-        {value}
-        {sub && <span className="ml-1.5 text-xs font-normal text-slate-400">{sub}</span>}
-      </span>
-    </div>
-  );
-}
-
 const TEMPLATE_TONE = {
   amber: 'border-amber-300 text-amber-800 hover:bg-amber-100',
-  emerald: 'border-emerald-300 text-emerald-800 hover:bg-emerald-100',
 };
 
 // 브랜드에게 줄 엑셀 양식 단추. GET 이 xlsx 를 Content-Disposition: attachment
 // 로 내려주므로 fetch 로 blob 을 만들 필요 없이 <a download> 로 충분하다.
+// 준비 배너에서만 쓴다 — 제목 줄의 내보내기 메뉴에는 같은 링크가 다른
+// 모양(ExportMenu 의 메뉴 항목)으로 또 있다.
 function TemplateLink({ id, tone }) {
   return (
     <div className="flex flex-col items-end gap-0.5">
@@ -523,6 +530,99 @@ function TemplateLink({ id, tone }) {
       <span className="text-[11px] text-slate-500">
         브랜드가 채울 양식입니다. 첫 시트에 꼭 볼 57줄만 있습니다.
       </span>
+    </div>
+  );
+}
+
+// 제목 줄의 '내보내기 ▾' — 브랜드 양식과 현황 내보내기 둘.
+//
+// 현황 내보내기(export)는 다른 에이전트가 lib/launchTemplate.js 근처에서
+// 만드는 중이다 — 여기서는 GET 링크만 걸어 둔다. 라우트가 아직 없어도
+// 이 화면은 그대로 동작해야 하니 fetch 로 존재를 확인하지 않는다.
+function ExportMenu({ id, open, onToggle }) {
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-50"
+      >
+        내보내기 ▾
+      </button>
+      {open && (
+        <div
+          className="absolute right-0 top-9 z-20 w-56 rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <a
+            href={`/api/launch/${id}/template`}
+            download
+            className="block rounded-md px-2.5 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            브랜드 양식
+          </a>
+          <p className="px-2.5 pb-1.5 text-[11px] text-slate-400">
+            브랜드가 채울 엑셀. 첫 시트에 꼭 볼 57줄만.
+          </p>
+          <hr className="my-1 border-slate-100" />
+          <a
+            href={`/api/launch/${id}/export`}
+            download
+            className="block rounded-md px-2.5 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            현황 내보내기
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 제목 줄의 '⋯' — 엑셀에서 가져오기 · 준비로 되돌리기.
+//
+// 예전에는 이 둘이 상태별 배너 안에 있었다. 배너를 없앤(진행 중) 뒤에도
+// 손잡이는 남아야 해서 여기로 옮긴다.
+function MoreMenu({ open, onToggle, importLocked, showRevert, onImport, onRevert }) {
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-label="더 보기"
+        className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-50"
+      >
+        ⋯
+      </button>
+      {open && (
+        <div
+          className="absolute right-0 top-9 z-20 w-56 rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            disabled={importLocked}
+            onClick={onImport}
+            title={importLocked ? '진행 중 런칭은 엑셀로 덮어쓸 수 없습니다' : undefined}
+            className="w-full rounded-md px-2.5 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400 disabled:hover:bg-transparent"
+          >
+            엑셀에서 가져오기 {importLocked && '🔒'}
+          </button>
+          {showRevert && (
+            <>
+              <hr className="my-1 border-slate-100" />
+              <button
+                type="button"
+                onClick={onRevert}
+                className="w-full rounded-md px-2.5 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-50"
+              >
+                준비로 되돌리기
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
