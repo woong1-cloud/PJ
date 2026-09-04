@@ -4,7 +4,7 @@ import { errorResponse, ApiError } from '@/lib/apiError';
 import { LAUNCH_STATUSES, DONE_STATUS, BLOCKED_STATUS, NA_STATUS } from '@/lib/launchTask';
 
 const TASK_SELECT =
-  'id, code, workstream, category, title, channel, decision_org, owner_org, owner_role, support_role, depends_on, day_offset, deliverable, plain_text, note, is_critical, sort_order, status, blocked_reason, done_at, excluded_reason, source, assignee:team_members!launch_tasks_assignee_fkey(id, name)';
+  'id, code, workstream, category, title, channel, decision_org, owner_org, owner_role, support_role, depends_on, day_offset, deliverable, plain_text, note, is_critical, sort_order, status, blocked_reason, blocked_decision_id, done_at, excluded_reason, source, assignee:team_members!launch_tasks_assignee_fkey(id, name)';
 
 // lib/launchImport.js 의 CODE 와 같아야 한다. 통합 WBS 가 07B-01 · 10A-03
 // 을 쓴다.
@@ -57,12 +57,23 @@ export async function PATCH(request, { params }) {
 
       patch.status = body.status;
       patch.done_at = body.status === DONE_STATUS ? new Date().toISOString() : null;
-      if (body.status !== BLOCKED_STATUS) patch.blocked_reason = null;
+      // 막힘을 벗어나면 이유도 · 걸려 있던 결정도 함께 지운다. 남겨 두면
+      // 다음에 막혔을 때 지난 이유·결정이 그대로 붙어 나온다.
+      if (body.status !== BLOCKED_STATUS) {
+        patch.blocked_reason = null;
+        patch.blocked_decision_id = null;
+      }
     }
-    // 막힌 이유는 상태와 같이 올 수도, 따로 올 수도 있다. 상태가 '막힘'이
-    // 아닌 채로 오면 위에서 방금 null 로 밀었으므로 여기서 다시 안 쓴다.
+    // 막힌 이유·연결된 결정은 상태와 같이 올 수도, 따로 올 수도 있다. 상태가
+    // '막힘'이 아닌 채로 오면 위에서 방금 null 로 밀었으므로 여기서 다시 안
+    // 쓴다. body 값이 명시적으로 null 이면(BlockDialog 가 종류를 바꿀 때
+    // 그렇게 보낸다) 그대로 null 로 — String(null) 은 "null" 이라는 글자가
+    // 되어 버리므로 따로 갈라야 한다.
     if (body.blockedReason !== undefined && patch.blocked_reason !== null) {
-      patch.blocked_reason = String(body.blockedReason).trim() || null;
+      patch.blocked_reason = body.blockedReason === null ? null : String(body.blockedReason).trim() || null;
+    }
+    if (body.blockedDecisionId !== undefined && patch.blocked_decision_id !== null) {
+      patch.blocked_decision_id = body.blockedDecisionId || null;
     }
     if (body.assignee !== undefined) patch.assignee = body.assignee || null;
 

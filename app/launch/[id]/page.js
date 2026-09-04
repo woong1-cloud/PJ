@@ -8,6 +8,8 @@ import { LaunchBoard } from '@/components/launch/LaunchBoard';
 import { LaunchContext } from '@/components/launch/LaunchContext';
 import { LaunchContextDialog } from '@/components/launch/LaunchContextDialog';
 import { ImportDialog } from '@/components/launch/ImportDialog';
+import { DecisionList } from '@/components/launch/DecisionList';
+import { WeeklyProgress } from '@/components/launch/WeeklyProgress';
 import { dDay, dDayLabel } from '@/lib/launchDate';
 import { progress } from '@/lib/launchTask';
 import { todayInKst } from '@/lib/overdue';
@@ -23,9 +25,16 @@ export default function LaunchDetailPage({ params }) {
 
   const [launch, setLaunch] = useState(null);
   const [tasks, setTasks] = useState([]);
+  // 결정 대기 목록. 탭(결정 대기·주간 진척) 배지 건수와 보드의 '결정 대기 ·
+  // 제목' 표시가 같이 쓰기 때문에 페이지가 갖는다 — LaunchBoard 만 갖고
+  // 있으면 탭 줄에서 건수를 못 본다.
+  const [decisions, setDecisions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [importOpen, setImportOpen] = useState(false);
+  // 탭 셋. 기본은 보드다 — 지금까지 보드가 바로 나오던 화면이라 습관을
+  // 안 바꾼다.
+  const [tab, setTab] = useState('board');
   // 가져오기 결과. 476건을 올렸는데 아무 숫자도 안 뜨면 무엇이 들어갔는지
   // 알 길이 없다 — 특히 시트에서 빠진 것과 진행 중이라 안 바꾼 것은
   // 여기서만 보인다.
@@ -47,12 +56,21 @@ export default function LaunchDetailPage({ params }) {
 
     async function load() {
       try {
-        const res = await fetch(`/api/launch/${id}`);
+        // 함께 받는다. 결정 목록은 작아서(14건 안팎) 따로 불러도 비용은
+        // 작지만, 같은 reloadToken 을 쓰는 자리이니 한 번에 묶는다 —
+        // 지우기·가져오기처럼 목록 길이가 바뀌는 일 뒤에는 결정 쪽의
+        // waitingCount 도 같이 낡아 있을 수 있어서다.
+        const [res, decRes] = await Promise.all([
+          fetch(`/api/launch/${id}`),
+          fetch(`/api/launch/${id}/decisions`),
+        ]);
         const body = await res.json();
         if (!res.ok) throw new Error(body.error ?? '불러오지 못했습니다.');
+        const decBody = await decRes.json().catch(() => ({}));
         if (cancelled) return;
         setLaunch(body.launch);
         setTasks(body.tasks ?? []);
+        if (decRes.ok) setDecisions(decBody.decisions ?? []);
         setError('');
       } catch (err) {
         if (!cancelled) setError(err.message);
@@ -67,9 +85,45 @@ export default function LaunchDetailPage({ params }) {
     };
   }, [admin, id, reloadToken]);
 
+  // 결정 목록만 다시 받는다. 항목 하나가 막히거나 풀리면 결정 쪽
+  // waitingCount 가 그 순간 낡는다 — 보드 전체를 다시 받으면(reloadToken)
+  // 회의 중 스크롤이 튀니, 여기는 결정만 가볍게 새로 받는다.
+  async function refreshDecisions() {
+    const res = await fetch(`/api/launch/${id}/decisions`).catch(() => null);
+    if (!res?.ok) return;
+    const body = await res.json();
+    setDecisions(body.decisions ?? []);
+  }
+
+  // 결정 기록·추가·(BlockDialog 의) 새 결정 올리기가 전부 이 하나로 온다.
+  // id 가 이미 있으면 갈아 끼우고, 없으면 붙인다.
+  function saveDecision(decision) {
+    setDecisions((prev) => {
+      const exists = prev.some((d) => d.id === decision.id);
+      if (exists) return prev.map((d) => (d.id === decision.id ? { ...d, ...decision } : d));
+      return [...prev, decision].sort((a, b) => a.seq - b.seq);
+    });
+  }
+
   const stat = useMemo(
     () => progress({ tasks, openDate: launch?.open_date, today }),
     [tasks, launch, today],
+  );
+
+  const pendingDecisionCount = useMemo(
+    () => decisions.filter((d) => d.status === '대기').length,
+    [decisions],
+  );
+
+  // 탭 셋. 건수를 붙이는 이유: 안 열어봐도 몇 건인지 보여야 한다. 주간
+  // 진척은 다섯 칸을 합치면 뜻이 겹치는 숫자라 배지를 안 단다.
+  const tabs = useMemo(
+    () => [
+      { key: 'board', label: '보드', count: stat.total },
+      { key: 'decisions', label: '결정 대기', count: pendingDecisionCount },
+      { key: 'weekly', label: '주간 진척', count: null },
+    ],
+    [stat.total, pendingDecisionCount],
   );
 
   // 준비 ↔ 진행 중 — 엑셀 문의 열쇠. app/api/launch/[id]/route.js PATCH 참고.
@@ -123,7 +177,8 @@ export default function LaunchDetailPage({ params }) {
           <div>
             <b>아직 준비 단계입니다.</b> 엑셀로 요건을 정리해 올린 뒤 시작합니다.
           </div>
-          <div className="ml-auto flex gap-2">
+          <div className="ml-auto flex flex-wrap items-center gap-3">
+            <TemplateLink id={id} tone="amber" />
             <button
               type="button"
               onClick={() => setImportOpen(true)}
@@ -146,7 +201,10 @@ export default function LaunchDetailPage({ params }) {
           <div>
             <b>진행 중입니다.</b> 이제부터는 모아에서 관리합니다 — 엑셀 문은 닫혔습니다.
           </div>
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex flex-wrap items-center gap-3">
+            {/* 진행 중에도 뽑을 일이 있다 — 양식은 이 브랜드가 아니라 브랜드
+                쪽에 주는 것이라, 엑셀 문이 닫혀도 이 단추는 안 잠근다. */}
+            <TemplateLink id={id} tone="emerald" />
             {/* 잠긴 채로 둔다. 눌러도 안 되는 것을 감추는 대신 왜 안 되는지가
                 보여야 한다. */}
             <button
@@ -191,19 +249,54 @@ export default function LaunchDetailPage({ params }) {
         </div>
       </div>
 
-      <LaunchBoard
-        launch={launch}
-        tasks={tasks}
-        today={today}
-        // 서버가 돌려준 한 줄만 갈아 끼운다. 통째로 다시 부르면 스크롤이
-        // 튀고, 회의 중에 그러면 보던 자리를 잃는다.
-        onChanged={(task) =>
-          setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, ...task } : t)))
-        }
-        // 지우기는 한 줄만 갈아 끼울 수 없다 — 목록 자체가 짧아지므로
-        // 통째로 다시 부른다.
-        onReload={() => setReloadToken((t) => t + 1)}
-      />
+      {/* 탭 셋 — 보드 · 결정 대기 · 주간 진척. 기본은 보드다. 건수를 붙이는
+          이유: 안 열어봐도 몇 건인지 보여야 한다. */}
+      <div className="flex flex-wrap items-center gap-2">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setTab(t.key)}
+            className={`rounded-full border px-3 py-1.5 text-sm ${
+              tab === t.key
+                ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            {t.label}
+            {t.count !== null && (
+              <span className="ml-1.5 text-xs tabular-nums text-slate-400">{t.count}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'board' && (
+        <LaunchBoard
+          launch={launch}
+          tasks={tasks}
+          today={today}
+          decisions={decisions}
+          // 서버가 돌려준 한 줄만 갈아 끼운다. 통째로 다시 부르면 스크롤이
+          // 튀고, 회의 중에 그러면 보던 자리를 잃는다.
+          onChanged={(task) =>
+            setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, ...task } : t)))
+          }
+          // 지우기는 한 줄만 갈아 끼울 수 없다 — 목록 자체가 짧아지므로
+          // 통째로 다시 부른다.
+          onReload={() => setReloadToken((t) => t + 1)}
+          onDecisionCreated={saveDecision}
+          onBlockedChanged={refreshDecisions}
+        />
+      )}
+
+      {tab === 'decisions' && (
+        <DecisionList launchId={id} decisions={decisions} onSaved={saveDecision} />
+      )}
+
+      {tab === 'weekly' && (
+        <WeeklyProgress launch={launch} tasks={tasks} decisions={decisions} today={today} />
+      )}
 
       <ImportDialog
         open={importOpen}
@@ -400,6 +493,30 @@ function Stat({ label, value, sub, tone }) {
       <span className={`text-sm font-medium tabular-nums ${TONE[tone] ?? 'text-slate-800'}`}>
         {value}
         {sub && <span className="ml-1.5 text-xs font-normal text-slate-400">{sub}</span>}
+      </span>
+    </div>
+  );
+}
+
+const TEMPLATE_TONE = {
+  amber: 'border-amber-300 text-amber-800 hover:bg-amber-100',
+  emerald: 'border-emerald-300 text-emerald-800 hover:bg-emerald-100',
+};
+
+// 브랜드에게 줄 엑셀 양식 단추. GET 이 xlsx 를 Content-Disposition: attachment
+// 로 내려주므로 fetch 로 blob 을 만들 필요 없이 <a download> 로 충분하다.
+function TemplateLink({ id, tone }) {
+  return (
+    <div className="flex flex-col items-end gap-0.5">
+      <a
+        href={`/api/launch/${id}/template`}
+        download
+        className={`rounded-lg border bg-white px-3 py-1.5 text-xs font-medium ${TEMPLATE_TONE[tone]}`}
+      >
+        양식 받기
+      </a>
+      <span className="text-[11px] text-slate-500">
+        브랜드가 채울 양식입니다. 첫 시트에 꼭 볼 57줄만 있습니다.
       </span>
     </div>
   );

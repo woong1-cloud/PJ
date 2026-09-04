@@ -19,6 +19,7 @@ import {
 } from '@/lib/launchTask';
 import { NotApplicableDialog } from '@/components/launch/NotApplicableDialog';
 import { TaskEditDialog } from '@/components/launch/TaskEditDialog';
+import { BlockDialog } from '@/components/launch/BlockDialog';
 
 // 역할 문자열 하나. support_role 에 '온라인BU 광고기획 , 브랜드PM' 처럼
 // 쉼표로 둘이 든 값이 5건 있다 — 정확히 같은지만 보면 그 5건이 안 잡힌다.
@@ -55,8 +56,15 @@ function readStoredRole(launchId) {
 // 색은 lib/launchTask.js 의 taskTone 하나로 정한다. 화면마다 다르게 칠하면
 // 같은 항목이 여기서는 빨강, 저기서는 회색이 된다.
 //
-// props: launch, tasks, today, onChanged, onReload
-export function LaunchBoard({ launch, tasks = [], today, onChanged, onReload }) {
+// props: launch, tasks, today, onChanged, onReload, decisions, onDecisionCreated,
+//        onBlockedChanged
+//
+// decisions 는 BlockDialog 의 '어느 결정인가요' 드롭다운과, 막힌 줄의
+// '결정 대기 · 제목' 표시가 같이 쓴다 — 결정 목록은 페이지가 갖고 있고
+// (탭 건수 배지가 필요해서) 보드는 읽기만 한다.
+export function LaunchBoard({
+  launch, tasks = [], today, onChanged, onReload, decisions = [], onDecisionCreated, onBlockedChanged,
+}) {
   const [view, setView] = useState('week');
   const [query, setQuery] = useState('');
   const [closedGroups, setClosedGroups] = useState(() => new Set());
@@ -76,6 +84,8 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged, onReload }) 
   // 해당없음 사유 창을 띄운 항목. 단건·다중 모두 { ids, title } 모양으로
   // 통일한다 — 다이얼로그 하나가 양쪽을 다 받게 하려고.
   const [naFor, setNaFor] = useState(null);
+  // 막힘 사유 창을 띄운 항목. window.prompt 대신 종류를 가르는 창을 연다.
+  const [blockFor, setBlockFor] = useState(null);
   // ⋯ 메뉴가 열린 항목. 마찬가지로 한 번에 하나만 연다.
   const [menuFor, setMenuFor] = useState(null);
   // 항목 편집 창. { mode: 'create' } 또는 { mode: 'edit', task } 또는 null.
@@ -115,6 +125,9 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged, onReload }) 
   );
 
   const stat = useMemo(() => progress(all), [all]);
+
+  // 막힌 줄의 '결정 대기 · 제목' 표시가 쓴다.
+  const decisionsById = useMemo(() => new Map(decisions.map((d) => [d.id, d])), [decisions]);
 
   // 보기 다섯. 세는 규칙은 전부 launchTask 에서 온다.
   const views = useMemo(
@@ -250,19 +263,22 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged, onReload }) 
     setError('');
     setTouched((prev) => new Set(prev).add(task.id));
     onChanged?.(resBody.task);
+
+    // blocked_decision_id 가 바뀌었으면(막히거나 · 풀리거나 · 다른 결정으로
+    // 바뀌거나) 결정 대기 목록의 waitingCount 가 그 순간 낡는다. 페이지가
+    // 그 목록을 다시 받아 온다 — 탭 배지·결정 대기 화면이 보드와 어긋나면
+    // "3건이 기다린다"는 말을 못 믿게 된다.
+    if (resBody.task?.blocked_decision_id !== task.blocked_decision_id) onBlockedChanged?.();
   }
 
-  // 상태를 바꾼다. 막힘으로 갈 때만 이유를 묻는다 — 이유 없는 막힘은
-  // 회의에서 "그래서 뭐가 문제죠"로 시작하게 만든다.
+  // 상태를 바꾼다. 막힘으로 갈 때는 창을 띄워 종류(의사결정/그 밖)를 가른다
+  // — window.prompt 로 이유만 받으면 결정 대기와 이을 길이 없다.
   async function setStatus(task, status) {
-    let blockedReason;
     if (status === BLOCKED_STATUS) {
-      const answer = window.prompt(`${task.code} ${task.title}\n\n무엇에 막혔나요?`, '');
-      // 취소는 취소다. 빈 문자열(그냥 확인)은 이유 없이 막힘으로 둔다.
-      if (answer === null) return;
-      blockedReason = answer;
+      setBlockFor(task);
+      return;
     }
-    await patchTask(task, { status, ...(blockedReason === undefined ? {} : { blockedReason }) });
+    await patchTask(task, { status });
   }
 
   // 해당없음은 사유를 받고 나서야 보낸다. 서버도 빈 사유를 400 으로 막지만,
@@ -535,6 +551,11 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged, onReload }) 
                     tasks={tasks}
                     openDate={openDate}
                     today={today}
+                    blockedDecisionTitle={
+                      task.blocked_decision_id
+                        ? (decisionsById.get(task.blocked_decision_id)?.title ?? '(지워진 결정)')
+                        : null
+                    }
                     busy={busy === task.id}
                     checked={picked.has(task.id)}
                     onCheck={togglePick}
@@ -583,6 +604,16 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged, onReload }) 
         }}
       />
 
+      <BlockDialog
+        open={Boolean(blockFor)}
+        task={blockFor}
+        launchId={launch.id}
+        decisions={decisions}
+        onClose={() => setBlockFor(null)}
+        onSubmit={(patch) => (blockFor ? patchTask(blockFor, { status: BLOCKED_STATUS, ...patch }) : undefined)}
+        onDecisionCreated={onDecisionCreated}
+      />
+
       <TaskEditDialog
         open={Boolean(taskDialog)}
         mode={taskDialog?.mode ?? 'edit'}
@@ -616,7 +647,8 @@ const TONE_BAR = {
 };
 
 function TaskRow({
-  task, tasks, openDate, today, busy, checked, onCheck, onStatus, menuOpen, onToggleMenu, onEdit, onAskNa, onRestore, onDelete,
+  task, tasks, openDate, today, blockedDecisionTitle, busy, checked, onCheck, onStatus, menuOpen,
+  onToggleMenu, onEdit, onAskNa, onRestore, onDelete,
 }) {
   const tone = taskTone({ task, openDate, today, tasks });
   const due = dueDate(openDate, task.day_offset);
@@ -673,7 +705,12 @@ function TaskRow({
               {waiting && !done && (
                 <span className="text-slate-400">선행 {task.depends_on.join(', ')} 대기</span>
               )}
-              {isBlocked(task) && task.blocked_reason && (
+              {/* 어느 결정을 기다리는지가 자유 사유보다 먼저다 — 결정이
+                  풀리면 이 항목도 풀린다는 인과가 여기서 보여야 한다. */}
+              {isBlocked(task) && blockedDecisionTitle && (
+                <span className="text-indigo-700">결정 대기 · {blockedDecisionTitle}</span>
+              )}
+              {isBlocked(task) && !blockedDecisionTitle && task.blocked_reason && (
                 <span className="text-amber-700">막힘 — {task.blocked_reason}</span>
               )}
             </>
