@@ -18,6 +18,34 @@ import {
   progress,
 } from '@/lib/launchTask';
 import { NotApplicableDialog } from '@/components/launch/NotApplicableDialog';
+import { TaskEditDialog } from '@/components/launch/TaskEditDialog';
+
+// 역할 문자열 하나. support_role 에 '온라인BU 광고기획 , 브랜드PM' 처럼
+// 쉼표로 둘이 든 값이 5건 있다 — 정확히 같은지만 보면 그 5건이 안 잡힌다.
+function splitRoles(value) {
+  return String(value ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function hasRole(value, role) {
+  return splitRoles(value).includes(role);
+}
+
+function roleStorageKey(launchId) {
+  return `moa.launch.${launchId}.role`;
+}
+
+// 사생활 보호 모드에서 localStorage 가 던진다. 못 읽으면 안 고른 것으로 친다.
+function readStoredRole(launchId) {
+  if (!launchId) return '';
+  try {
+    return localStorage.getItem(roleStorageKey(launchId)) || '';
+  } catch {
+    return '';
+  }
+}
 
 // 런칭 보드.
 //
@@ -50,6 +78,27 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged, onReload }) 
   const [naFor, setNaFor] = useState(null);
   // ⋯ 메뉴가 열린 항목. 마찬가지로 한 번에 하나만 연다.
   const [menuFor, setMenuFor] = useState(null);
+  // 항목 편집 창. { mode: 'create' } 또는 { mode: 'edit', task } 또는 null.
+  // 만들기·고치기가 같은 창(TaskEditDialog)을 쓴다 — 필드가 거의 같아서다.
+  const [taskDialog, setTaskDialog] = useState(null);
+  // 역할 필터. 회의에서 "물류팀 것 봅시다" 하고 고르는 사람 기준이지, 화면을
+  // 띄운 사람 기준이 아니다 — 그래서 자동으로는 안 고른다.
+  //
+  // localStorage 읽기는 초기화 함수 안에 두면 effect 가 필요 없다.
+  const [selectedRole, setSelectedRole] = useState(() => readStoredRole(launch?.id));
+  const [roleTab, setRoleTab] = useState('owner');
+
+  // 고른 역할을 런칭별로 기억한다. 서버 작업은 없다 — 이 브라우저에서 다음에
+  // 같은 런칭을 열 때만 쓰는, 회의 준비용 편의다.
+  useEffect(() => {
+    if (!launch?.id) return;
+    try {
+      if (selectedRole) localStorage.setItem(roleStorageKey(launch.id), selectedRole);
+      else localStorage.removeItem(roleStorageKey(launch.id));
+    } catch {
+      // 사생활 보호 모드 등. 기억 못 해도 화면은 그대로 동작해야 한다.
+    }
+  }, [selectedRole, launch?.id]);
 
   // 바깥을 누르면 열린 메뉴를 닫는다.
   useEffect(() => {
@@ -100,9 +149,70 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged, onReload }) 
     return list;
   }, [tasks, view, query, openDate, today, touched]);
 
+  // 워크스트림·역할·소속 후보. 항목 편집 창의 datalist 와 역할 필터
+  // 드롭다운이 같이 쓴다 — 어차피 같은 476건에서 뽑는 값이다.
+  const workstreams = useMemo(() => {
+    const set = new Set(tasks.map((t) => t.workstream).filter(Boolean));
+    return [...set].sort((a, b) => a.localeCompare(b, 'ko'));
+  }, [tasks]);
+
+  const roleOptions = useMemo(() => {
+    const set = new Set();
+    for (const task of tasks) {
+      splitRoles(task.owner_role).forEach((r) => set.add(r));
+      splitRoles(task.support_role).forEach((r) => set.add(r));
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, 'ko'));
+  }, [tasks]);
+
+  const orgOptions = useMemo(() => {
+    const set = new Set();
+    for (const task of tasks) {
+      if (task.decision_org) set.add(task.decision_org.trim());
+      if (task.owner_org) set.add(task.owner_org.trim());
+    }
+    return [...set].filter(Boolean).sort((a, b) => a.localeCompare(b, 'ko'));
+  }, [tasks]);
+
+  // 역할 탭 셋. 이름에 고른 역할이 들어가야 한다 — 화면 띄운 사람이
+  // 브랜드PM인데 물류팀 것을 보고 있을 수 있어 '내가 할 것'은 거짓말이다.
+  const roleTabs = useMemo(() => {
+    if (!selectedRole) return [];
+    return [
+      {
+        key: 'owner',
+        label: `${selectedRole}이 할 것`,
+        count: shown.filter((task) => hasRole(task.owner_role, selectedRole)).length,
+      },
+      {
+        key: 'support',
+        label: `${selectedRole}이 도울 것`,
+        count: shown.filter((task) => hasRole(task.support_role, selectedRole)).length,
+      },
+      {
+        key: 'all',
+        label: '전부',
+        count: shown.filter(
+          (task) => hasRole(task.owner_role, selectedRole) || hasRole(task.support_role, selectedRole),
+        ).length,
+      },
+    ];
+  }, [shown, selectedRole]);
+
+  // 역할 필터는 기존 보기 칩과 겹쳐 적용된다 — '물류팀이 할 것' + '이번 주'가
+  // 함께 걸린다. 안 고르면 지금과 똑같이 동작해야 하니 그대로 통과시킨다.
+  const roleFiltered = useMemo(() => {
+    if (!selectedRole) return shown;
+    if (roleTab === 'owner') return shown.filter((task) => hasRole(task.owner_role, selectedRole));
+    if (roleTab === 'support') return shown.filter((task) => hasRole(task.support_role, selectedRole));
+    return shown.filter(
+      (task) => hasRole(task.owner_role, selectedRole) || hasRole(task.support_role, selectedRole),
+    );
+  }, [shown, selectedRole, roleTab]);
+
   const groups = useMemo(() => {
     const map = new Map();
-    for (const task of shown) {
+    for (const task of roleFiltered) {
       if (!map.has(task.workstream)) map.set(task.workstream, []);
       map.get(task.workstream).push(task);
     }
@@ -110,7 +220,7 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged, onReload }) 
     // 뿐이고, 회의에서 보는 순서는 언제까지인가다.
     for (const list of map.values()) list.sort((a, b) => a.day_offset - b.day_offset);
     return [...map.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
-  }, [shown]);
+  }, [roleFiltered]);
 
   function toggleGroup(ws) {
     setClosedGroups((prev) => {
@@ -230,6 +340,57 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged, onReload }) 
 
   return (
     <div className="flex flex-col gap-4">
+      {/* 역할 필터. 모아의 조직과 런칭의 역할은 다른 축이라 이을 데이터가
+          없다 — 그래서 자동으로 안 고르고 사람이 고른다. 회의에서 화면 띄운
+          사람이 "물류팀 것 봅시다" 하고 누르는 자리다. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <label htmlFor="role-filter" className="text-xs text-slate-500">
+          역할로 보기
+        </label>
+        <select
+          id="role-filter"
+          value={selectedRole}
+          onChange={(e) => {
+            setSelectedRole(e.target.value);
+            // 새로 고른 역할이면 '할 것'부터 본다 — 가장 흔히 찾는 것이다.
+            setRoleTab('owner');
+          }}
+          className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-600 focus:border-indigo-400 focus:outline-none"
+        >
+          <option value="">고르지 않음</option>
+          {roleOptions.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </select>
+        {selectedRole &&
+          roleTabs.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setRoleTab(t.key)}
+              className={`rounded-full border px-2.5 py-1 text-xs ${
+                roleTab === t.key
+                  ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                  : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              {t.label}
+              <span className="ml-1 tabular-nums text-slate-400">{t.count}</span>
+            </button>
+          ))}
+        {selectedRole && (
+          <button
+            type="button"
+            onClick={() => setSelectedRole('')}
+            className="text-xs text-slate-400 hover:text-slate-600"
+          >
+            역할 해제
+          </button>
+        )}
+      </div>
+
       <div className="flex flex-wrap items-center gap-2">
         {views.map((v) => (
           <button
@@ -253,6 +414,13 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged, onReload }) 
             <span className="ml-1.5 text-xs tabular-nums text-slate-400">{v.count}</span>
           </button>
         ))}
+        <button
+          type="button"
+          onClick={() => setTaskDialog({ mode: 'create' })}
+          className="ml-auto rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+        >
+          ＋ 항목
+        </button>
         <input
           type="search"
           value={query}
@@ -261,7 +429,7 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged, onReload }) 
             setPicked(new Set());
           }}
           placeholder="항목·역할로 찾기"
-          className="ml-auto h-9 w-56 rounded-lg border border-slate-300 px-3 text-sm focus:border-indigo-400 focus:outline-none"
+          className="h-9 w-56 rounded-lg border border-slate-300 px-3 text-sm focus:border-indigo-400 focus:outline-none"
         />
       </div>
 
@@ -301,11 +469,17 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged, onReload }) 
 
       {groups.length === 0 && (
         <p className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-8 text-center text-sm text-slate-500">
-          {view === 'week' && '이번 주에 할 것이 없습니다.'}
-          {view === 'late' && '지난 항목이 없습니다.'}
-          {view === 'blocked' && '막힌 항목이 없습니다.'}
-          {view === 'na' && '해당없음으로 둔 항목이 없습니다.'}
-          {view === 'all' && '항목이 없습니다.'}
+          {selectedRole ? (
+            `${roleTabs.find((t) => t.key === roleTab)?.label ?? selectedRole} 항목이 이 보기에 없습니다.`
+          ) : (
+            <>
+              {view === 'week' && '이번 주에 할 것이 없습니다.'}
+              {view === 'late' && '지난 항목이 없습니다.'}
+              {view === 'blocked' && '막힌 항목이 없습니다.'}
+              {view === 'na' && '해당없음으로 둔 항목이 없습니다.'}
+              {view === 'all' && '항목이 없습니다.'}
+            </>
+          )}
         </p>
       )}
 
@@ -367,6 +541,10 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged, onReload }) 
                     onStatus={(status) => setStatus(task, status)}
                     menuOpen={menuFor === task.id}
                     onToggleMenu={() => setMenuFor((prev) => (prev === task.id ? null : task.id))}
+                    onEdit={() => {
+                      setMenuFor(null);
+                      setTaskDialog({ mode: 'edit', task });
+                    }}
                     onAskNa={() => {
                       setMenuFor(null);
                       setNaFor({ ids: [task.id], title: `${task.code} ${task.title}` });
@@ -404,6 +582,26 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged, onReload }) 
           return bulkAction(naFor.ids, 'not_applicable', reason);
         }}
       />
+
+      <TaskEditDialog
+        open={Boolean(taskDialog)}
+        mode={taskDialog?.mode ?? 'edit'}
+        launch={launch}
+        task={taskDialog?.mode === 'edit' ? taskDialog.task : null}
+        workstreams={workstreams}
+        roles={roleOptions}
+        orgs={orgOptions}
+        onClose={() => setTaskDialog(null)}
+        onSaved={(task) => {
+          const wasCreate = taskDialog?.mode === 'create';
+          setTaskDialog(null);
+          // 고치기는 그 줄만 갈아 끼운다(onChanged) — 새로 넣기는 목록
+          // 자체가 길어지므로 통째로 다시 받는다(onReload), bulkAction 과
+          // 같은 규칙이다.
+          if (wasCreate) onReload?.();
+          else onChanged?.(task);
+        }}
+      />
     </div>
   );
 }
@@ -418,7 +616,7 @@ const TONE_BAR = {
 };
 
 function TaskRow({
-  task, tasks, openDate, today, busy, checked, onCheck, onStatus, menuOpen, onToggleMenu, onAskNa, onRestore, onDelete,
+  task, tasks, openDate, today, busy, checked, onCheck, onStatus, menuOpen, onToggleMenu, onEdit, onAskNa, onRestore, onDelete,
 }) {
   const tone = taskTone({ task, openDate, today, tasks });
   const due = dueDate(openDate, task.day_offset);
@@ -472,7 +670,6 @@ function TaskRow({
                 </span>
               )}
               {task.owner_role && <span>{task.owner_role}</span>}
-              {task.decision_org && <span className="text-slate-400">결정 {task.decision_org}</span>}
               {waiting && !done && (
                 <span className="text-slate-400">선행 {task.depends_on.join(', ')} 대기</span>
               )}
@@ -533,6 +730,14 @@ function TaskRow({
             className="absolute right-0 top-7 z-20 w-56 rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
             onClick={(e) => e.stopPropagation()}
           >
+            <button
+              type="button"
+              onClick={onEdit}
+              className="w-full rounded-md px-2.5 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-50"
+            >
+              내용 고치기
+            </button>
+            <hr className="my-1 border-slate-100" />
             {na ? (
               <button
                 type="button"
