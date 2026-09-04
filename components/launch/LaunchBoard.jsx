@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { dueDate, dDay, dDayLabel } from '@/lib/launchDate';
+import { matchesItem } from '@/lib/launchSearch';
 import {
   BOARD_STATUSES,
   DONE_STATUS,
@@ -93,14 +94,9 @@ export function LaunchBoard({ launch, tasks = [], today, onChanged, onReload }) 
     // 해당없음은 'na' 보기에서만 본다.
     else list = list.filter((task) => !isNotApplicable(task) || keep(task));
 
-    if (q) {
-      list = list.filter((task) =>
-        [task.code, task.title, task.note, task.deliverable, task.owner_role, task.category]
-          .filter(Boolean)
-          .join(' ')
-          .includes(q),
-      );
-    }
+    // 찾는 규칙은 lib/launchSearch.js 하나다. 가이드와 같은 함수를 쓴다 —
+    // 두 화면에 따로 쓰면 한쪽만 고쳐진다.
+    if (q) list = list.filter((task) => matchesItem(task, q));
     return list;
   }, [tasks, view, query, openDate, today, touched]);
 

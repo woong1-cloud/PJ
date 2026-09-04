@@ -2,11 +2,13 @@
 
 import { useMemo, useState } from 'react';
 
+import { matchesItem } from '@/lib/launchSearch';
+
 // 런칭 가이드 — 브랜드와 무관한 지식.
 //
 // 오픈일도 D-N 도 진척률도 없다. 브랜드가 없으니 있을 수가 없다.
 //
-// 이 화면은 훑는 목록이 아니라 찾아 들어가는 문서다. 403건이라 검색이
+// 이 화면은 훑는 목록이 아니라 찾아 들어가는 문서다. 476건이라 검색이
 // 없으면 못 쓴다.
 //
 // props: guide, items, roles, onDeleted
@@ -16,16 +18,11 @@ export function GuideView({ guide, items = [], roles = [], onDeleted }) {
   const [showRoles, setShowRoles] = useState(false);
 
   const hits = useMemo(() => {
-    const q = query.trim();
-    if (!q) return items;
-    // 코드·제목·비고·산출물·역할을 한 덩어리로 본다. 어느 칸에 있는지
-    // 기억하고 찾는 사람은 없다.
-    return items.filter((i) =>
-      [i.code, i.title, i.note, i.deliverable, i.owner_role, i.support_role, i.category]
-        .filter(Boolean)
-        .join(' ')
-        .includes(q),
-    );
+    // 찾는 규칙은 lib/launchSearch.js 하나다. 보드와 같은 함수를 쓴다 —
+    // 화면마다 따로 쓰면 한쪽만 고쳐진다. 실제로 그랬다: 대소문자를 가려서
+    // 'wms' 로 치면 아무것도 안 나왔다.
+    if (!query.trim()) return items;
+    return items.filter((i) => matchesItem(i, query));
   }, [items, query]);
 
   const groups = useMemo(() => {
