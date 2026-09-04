@@ -13,6 +13,7 @@ import {
   isBlocked,
   isLate,
   isReady,
+  readyCount,
   isThisWeek,
   isWaitingOnDep,
   isNotApplicable,
@@ -139,6 +140,9 @@ export function LaunchBoard({
   );
 
   const stat = useMemo(() => progress(all), [all]);
+  // 착수 가능은 런칭 전체 목록에서만 셀 수 있다 — 선행이 워크스트림을
+  // 넘나든다. 그래서 progress 와 따로 센다(lib/launchTask.js 참고).
+  const readyTotal = useMemo(() => readyCount(tasks), [tasks]);
 
   // 막힌 줄의 '결정 대기 · 제목' 표시가 쓴다.
   const decisionsById = useMemo(() => new Map(decisions.map((d) => [d.id, d])), [decisions]);
@@ -151,11 +155,11 @@ export function LaunchBoard({
       { key: 'blocked', label: '막힘', count: stat.blocked },
       // '막힘'의 반대말 자리라 그 옆에 둔다. 회의에서 "막힌 것"과
       // "지금 할 수 있는 것"은 잇달아 묻는 질문이다.
-      { key: 'ready', label: '착수 가능', count: stat.ready },
+      { key: 'ready', label: '착수 가능', count: readyTotal },
       { key: 'na', label: '해당없음', count: stat.notApplicable },
       { key: 'all', label: '전체', count: stat.total },
     ],
-    [stat],
+    [stat, readyTotal],
   );
 
   const shown = useMemo(() => {
