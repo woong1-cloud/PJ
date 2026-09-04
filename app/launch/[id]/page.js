@@ -10,6 +10,7 @@ import { LaunchContextDialog } from '@/components/launch/LaunchContextDialog';
 import { ImportDialog } from '@/components/launch/ImportDialog';
 import { DecisionList } from '@/components/launch/DecisionList';
 import { WeeklyProgress } from '@/components/launch/WeeklyProgress';
+import { GanttView } from '@/components/launch/GanttView';
 import { dDay, dDayLabel } from '@/lib/launchDate';
 import { progress } from '@/lib/launchTask';
 import { todayInKst } from '@/lib/overdue';
@@ -35,6 +36,10 @@ export default function LaunchDetailPage({ params }) {
   // 탭 셋. 기본은 보드다 — 지금까지 보드가 바로 나오던 화면이라 습관을
   // 안 바꾼다.
   const [tab, setTab] = useState('board');
+  // 간트에서 막대를 눌러 넘어올 때 보드가 걸 워크스트림. 보드 안에 두지
+  // 않는 이유는 간트가 그것을 정하기 때문이다 — 탭을 넘나드는 값이라
+  // 페이지가 갖는다.
+  const [boardFocus, setBoardFocus] = useState('');
   // 가져오기 결과. 476건을 올렸는데 아무 숫자도 안 뜨면 무엇이 들어갔는지
   // 알 길이 없다 — 특히 시트에서 빠진 것과 진행 중이라 안 바꾼 것은
   // 여기서만 보인다.
@@ -136,6 +141,8 @@ export default function LaunchDetailPage({ params }) {
       { key: 'board', label: '보드', count: stat.total },
       { key: 'decisions', label: '결정 대기', count: pendingDecisionCount },
       { key: 'weekly', label: '주간 진척', count: null },
+      // 간트는 건수를 안 단다 — 워크스트림 19줄이라 '19' 는 아무 말도 안 한다.
+      { key: 'gantt', label: '간트', count: null },
     ],
     [stat.total, pendingDecisionCount],
   );
@@ -207,7 +214,10 @@ export default function LaunchDetailPage({ params }) {
               e.stopPropagation();
               setOpenMenu((prev) => (prev === 'more' ? null : 'more'));
             }}
-            importLocked={launch.status === '진행 중'}
+            // 서버는 '준비' 가 아니면 400 을 낸다
+            // (app/api/launch/[id]/import/route.js). 화면이 그보다 넓게
+            // 열어 두면 완료·중단 런칭에서 누르고 오류를 보게 된다.
+            importLocked={launch.status !== '준비'}
             showRevert={launch.status !== '준비'}
             onImport={() => {
               setOpenMenu(null);
@@ -310,6 +320,8 @@ export default function LaunchDetailPage({ params }) {
           onReload={() => setReloadToken((t) => t + 1)}
           onDecisionCreated={saveDecision}
           onBlockedChanged={refreshDecisions}
+          focusWorkstream={boardFocus}
+          onClearFocus={() => setBoardFocus('')}
         />
       )}
 
@@ -319,6 +331,21 @@ export default function LaunchDetailPage({ params }) {
 
       {tab === 'weekly' && (
         <WeeklyProgress launch={launch} tasks={tasks} decisions={decisions} today={today} />
+      )}
+
+      {tab === 'gantt' && (
+        <GanttView
+          launch={launch}
+          tasks={tasks}
+          today={today}
+          // 막대를 누르면 보드로 넘어가 그 워크스트림만 건다. 간트는
+          // "언제 몰리나"를 보는 자리고, 답이 보이면 바로 그 줄들을 열어보게
+          // 된다 — 탭을 손으로 다시 누르게 하면 그 흐름이 끊긴다.
+          onPick={(workstream) => {
+            setBoardFocus(workstream);
+            setTab('board');
+          }}
+        />
       )}
 
       <ImportDialog

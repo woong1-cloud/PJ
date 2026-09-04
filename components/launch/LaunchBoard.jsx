@@ -65,6 +65,7 @@ function readStoredRole(launchId) {
 // (탭 건수 배지가 필요해서) 보드는 읽기만 한다.
 export function LaunchBoard({
   launch, tasks = [], today, onChanged, onReload, decisions = [], onDecisionCreated, onBlockedChanged,
+  focusWorkstream = '', onClearFocus,
 }) {
   const [view, setView] = useState('week');
   const [query, setQuery] = useState('');
@@ -152,6 +153,10 @@ export function LaunchBoard({
     const q = query.trim();
     let list = tasks;
 
+    // 간트에서 막대를 눌러 넘어왔다. 검색과 따로 두는 이유: 사람이 검색어를
+    // 치면 그건 다른 것을 찾겠다는 뜻이라 이 걸림은 남아 있어야 한다.
+    if (focusWorkstream) list = list.filter((t) => t.workstream === focusWorkstream);
+
     const keep = (task) => touched.has(task.id);
     if (view === 'week')
       list = list.filter((task) => isThisWeek({ task, openDate, today }) || keep(task));
@@ -167,7 +172,7 @@ export function LaunchBoard({
     // 두 화면에 따로 쓰면 한쪽만 고쳐진다.
     if (q) list = list.filter((task) => matchesItem(task, q));
     return list;
-  }, [tasks, view, query, openDate, today, touched]);
+  }, [tasks, view, query, openDate, today, touched, focusWorkstream]);
 
   // 워크스트림·역할·소속 후보. 항목 편집 창의 datalist 와 역할 필터
   // 드롭다운이 같이 쓴다 — 어차피 같은 476건에서 뽑는 값이다.
@@ -274,6 +279,11 @@ export function LaunchBoard({
     setGroupMode(mode);
     setClosedGroups(new Set());
     setPicked(new Set());
+    // '이번 주만 보기'와 '주별로 묶어 보기'는 서로 상쇄된다 — 한 주만
+    // 남겨놓고 주별로 묶으면 묶음이 하나거나 빈 화면이다. 실제로
+    // 온라인BU 서비스기획의 할 일 22건은 전부 D-95~D-25 라 이번 주에
+    // 0건이고, 그대로 두면 아무것도 안 보인다.
+    if (mode === 'week' && view === 'week') setView('all');
   }
 
   function toggleGroup(key) {
@@ -505,6 +515,23 @@ export function LaunchBoard({
           ))}
         </select>
       </div>
+
+      {/* 간트에서 넘어온 걸림. 어디서 온 것인지 말해 주지 않으면 "왜 몇 건밖에
+          없지"가 된다 — 스스로 건 필터가 아니라서 더 그렇다. */}
+      {focusWorkstream && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs text-indigo-800">
+          <span>
+            간트에서 고른 <b>{focusWorkstream}</b> 만 보고 있습니다
+          </span>
+          <button
+            type="button"
+            onClick={() => onClearFocus?.()}
+            className="ml-auto text-indigo-700 underline hover:text-indigo-900"
+          >
+            전체 보기
+          </button>
+        </div>
+      )}
 
       {/* 역할을 고른 뒤에만 나오는 얇은 줄. 역할 이름은 위 드롭다운에 이미
           있으니 여기서는 반복하지 않는다(할 것/도울 것/둘 다). */}
