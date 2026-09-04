@@ -35,7 +35,8 @@ export async function POST(request, { params }) {
     const supabase = getSupabaseAdmin();
     const { data: launch, error: lErr } = await supabase
       .from('launches')
-      .select('id, status')
+      // context 도 읽는다 — 이미 있으면 시트가 덮지 않는다(아래).
+      .select('id, status, context')
       .eq('id', id)
       .maybeSingle();
     if (lErr) throw lErr;
@@ -181,12 +182,22 @@ export async function POST(request, { params }) {
     }
 
     // 전제 7줄. 항목과 함께 온다.
+    //
+    // 이미 있으면 안 덮는다. 항목의 'manual' 승격과 같은 규칙이다 —
+    // 손으로 고친 것을 파일이 지우면 아무도 안 고친다. 전제는 7줄뿐이라
+    // 열 단위로 가릴 것도 없어서 통째로 지킨다.
+    //
+    // 시트 것으로 되돌리고 싶으면 전제를 비우고 다시 올리면 된다. 화면이
+    // 그렇게 안내한다.
     const patch = { updated_at: now };
-    if (Array.isArray(context) && context.length > 0) {
+    const hasContext = Array.isArray(launch.context) && launch.context.length > 0;
+    let contextFilled = false;
+    if (Array.isArray(context) && context.length > 0 && !hasContext) {
       patch.context = context
         .filter((c) => String(c?.label ?? '').trim() && String(c?.value ?? '').trim())
         .slice(0, 40)
         .map((c) => ({ label: String(c.label).trim(), value: String(c.value).trim() }));
+      contextFilled = patch.context.length > 0;
     }
     if (sourceVersion) patch.note = String(sourceVersion).slice(0, 200);
     await supabase.from('launches').update(patch).eq('id', id);
@@ -198,6 +209,10 @@ export async function POST(request, { params }) {
       // "갱신 476건"은 사람에게 아무 말도 안 한다.
       updated: plan.update.map((u) => ({ code: u.code, title: u.title, changes: u.changes })),
       unchanged: plan.unchanged.length,
+      // 전제를 채웠는가. 이미 있어서 건너뛴 것과 시트에 없어서 못 채운 것을
+      // 화면이 갈라 말할 수 있어야 한다.
+      contextFilled,
+      contextKept: hasContext,
       excluded: plan.exclude,
       markedNa: plan.markNa.length,
       restored: plan.restore.length,
