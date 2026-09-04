@@ -767,6 +767,7 @@ export function LaunchBoard({
           mode={taskDialog.mode ?? 'edit'}
           launch={launch}
           task={taskDialog.mode === 'edit' ? taskDialog.task : null}
+          tasks={tasks}
           workstreams={workstreams}
           roles={roleOptions}
           orgs={orgOptions}

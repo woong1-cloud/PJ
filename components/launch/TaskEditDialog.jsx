@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { isWorkstream } from '@/lib/launchCode';
 import { parseDeps } from '@/lib/launchImport';
+import { byCode } from '@/lib/launchDeps';
 import { dueDate } from '@/lib/launchDate';
 import { PickOrType } from '@/components/launch/PickOrType';
 
@@ -24,13 +25,14 @@ import { PickOrType } from '@/components/launch/PickOrType';
 // (app/api/launch/[id]/tasks/[taskId]/route.js 의 PLAN_FIELDS 참고) — 고치기는
 // 읽기 전용으로 보여주고, 만들기는 서버가 지을 자리를 비워 둔다.
 //
-// props: open, mode('create'|'edit'), launch, task(edit일 때만), workstreams,
+// props: open, mode('create'|'edit'), launch, task(edit일 때만), tasks, workstreams,
 //        roles, orgs, channels, onClose, onSaved(task)
 export function TaskEditDialog({
   open,
   mode = 'edit',
   launch,
   task,
+  tasks = [],
   workstreams = [],
   roles = [],
   orgs = [],
@@ -266,6 +268,10 @@ export function TaskEditDialog({
                 placeholder="01-01, 01-02"
                 className={input}
               />
+              {/* 친 코드가 무엇인지 그 자리에서 보여준다. 실제 자료에
+                  목록에 없는 코드를 가리키는 것이 4건 있는데, 저장할 때는
+                  아무 말이 없어서 아무도 몰랐다. */}
+              <DepHint value={form.depends_on} tasks={tasks} />
             </Field>
 
             <Field label="산출물·증빙" htmlFor="te-out">
@@ -369,6 +375,35 @@ function fromTask(task, workstreams) {
 
 const input =
   'h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm focus:border-indigo-400 focus:outline-none';
+
+// 친 선행 코드를 그 자리에서 풀어 준다.
+//
+// 막지는 않는다. 런칭 유형에 따라 안 가져온 워크스트림이 있어서(기존
+// 법인이면 01·02 가 통째로 빠진다) 없는 코드가 정상일 수 있다 —
+// 다만 그것이 오타인지 아닌지는 사람이 봐야 판단이 된다.
+function DepHint({ value, tasks }) {
+  const codes = parseDeps(value);
+  if (codes.length === 0) return null;
+  const index = byCode(tasks);
+
+  return (
+    <ul className="mt-1 flex flex-col gap-0.5">
+      {codes.map((code) => {
+        const found = index.get(code);
+        return (
+          <li key={code} className="flex gap-1.5 text-[11px]">
+            <span className="shrink-0 tabular-nums text-slate-400">{code}</span>
+            {found ? (
+              <span className="min-w-0 truncate text-slate-500">{found.title}</span>
+            ) : (
+              <span className="text-amber-700">이 런칭에 없는 코드입니다</span>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 
 function Field({ label, required, htmlFor, className = '', children }) {
   return (
