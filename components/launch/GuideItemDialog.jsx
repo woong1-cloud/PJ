@@ -22,13 +22,16 @@ import { parseDeps } from '@/lib/launchImport';
 // 코드는 안 받는다. 서버가 짓는다 — 손으로 적게 하면 중복이 나고, 중복은
 // unique 제약에 걸려 저장이 통째로 실패한다.
 //
-// props: open, guideId, workstreams, roles, existingCodes, onClose, onCreated
+// props: open, guideId, workstreams, roles, existing, onClose, onCreated
+//
+// existing 은 [{ code, workstream }] 다. 코드 앞자리를 그 워크스트림의
+// 기존 항목에게 물어보기 때문이다(lib/launchCode.js 의 codePrefix).
 export function GuideItemDialog({
   open,
   guideId,
   workstreams = [],
   roles = [],
-  existingCodes = [],
+  existing = [],
   onClose,
   onCreated,
 }) {
@@ -68,7 +71,7 @@ export function GuideItemDialog({
   async function submit(event) {
     event.preventDefault();
     if (!isWorkstream(form.workstream.trim())) {
-      setError("워크스트림은 '01_신규법인' 처럼 두 자리 번호로 시작해야 합니다.");
+      setError('워크스트림을 입력하세요.');
       return;
     }
     if (!form.title.trim()) {
@@ -105,7 +108,7 @@ export function GuideItemDialog({
   if (!open) return null;
 
   // 서버가 지을 코드를 미리 보여준다. 어디에 들어가는지 알고 넣게 된다.
-  const preview = nextCode({ workstream: form.workstream.trim(), existingCodes });
+  const preview = nextCode({ workstream: form.workstream.trim(), existing });
 
   return (
     <Dialog

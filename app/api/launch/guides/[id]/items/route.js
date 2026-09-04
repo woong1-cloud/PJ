@@ -91,14 +91,13 @@ export async function POST(request, { params }) {
 
     const { data: existing, error: exError } = await supabase
       .from('launch_guide_items')
-      .select('code, sort_order')
+      // workstream 도 읽는다 — 코드 앞자리를 그 워크스트림의 기존
+      // 항목에게 물어보기 때문이다(lib/launchCode.js 의 codePrefix).
+      .select('code, workstream, sort_order')
       .eq('guide_id', id);
     if (exError) throw exError;
 
-    const code = nextCode({
-      workstream,
-      existingCodes: (existing ?? []).map((e) => e.code),
-    });
+    const code = nextCode({ workstream, existing: existing ?? [] });
     if (!code) throw new ApiError(400, '이 워크스트림에 더 넣을 자리가 없습니다.');
 
     // 맨 뒤에 붙인다. 시트에서 온 항목의 순서를 흔들지 않는다.

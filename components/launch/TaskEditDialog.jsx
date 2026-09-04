@@ -54,7 +54,7 @@ export function TaskEditDialog({
   async function submit(event) {
     event.preventDefault();
     if (!isWorkstream(form.workstream.trim())) {
-      setError("워크스트림은 '01_신규법인' 처럼 두 자리 번호로 시작해야 합니다.");
+      setError('워크스트림을 입력하세요.');
       return;
     }
     if (!form.title.trim()) {

@@ -26,11 +26,13 @@ export async function POST(request, { params }) {
     const supabase = getSupabaseAdmin();
     const { data: codes, error: cErr } = await supabase
       .from('launch_tasks')
-      .select('code')
+      // workstream 도 읽는다 — 코드 앞자리를 그 워크스트림의 기존
+      // 항목에게 물어보기 때문이다(lib/launchCode.js 의 codePrefix).
+      .select('code, workstream')
       .eq('launch_id', id);
     if (cErr) throw cErr;
 
-    const code = nextCode({ workstream, existingCodes: (codes ?? []).map((c) => c.code) });
+    const code = nextCode({ workstream, existing: codes ?? [] });
     if (!code) throw new ApiError(400, '코드를 지을 수 없습니다.');
 
     const { data, error } = await supabase

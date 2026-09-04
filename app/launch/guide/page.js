@@ -142,7 +142,7 @@ export default function LaunchGuidePage() {
         guideId={guide?.id}
         workstreams={[...new Set(items.map((i) => i.workstream))].sort()}
         roles={roles}
-        existingCodes={items.map((i) => i.code)}
+        existing={items}
         onClose={() => setAddOpen(false)}
         onCreated={() => {
           setDone(null);
