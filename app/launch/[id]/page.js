@@ -270,6 +270,18 @@ function ImportReport({ report, onClose }) {
             )}
           </p>
 
+          {/* 전제는 이미 있으면 시트가 안 덮는다. 조용히 건너뛰면 "왜 시트를
+              고쳤는데 안 바뀌지"가 되므로 말해 준다. */}
+          {report.contextFilled && (
+            <p className="mt-1.5 text-[13px] text-emerald-800">전제를 시트에서 가져왔습니다.</p>
+          )}
+          {report.contextKept && (
+            <p className="mt-1.5 text-[13px] text-emerald-800">
+              전제는 이미 있어 그대로 뒀습니다 — 시트 것으로 되돌리려면 전제를 비우고 다시
+              올리세요.
+            </p>
+          )}
+
           {/* 바뀐 항목은 열 이름과 전후 값을 보여준다 — "갱신 476건"은
               아무 말도 안 하지만 "D-day -60 → -75"는 엑셀을 열지 않아도
               무엇을 확인해야 하는지 알려준다. */}

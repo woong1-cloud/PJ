@@ -99,8 +99,8 @@ export function LaunchContextDialog({ open, launchId, context = [], onClose, onS
           <DialogTitle>전제 고치기</DialogTitle>
           <DialogDescription>
             00_개요 의 [제반사항] 줄입니다.{' '}
-            <b>엑셀을 다시 올리면 시트의 전제로 덮어씁니다</b> — 여기서 고쳐도 다음 가져오기가
-            지웁니다.
+            <b>여기 적은 것은 엑셀을 다시 올려도 그대로 둡니다.</b> 시트 것으로 되돌리려면 전부
+            지우고 다시 올리세요.
           </DialogDescription>
         </DialogHeader>
 
