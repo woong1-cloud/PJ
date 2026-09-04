@@ -6,6 +6,7 @@ import { useIdentity } from '@/components/IdentityProvider';
 import { isGlobalAdmin } from '@/lib/tiers';
 import { LaunchBoard } from '@/components/launch/LaunchBoard';
 import { LaunchContext } from '@/components/launch/LaunchContext';
+import { LaunchContextDialog } from '@/components/launch/LaunchContextDialog';
 import { ImportDialog } from '@/components/launch/ImportDialog';
 import { dDay, dDayLabel } from '@/lib/launchDate';
 import { progress } from '@/lib/launchTask';
@@ -29,6 +30,8 @@ export default function LaunchDetailPage({ params }) {
   // 알 길이 없다 — 특히 시트에서 빠진 것과 진행 중이라 안 바꾼 것은
   // 여기서만 보인다.
   const [done, setDone] = useState(null);
+  // 전제 고치기 창. 읽기 전용이던 LaunchContext 에 고치기가 붙으며 필요해졌다.
+  const [contextOpen, setContextOpen] = useState(false);
   // 가져오기(엑셀) · 지우기 뒤에 다시 부르는 손잡이. app/launch/guide/page.js 와
   // 같은 방식이다 — effect 밖의 함수를 effect 에서 부르면 그 안의 setState 가
   // 동기 호출로 보여 cascading render 경고가 난다.
@@ -167,7 +170,7 @@ export default function LaunchDetailPage({ params }) {
 
       <ImportReport report={done} onClose={() => setDone(null)} />
 
-      <LaunchContext context={launch.context} />
+      <LaunchContext context={launch.context} onEdit={() => setContextOpen(true)} />
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3">
         <Stat label="완료" value={`${stat.done}/${stat.total}`} sub={`${stat.percent}%`} />
@@ -211,6 +214,16 @@ export default function LaunchDetailPage({ params }) {
           setReloadToken((t) => t + 1);
         }}
       />
+
+      <LaunchContextDialog
+        open={contextOpen}
+        launchId={id}
+        context={launch.context ?? []}
+        onClose={() => setContextOpen(false)}
+        // 한 줄만 온 status 갱신과 달리 launch 전체를 돌려받는다 — PATCH 가
+        // context 를 포함한 launches 행 전체를 select 하기 때문이다.
+        onSaved={(next) => setLaunch(next)}
+      />
     </div>
   );
 }
@@ -221,6 +234,11 @@ export default function LaunchDetailPage({ params }) {
 // 아예 없다 — 시트에서 빠져 해당없음이 된 것, 양식이 해당없음이라는데 사람이
 // 이미 붙어 있어 안 바꾼 것, 손대지 않은 것.
 //
+// updated 는 이제 숫자가 아니라 실제로 값이 다른 항목의 배열이다
+// (lib/launchReimport.js planReimport). "같은 것 N건 — 손대지 않습니다"가
+// 요점이다 — 476건을 올렸는데 2건만 바뀐다는 걸 알면 확인이 도박이 아니라
+// 검토가 된다.
+//
 // 사람이 닫을 때까지 남긴다. 몇 초 뒤 사라지면 회의 중에 놓친다.
 function ImportReport({ report, onClose }) {
   if (!report) return null;
@@ -228,14 +246,18 @@ function ImportReport({ report, onClose }) {
   const excluded = report.excluded ?? [];
   const busy = report.busy ?? [];
   const untouched = report.untouched ?? [];
+  const updated = report.updated ?? [];
+  const shown = updated.slice(0, MAX_CHANGES_SHOWN);
+  const hiddenCount = updated.length - shown.length;
 
   return (
     <section className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1 text-sm text-emerald-900">
           <p>
-            새로 <b className="tabular-nums">{report.created ?? 0}</b>건 · 갱신{' '}
-            <b className="tabular-nums">{report.updated ?? 0}</b>건
+            새로 <b className="tabular-nums">{report.created ?? 0}</b>건 · 바뀌는 것{' '}
+            <b className="tabular-nums">{updated.length}</b>건 · 같은 것{' '}
+            <b className="tabular-nums">{report.unchanged ?? 0}</b>건 — 손대지 않습니다
             {report.markedNa > 0 && (
               <>
                 {' · '}양식이 해당없음으로 표시한 <b className="tabular-nums">{report.markedNa}</b>건
@@ -247,6 +269,33 @@ function ImportReport({ report, onClose }) {
               </>
             )}
           </p>
+
+          {/* 바뀐 항목은 열 이름과 전후 값을 보여준다 — "갱신 476건"은
+              아무 말도 안 하지만 "D-day -60 → -75"는 엑셀을 열지 않아도
+              무엇을 확인해야 하는지 알려준다. */}
+          {shown.length > 0 && (
+            <div className="mt-1.5 flex flex-col gap-1.5 text-[13px]">
+              {shown.map((u) => (
+                <div key={u.code}>
+                  <p className="text-emerald-900">
+                    <b className="tabular-nums">{u.code}</b>{' '}
+                    <span>{truncate(u.title, 40)}</span>
+                  </p>
+                  <ul className="ml-4 list-disc text-emerald-700">
+                    {u.changes.map((c) => (
+                      <li key={c.field}>
+                        {c.label} {formatChangeValue(c.field, c.from)} →{' '}
+                        {formatChangeValue(c.field, c.to)}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+              {hiddenCount > 0 && (
+                <p className="text-emerald-700">외 {hiddenCount}건</p>
+              )}
+            </div>
+          )}
 
           {excluded.length > 0 && (
             <p className="mt-1.5 text-[13px] text-amber-800">
@@ -300,6 +349,32 @@ const UNTOUCHED_LABELS = [
   ['already', '이미 해당없음'],
   ['manual', '손으로 넣은 것'],
 ];
+
+// 바뀐 항목을 20건 넘게 늘어놓으면 화면이 통째로 목록이 된다. 476건 중
+// 100건이 바뀌어도 앞 20건만 보고 나머지는 "외 N건"으로 접는다.
+const MAX_CHANGES_SHOWN = 20;
+
+function truncate(value, max) {
+  const s = String(value ?? '');
+  return s.length > max ? `${s.slice(0, max)}…` : s;
+}
+
+// changes[].from / to 를 사람이 읽는 모양으로 바꾼다.
+//
+// depends_on 은 배열이라 join 하지 않으면 "01-01,01-02"가 아니라
+// "[object Object]" 근처의 것이 찍힌다. is_critical 은 불리언이라 true/false
+// 그대로 보이면 무슨 뜻인지 한 번 더 생각해야 한다.
+function formatChangeValue(field, value) {
+  if (field === 'depends_on') {
+    const arr = Array.isArray(value) ? value : [];
+    return arr.length > 0 ? arr.join(', ') : '—';
+  }
+  if (field === 'is_critical') return value ? '★ 있음' : '★ 없음';
+  if (value === null || value === undefined || value === '') return '—';
+  // 제목·비고처럼 긴 열은 40자로 자른다 — 짧은 열(D-day, 주관 등)은
+  // 40자를 넘지 않으니 그대로 나온다.
+  return truncate(value, 40);
+}
 
 const TONE = {
   rose: 'text-rose-600',

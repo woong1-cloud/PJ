@@ -191,6 +191,14 @@ export function ImportDialog({ open, target, onClose, onDone }) {
               <p className="text-[11px] text-slate-400">
                 기한 열은 읽지 않습니다. D-day 와 오픈일로 계산합니다.
               </p>
+              {/* 여기서는 무엇이 바뀔지 모른다 — 서버가 지금 값과 견줘야
+                  알 수 있는데, 그 계산은 가져오기를 눌러야 돈다. 그래서
+                  단추 문구를 "무엇이 바뀌는지 보기"로 바꾸지 않는다 —
+                  누르면 바로 반영되므로 그 말은 거짓이 된다. 대신 가져온
+                  뒤 무엇이 바뀌었는지 보여준다는 것만 미리 알린다. */}
+              <p className="text-[11px] text-slate-400">
+                가져오면 새 항목과 바뀐 항목, 같은 항목의 수를 바로 보여드립니다.
+              </p>
             </div>
           )}
         </div>
