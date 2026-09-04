@@ -12,13 +12,16 @@ import {
   isDone,
   isBlocked,
   isLate,
+  isReady,
   isThisWeek,
   isWaitingOnDep,
   isNotApplicable,
   taskTone,
   progress,
 } from '@/lib/launchTask';
+import { missingDeps, prevTasks, unlockCount } from '@/lib/launchDeps';
 import { NotApplicableDialog } from '@/components/launch/NotApplicableDialog';
+import { TaskLinksDialog } from '@/components/launch/TaskLinksDialog';
 import { TaskEditDialog } from '@/components/launch/TaskEditDialog';
 import { BlockDialog } from '@/components/launch/BlockDialog';
 
@@ -86,6 +89,9 @@ export function LaunchBoard({
   // 해당없음 사유 창을 띄운 항목. 단건·다중 모두 { ids, title } 모양으로
   // 통일한다 — 다이얼로그 하나가 양쪽을 다 받게 하려고.
   const [naFor, setNaFor] = useState(null);
+  // 연계 창을 띄운 항목. 창 안에서 줄을 따라 옮겨 다니므로 여기서는
+  // 시작점만 잡는다.
+  const [linksFor, setLinksFor] = useState(null);
   // 막힘 사유 창을 띄운 항목. window.prompt 대신 종류를 가르는 창을 연다.
   const [blockFor, setBlockFor] = useState(null);
   // ⋯ 메뉴가 열린 항목. 마찬가지로 한 번에 하나만 연다.
@@ -143,6 +149,9 @@ export function LaunchBoard({
       { key: 'week', label: '이번 주', count: stat.thisWeek },
       { key: 'late', label: '지남', count: stat.late },
       { key: 'blocked', label: '막힘', count: stat.blocked },
+      // '막힘'의 반대말 자리라 그 옆에 둔다. 회의에서 "막힌 것"과
+      // "지금 할 수 있는 것"은 잇달아 묻는 질문이다.
+      { key: 'ready', label: '착수 가능', count: stat.ready },
       { key: 'na', label: '해당없음', count: stat.notApplicable },
       { key: 'all', label: '전체', count: stat.total },
     ],
@@ -163,6 +172,10 @@ export function LaunchBoard({
     else if (view === 'late')
       list = list.filter((task) => isLate({ task, openDate, today }) || keep(task));
     else if (view === 'blocked') list = list.filter((task) => isBlocked(task) || keep(task));
+    // 선행이 다 끝난 할 것. 기한 필터를 안 건다 — D-120 짜리도 지금
+    // 시작할 수 있으면 여기 있어야 한다, 그게 이 보기의 쓸모다.
+    else if (view === 'ready')
+      list = list.filter((task) => isReady({ task, tasks }) || keep(task));
     else if (view === 'na') list = list.filter(isNotApplicable);
     // '전체'에서는 해당없음을 뺀다. 451줄 사이에 섞이면 읽기 어렵다 —
     // 해당없음은 'na' 보기에서만 본다.
@@ -595,6 +608,7 @@ export function LaunchBoard({
               {view === 'week' && '이번 주에 할 것이 없습니다.'}
               {view === 'late' && '지난 항목이 없습니다.'}
               {view === 'blocked' && '막힌 항목이 없습니다.'}
+              {view === 'ready' && '지금 착수할 수 있는 항목이 없습니다 — 선행이 모두 남아 있습니다.'}
               {view === 'na' && '해당없음으로 둔 항목이 없습니다.'}
               {view === 'all' && '항목이 없습니다.'}
             </>
@@ -669,6 +683,10 @@ export function LaunchBoard({
                       setMenuFor(null);
                       setTaskDialog({ mode: 'edit', task });
                     }}
+                    onLinks={() => {
+                      setMenuFor(null);
+                      setLinksFor(task);
+                    }}
                     onAskNa={() => {
                       setMenuFor(null);
                       setNaFor({ ids: [task.id], title: `${task.code} ${task.title}` });
@@ -712,6 +730,23 @@ export function LaunchBoard({
       />
       )}
 
+      {/* 조건부로 그린다. 닫혀도 그리면 창 안의 '지금 보는 코드'가
+          지난 항목에 머문다 — 이 병이 네 창에 있었다. */}
+      {linksFor && (
+        <TaskLinksDialog
+          open
+          task={linksFor}
+          tasks={tasks}
+          openDate={openDate}
+          today={today}
+          onClose={() => setLinksFor(null)}
+          onEdit={(task) => {
+            setLinksFor(null);
+            setTaskDialog({ mode: 'edit', task });
+          }}
+        />
+      )}
+
       {blockFor && (
         <BlockDialog
           open
@@ -752,6 +787,48 @@ export function LaunchBoard({
   );
 }
 
+// 무엇을 기다리는지 읽을 수 있게.
+//
+// 'ⵈ선행 01-01 대기' 라고만 쓰면 그게 무슨 일인지·누가 하는지·언제
+// 끝나는지를 알 수 없어 찾아갈 수가 없다. 312건이 선행을 갖고 있으니
+// 그때마다 코드를 뒤지게 하는 것은 312번 뒤지게 하는 것이다.
+//
+// 한 줄을 안 넘긴다 — 제목이 길면 자른다. 여기서 두 줄이 되면 451줄이
+// 통째로 길어져 목록이 안 읽힌다. 전체는 눌러서 연계 창에서 본다.
+function DepChip({ task, tasks, openDate, today, onOpen }) {
+  const waitingOn = prevTasks({ task, tasks }).filter(
+    (node) => node.task && !isDone(node.task),
+  );
+  if (waitingOn.length === 0) return null;
+
+  const [first] = waitingOn;
+  const dep = first.task;
+  const due = dueDate(openDate, dep.day_offset);
+  const days = dDay(due, today);
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      title={`${first.code} ${dep.title}`}
+      className="flex min-w-0 max-w-full items-center gap-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"
+    >
+      <span className="shrink-0">선행</span>
+      <span className="shrink-0 tabular-nums text-slate-400">{first.code}</span>
+      <span className="min-w-0 truncate">{dep.title}</span>
+      <span className="shrink-0 text-slate-400">
+        {dep.owner_role || '담당 없음'}
+        {days !== null && ` · ${dDayLabel(days)}`}
+      </span>
+      {/* 둘 이상을 기다리는 항목은 지금 자료에 없지만 열은 text[] 이다.
+          한 건만 보여주고 나머지를 감추면 그 사실을 알 방법이 없다. */}
+      {waitingOn.length > 1 && (
+        <span className="shrink-0 text-slate-400">외 {waitingOn.length - 1}</span>
+      )}
+    </button>
+  );
+}
+
 const TONE_BAR = {
   done: 'bg-emerald-400',
   blocked: 'bg-amber-500',
@@ -763,7 +840,7 @@ const TONE_BAR = {
 
 function TaskRow({
   task, tasks, openDate, today, blockedDecisionTitle, busy, checked, onCheck, onStatus, menuOpen,
-  onToggleMenu, onEdit, onAskNa, onRestore, onDelete,
+  onToggleMenu, onEdit, onLinks, onAskNa, onRestore, onDelete,
 }) {
   const tone = taskTone({ task, openDate, today, tasks });
   const due = dueDate(openDate, task.day_offset);
@@ -771,6 +848,11 @@ function TaskRow({
   const waiting = isWaitingOnDep({ task, tasks });
   const done = isDone(task);
   const na = isNotApplicable(task);
+  // 이걸 끝내면 몇 건이 풀리나. 2건 이상일 때만 쓴다 — 312줄에 전부
+  // 배지가 붙으면 아무것도 안 가리키는 것과 같다.
+  const unlock = na || done ? 0 : unlockCount({ task, tasks });
+  // 목록에 없는 선행. 대기로는 안 치지만 화면에는 나와야 한다.
+  const broken = na ? [] : missingDeps({ task, tasks });
 
   return (
     <li className="relative flex flex-wrap items-start gap-x-3 gap-y-1.5 px-4 py-2.5">
@@ -821,8 +903,28 @@ function TaskRow({
                   아무것도 안 보인다 — 빈 자리를 지키면 451줄에서 여백만
                   늘어난다. */}
               {task.assignee_name && <span className="text-slate-700">{task.assignee_name}</span>}
+              {/* 이걸 끝내면 무엇이 풀리는지. 기한이 같은 두 줄 사이에서
+                  무엇을 먼저 할지는 이 숫자가 정한다. */}
+              {unlock >= 2 && (
+                <button
+                  type="button"
+                  onClick={onLinks}
+                  className="rounded border border-indigo-100 bg-indigo-50 px-1.5 py-0.5 text-[11px] font-medium text-indigo-700 hover:border-indigo-300"
+                >
+                  풀림 {unlock}
+                </button>
+              )}
               {waiting && !done && (
-                <span className="text-slate-400">선행 {task.depends_on.join(', ')} 대기</span>
+                <DepChip task={task} tasks={tasks} openDate={openDate} today={today} onOpen={onLinks} />
+              )}
+              {broken.length > 0 && (
+                <button
+                  type="button"
+                  onClick={onLinks}
+                  className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700 hover:bg-amber-100"
+                >
+                  선행 {broken.join(', ')} — 목록에 없음
+                </button>
               )}
               {/* 어느 결정을 기다리는지가 자유 사유보다 먼저다 — 결정이
                   풀리면 이 항목도 풀린다는 인과가 여기서 보여야 한다. */}
@@ -893,6 +995,16 @@ function TaskRow({
             >
               내용 고치기
             </button>
+            <button
+              type="button"
+              onClick={onLinks}
+              className="w-full rounded-md px-2.5 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-50"
+            >
+              연계된 항목 보기
+            </button>
+            <p className="px-2.5 pb-1.5 text-[11px] text-slate-400">
+              무엇을 기다리고, 무엇이 이걸 기다리나.
+            </p>
             <hr className="my-1 border-slate-100" />
             {na ? (
               <button
