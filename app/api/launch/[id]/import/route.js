@@ -89,9 +89,13 @@ export async function POST(request, { params }) {
     }
     if (clean.length === 0) throw new ApiError(400, '읽을 수 있는 항목이 없습니다.');
 
+    // 계획 열도 가져와야 한다 — planReimport 가 실제로 바뀐 열만 골라내려면
+    // 시트 값과 견줄 지금 값이 있어야 한다(lib/launchReimport.js 의 same()).
     const { data: existing, error: exErr } = await supabase
       .from('launch_tasks')
-      .select('id, code, status, source, excluded_reason')
+      .select(
+        'id, code, status, source, excluded_reason, title, workstream, category, channel, decision_org, owner_org, owner_role, support_role, depends_on, day_offset, deliverable, note, plain_text, is_critical, sort_order',
+      )
       .eq('launch_id', id);
     if (exErr) throw exErr;
 
@@ -190,7 +194,10 @@ export async function POST(request, { params }) {
     return Response.json({
       ok: true,
       created: plan.create.length,
-      updated: plan.update.length,
+      // 실제로 값이 다른 것만이다. 안 바뀐 것은 unchanged 로 따로 센다 —
+      // "갱신 476건"은 사람에게 아무 말도 안 한다.
+      updated: plan.update.map((u) => ({ code: u.code, title: u.title, changes: u.changes })),
+      unchanged: plan.unchanged.length,
       excluded: plan.exclude,
       markedNa: plan.markNa.length,
       restored: plan.restore.length,
