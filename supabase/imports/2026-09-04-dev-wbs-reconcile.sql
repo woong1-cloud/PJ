@@ -278,16 +278,17 @@ select code, status, excluded_reason
  order by code;
 
 -- 3) 끊긴 선행이 남아 있는지 — 0건이 나와야 한다
-select t.code, d as 없는_선행
-  from launch_tasks t, unnest(t.depends_on) d
+select t.code, dep.code as 없는_선행
+  from launch_tasks t
+  cross join lateral unnest(t.depends_on) as dep(code)
  where t.launch_id = (select id from launches where name = '호카')
    and not exists (
      select 1 from launch_tasks x
-      where x.launch_id = t.launch_id and x.code = d);
+      where x.launch_id = t.launch_id and x.code = dep.code);
 
 -- 4) 선행이 후행보다 늦은 것.
 --
--- 0건이 아니다. 이 스크립트 전에도 21건이 있었다 — 이번에 만든 것이
+-- 0건이 아니다. 이 스크립트 전에도 19건이 있었다 — 이번에 만든 것이
 -- 아니라 원래 있던 자료의 흠이다. 고치려면 담당자에게 물어야 해서
 -- 여기서는 건드리지 않는다. 이번 변경으로 새로 생긴 것은 없다.
 --
@@ -295,10 +296,14 @@ select t.code, d as 없는_선행
 --   18-34 [갭] EP·상품피드 D-112 ← 12-02 D-60   (52일)
 --   18-35 앱 스토어 심사     D-60  ← 16-05 D-21  (39일)
 --   06-15 스마트스토어 결정  D-90  ← 02-03 D-60  (30일)
+-- unnest 를 쉼표로 붙인 뒤 join 을 쓰면 join 이 unnest 에만 걸려서
+-- t 가 안 보인다 (42P01 invalid reference to FROM-clause entry for table "t").
+-- cross join lateral 로 순서를 못 박는다.
 select t.code as 후행, t.day_offset as 후행D, p.code as 선행, p.day_offset as 선행D
-  from launch_tasks t, unnest(t.depends_on) d
+  from launch_tasks t
+  cross join lateral unnest(t.depends_on) as dep(code)
   join launch_tasks p
-    on p.launch_id = t.launch_id and p.code = d
+    on p.launch_id = t.launch_id and p.code = dep.code
  where t.launch_id = (select id from launches where name = '호카')
    and t.status <> '해당없음' and p.status <> '해당없음'
    and p.day_offset > t.day_offset
