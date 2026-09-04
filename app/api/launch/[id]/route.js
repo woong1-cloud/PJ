@@ -74,6 +74,18 @@ export async function PATCH(request, { params }) {
       patch.status = body.status;
     }
     if (body.note !== undefined) patch.note = body.note || null;
+    if (body.context !== undefined) {
+      // 전제 — 00_개요 의 [제반사항] 7줄. 451건이 왜 그렇게 생겼는지의
+      // 답이라 사람이 고칠 수 있어야 한다.
+      //
+      // 모양은 [{label, value}] 다. 라벨이 브랜드마다 달라서 컬럼으로
+      // 박지 않았다(0032).
+      if (!Array.isArray(body.context)) throw new ApiError(400, '전제 형식이 잘못됐습니다.');
+      patch.context = body.context
+        .filter((c) => String(c?.label ?? '').trim() && String(c?.value ?? '').trim())
+        .slice(0, 40)
+        .map((c) => ({ label: String(c.label).trim(), value: String(c.value).trim() }));
+    }
 
     if (Object.keys(patch).length === 0) throw new ApiError(400, '바꿀 내용이 없습니다.');
     patch.updated_at = new Date().toISOString();

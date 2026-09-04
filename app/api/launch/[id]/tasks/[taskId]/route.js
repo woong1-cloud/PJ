@@ -4,7 +4,23 @@ import { errorResponse, ApiError } from '@/lib/apiError';
 import { LAUNCH_STATUSES, DONE_STATUS, BLOCKED_STATUS, NA_STATUS } from '@/lib/launchTask';
 
 const TASK_SELECT =
-  'id, code, workstream, category, title, channel, decision_org, owner_org, owner_role, support_role, depends_on, day_offset, deliverable, note, is_critical, sort_order, status, blocked_reason, done_at, excluded_reason, source, assignee:team_members!launch_tasks_assignee_fkey(id, name)';
+  'id, code, workstream, category, title, channel, decision_org, owner_org, owner_role, support_role, depends_on, day_offset, deliverable, plain_text, note, is_critical, sort_order, status, blocked_reason, done_at, excluded_reason, source, assignee:team_members!launch_tasks_assignee_fkey(id, name)';
+
+// lib/launchImport.js 의 CODE 와 같아야 한다. 통합 WBS 가 07B-01 · 10A-03
+// 을 쓴다.
+const CODE = /^\d{2}[A-Z]?-\d{2}$/;
+
+// 엑셀이 원본이던 열. 화면에서 고치면 그 줄은 엑셀에서 독립한다 —
+// source 가 'manual' 로 올라가고, 다음 업로드가 이 줄을 안 덮는다
+// (lib/launchReimport.js).
+//
+// code 는 없다. 코드가 엑셀 왕복의 못이라, 그게 바뀌면 다음 업로드가
+// 같은 항목을 새것으로 본다.
+const PLAN_FIELDS = [
+  'title', 'workstream', 'category', 'channel', 'decision_org', 'owner_org',
+  'owner_role', 'support_role', 'depends_on', 'day_offset', 'deliverable',
+  'plain_text', 'is_critical', 'note',
+];
 
 // 항목 하나를 고친다 — 보드에서 상태를 누르는 것이 대부분이다.
 //
@@ -49,7 +65,37 @@ export async function PATCH(request, { params }) {
       patch.blocked_reason = String(body.blockedReason).trim() || null;
     }
     if (body.assignee !== undefined) patch.assignee = body.assignee || null;
-    if (body.note !== undefined) patch.note = body.note || null;
+
+    // 계획 열을 하나라도 고치면 엑셀에서 독립시킨다.
+    //
+    // 열 단위로 "이건 내 것, 저건 엑셀 것"을 추적하지 않는다. 476건에서
+    // 어느 열이 누구 것인지 사람이 못 따라간다 — 항목 단위로 잘라야 한
+    // 문장으로 설명된다.
+    let touchedPlan = false;
+    for (const field of PLAN_FIELDS) {
+      if (body[field] === undefined) continue;
+      touchedPlan = true;
+      if (field === 'day_offset') {
+        const n = Number(body[field]);
+        if (!Number.isFinite(n)) throw new ApiError(400, 'D-day 를 숫자로 입력하세요.');
+        patch.day_offset = Math.trunc(n);
+      } else if (field === 'depends_on') {
+        patch.depends_on = Array.isArray(body[field])
+          ? body[field].filter((c) => CODE.test(String(c)))
+          : [];
+      } else if (field === 'is_critical') {
+        patch.is_critical = body[field] === true;
+      } else {
+        const text = String(body[field] ?? '').trim();
+        // 제목과 워크스트림은 비울 수 없다. 빈 제목은 목록에서 사라진
+        // 것처럼 보인다.
+        if ((field === 'title' || field === 'workstream') && !text) {
+          throw new ApiError(400, `${field === 'title' ? '체크 항목' : '워크스트림'}을 입력하세요.`);
+        }
+        patch[field] = text || null;
+      }
+    }
+    if (touchedPlan) patch.source = 'manual';
 
     if (Object.keys(patch).length === 0) throw new ApiError(400, '바꿀 내용이 없습니다.');
     patch.updated_at = new Date().toISOString();
