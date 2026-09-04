@@ -54,6 +54,7 @@ export async function POST(request, { params }) {
         note: body?.note || null,
         plain_text: body?.plain_text || null,
         is_critical: body?.is_critical === true,
+        assignee_name: body?.assignee_name || null,
         source: 'manual',
       })
       .select('*')

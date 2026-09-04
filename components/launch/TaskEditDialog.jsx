@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { isWorkstream } from '@/lib/launchCode';
 import { parseDeps } from '@/lib/launchImport';
 import { dueDate } from '@/lib/launchDate';
+import { PickOrType } from '@/components/launch/PickOrType';
 
 // 항목 하나를 만들거나 고친다.
 //
@@ -24,7 +25,7 @@ import { dueDate } from '@/lib/launchDate';
 // 읽기 전용으로 보여주고, 만들기는 서버가 지을 자리를 비워 둔다.
 //
 // props: open, mode('create'|'edit'), launch, task(edit일 때만), workstreams,
-//        roles, orgs, onClose, onSaved(task)
+//        roles, orgs, channels, onClose, onSaved(task)
 export function TaskEditDialog({
   open,
   mode = 'edit',
@@ -33,6 +34,7 @@ export function TaskEditDialog({
   workstreams = [],
   roles = [],
   orgs = [],
+  channels = [],
   onClose,
   onSaved,
 }) {
@@ -74,6 +76,7 @@ export function TaskEditDialog({
       decision_org: form.decision_org,
       owner_org: form.owner_org,
       owner_role: form.owner_role,
+      assigneeName: form.assignee_name,
       support_role: form.support_role,
       depends_on: parseDeps(form.depends_on),
       day_offset: Number(form.day_offset),
@@ -152,19 +155,13 @@ export function TaskEditDialog({
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Field label="워크스트림" required htmlFor="te-ws" className="col-span-2">
-              <input
+              <PickOrType
                 id="te-ws"
-                list="te-ws-list"
                 value={form.workstream}
-                onChange={(e) => set('workstream', e.target.value)}
-                placeholder="01_신규법인"
-                className={input}
+                options={workstreams}
+                onChange={(v) => set('workstream', v)}
+                placeholder="D01_법인·행정"
               />
-              <datalist id="te-ws-list">
-                {workstreams.map((w) => (
-                  <option key={w} value={w} />
-                ))}
-              </datalist>
             </Field>
 
             <Field label="D-day" required htmlFor="te-d">
@@ -192,64 +189,62 @@ export function TaskEditDialog({
             </div>
 
             <Field label="주관 (수행)" htmlFor="te-owner">
-              <input
+              <PickOrType
                 id="te-owner"
-                list="te-role-list"
                 value={form.owner_role}
-                onChange={(e) => set('owner_role', e.target.value)}
-                placeholder="법무"
+                options={roles}
+                onChange={(v) => set('owner_role', v)}
+                placeholder="법무팀"
+              />
+            </Field>
+
+            <Field label="담당자 (이름)" htmlFor="te-assignee">
+              <input
+                id="te-assignee"
+                value={form.assignee_name}
+                onChange={(e) => set('assignee_name', e.target.value)}
+                placeholder="김지웅"
                 className={input}
               />
-              <datalist id="te-role-list">
-                {roles.map((r) => (
-                  <option key={r} value={r} />
-                ))}
-              </datalist>
             </Field>
 
             <Field label="지원" htmlFor="te-support">
-              <input
+              <PickOrType
                 id="te-support"
-                list="te-role-list"
                 value={form.support_role}
-                onChange={(e) => set('support_role', e.target.value)}
-                className={input}
+                options={roles}
+                onChange={(v) => set('support_role', v)}
+                placeholder="재무팀"
               />
             </Field>
 
             <Field label="결정권" htmlFor="te-decision">
-              <input
+              <PickOrType
                 id="te-decision"
-                list="te-org-list"
                 value={form.decision_org}
-                onChange={(e) => set('decision_org', e.target.value)}
+                options={orgs}
+                onChange={(v) => set('decision_org', v)}
                 placeholder="브랜드"
-                className={input}
               />
-              <datalist id="te-org-list">
-                {orgs.map((o) => (
-                  <option key={o} value={o} />
-                ))}
-              </datalist>
             </Field>
 
             <Field label="소속" htmlFor="te-org">
-              <input
+              <PickOrType
                 id="te-org"
-                list="te-org-list"
                 value={form.owner_org}
-                onChange={(e) => set('owner_org', e.target.value)}
+                options={orgs}
+                onChange={(v) => set('owner_org', v)}
                 placeholder="지원조직"
-                className={input}
               />
             </Field>
 
             <Field label="채널" htmlFor="te-ch">
-              <input
+              <PickOrType
                 id="te-ch"
                 value={form.channel}
-                onChange={(e) => set('channel', e.target.value)}
-                className={input}
+                options={channels}
+                onChange={(v) => set('channel', v)}
+                placeholder="공통"
               />
             </Field>
 
@@ -338,6 +333,7 @@ function fromTask(task, workstreams) {
     return {
       workstream: workstreams[0] ?? '',
       title: '',
+      assignee_name: '',
       owner_role: '',
       support_role: '',
       decision_org: '',
@@ -355,6 +351,7 @@ function fromTask(task, workstreams) {
   return {
     workstream: task.workstream ?? '',
     title: task.title ?? '',
+    assignee_name: task.assignee_name ?? '',
     owner_role: task.owner_role ?? '',
     support_role: task.support_role ?? '',
     decision_org: task.decision_org ?? '',

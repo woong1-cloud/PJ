@@ -178,6 +178,14 @@ export function LaunchBoard({
     return [...set].sort((a, b) => a.localeCompare(b, 'ko'));
   }, [tasks]);
 
+  // 채널은 런칭마다 다르다 — HOKA 는 공통·자사몰·외부몰·무신사·네이버 다.
+  // lib/channels.js 의 고정 5종은 요구사항용이라 여기 쓰면 무신사·네이버가
+  // 사라진다.
+  const channelOptions = useMemo(() => {
+    const set = new Set(tasks.map((t) => t.channel).filter(Boolean));
+    return [...set].sort((a, b) => a.localeCompare(b, 'ko'));
+  }, [tasks]);
+
   const orgOptions = useMemo(() => {
     const set = new Set();
     for (const task of tasks) {
@@ -586,8 +594,12 @@ export function LaunchBoard({
         );
       })}
 
+      {/* 창을 조건부로 그린다. 닫혀도 계속 그리면 useState 초기화 함수가
+          다시 안 돌아서 지난 항목의 값이 그대로 남는다 — 제목은 새 항목인데
+          칸은 옛 항목인 화면이 실제로 나왔다. */}
+      {naFor && (
       <NotApplicableDialog
-        open={Boolean(naFor)}
+        open
         count={naFor?.ids.length ?? 1}
         title={naFor?.title ?? ''}
         onClose={() => setNaFor(null)}
@@ -603,36 +615,44 @@ export function LaunchBoard({
           return bulkAction(naFor.ids, 'not_applicable', reason);
         }}
       />
+      )}
 
-      <BlockDialog
-        open={Boolean(blockFor)}
-        task={blockFor}
-        launchId={launch.id}
-        decisions={decisions}
-        onClose={() => setBlockFor(null)}
-        onSubmit={(patch) => (blockFor ? patchTask(blockFor, { status: BLOCKED_STATUS, ...patch }) : undefined)}
-        onDecisionCreated={onDecisionCreated}
-      />
+      {blockFor && (
+        <BlockDialog
+          open
+          task={blockFor}
+          launchId={launch.id}
+          decisions={decisions}
+          onClose={() => setBlockFor(null)}
+          onSubmit={(patch) =>
+            blockFor ? patchTask(blockFor, { status: BLOCKED_STATUS, ...patch }) : undefined
+          }
+          onDecisionCreated={onDecisionCreated}
+        />
+      )}
 
-      <TaskEditDialog
-        open={Boolean(taskDialog)}
-        mode={taskDialog?.mode ?? 'edit'}
-        launch={launch}
-        task={taskDialog?.mode === 'edit' ? taskDialog.task : null}
-        workstreams={workstreams}
-        roles={roleOptions}
-        orgs={orgOptions}
-        onClose={() => setTaskDialog(null)}
-        onSaved={(task) => {
-          const wasCreate = taskDialog?.mode === 'create';
-          setTaskDialog(null);
-          // 고치기는 그 줄만 갈아 끼운다(onChanged) — 새로 넣기는 목록
-          // 자체가 길어지므로 통째로 다시 받는다(onReload), bulkAction 과
-          // 같은 규칙이다.
-          if (wasCreate) onReload?.();
-          else onChanged?.(task);
-        }}
-      />
+      {taskDialog && (
+        <TaskEditDialog
+          open
+          mode={taskDialog.mode ?? 'edit'}
+          launch={launch}
+          task={taskDialog.mode === 'edit' ? taskDialog.task : null}
+          workstreams={workstreams}
+          roles={roleOptions}
+          orgs={orgOptions}
+          channels={channelOptions}
+          onClose={() => setTaskDialog(null)}
+          onSaved={(task) => {
+            const wasCreate = taskDialog.mode === 'create';
+            setTaskDialog(null);
+            // 고치기는 그 줄만 갈아 끼운다(onChanged) — 새로 넣기는 목록
+            // 자체가 길어지므로 통째로 다시 받는다(onReload), bulkAction 과
+            // 같은 규칙이다.
+            if (wasCreate) onReload?.();
+            else onChanged?.(task);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -702,6 +722,10 @@ function TaskRow({
                 </span>
               )}
               {task.owner_role && <span>{task.owner_role}</span>}
+              {/* 담당자는 팀보다 구체적이라 팀 바로 뒤에 붙인다. 없으면
+                  아무것도 안 보인다 — 빈 자리를 지키면 451줄에서 여백만
+                  늘어난다. */}
+              {task.assignee_name && <span className="text-slate-700">{task.assignee_name}</span>}
               {waiting && !done && (
                 <span className="text-slate-400">선행 {task.depends_on.join(', ')} 대기</span>
               )}

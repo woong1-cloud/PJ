@@ -4,7 +4,7 @@ import { errorResponse, ApiError } from '@/lib/apiError';
 import { LAUNCH_STATUSES, DONE_STATUS, BLOCKED_STATUS, NA_STATUS } from '@/lib/launchTask';
 
 const TASK_SELECT =
-  'id, code, workstream, category, title, channel, decision_org, owner_org, owner_role, support_role, depends_on, day_offset, deliverable, plain_text, note, is_critical, sort_order, status, blocked_reason, blocked_decision_id, done_at, excluded_reason, source, assignee:team_members!launch_tasks_assignee_fkey(id, name)';
+  'id, code, workstream, category, title, channel, decision_org, owner_org, owner_role, support_role, depends_on, day_offset, deliverable, plain_text, note, is_critical, sort_order, status, blocked_reason, blocked_decision_id, done_at, excluded_reason, source, assignee_name, assignee:team_members!launch_tasks_assignee_fkey(id, name)';
 
 // lib/launchImport.js 의 CODE 와 같아야 한다. 통합 WBS 가 07B-01 · 10A-03
 // 을 쓴다.
@@ -76,6 +76,12 @@ export async function PATCH(request, { params }) {
       patch.blocked_decision_id = body.blockedDecisionId || null;
     }
     if (body.assignee !== undefined) patch.assignee = body.assignee || null;
+    // 담당자 이름은 계획 열이 아니다. 엑셀에 없는 칸이고 모아에서만 자란다 —
+    // 고쳐도 source 를 'manual' 로 올리지 않는다. 올리면 이름 하나 적었다고
+    // 그 줄이 엑셀에서 통째로 독립해 버린다.
+    if (body.assigneeName !== undefined) {
+      patch.assignee_name = String(body.assigneeName ?? '').trim() || null;
+    }
 
     // 계획 열을 하나라도 고치면 엑셀에서 독립시킨다.
     //

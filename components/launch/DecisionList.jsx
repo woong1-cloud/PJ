@@ -59,14 +59,18 @@ export function DecisionList({ launchId, decisions = [], onSaved }) {
         </ul>
       )}
 
-      <DecisionDialog
-        open={Boolean(dialog)}
-        mode={dialog?.mode ?? 'record'}
-        launchId={launchId}
-        decision={dialog?.mode === 'record' ? dialog.decision : null}
-        onClose={() => setDialog(null)}
-        onSaved={onSaved}
-      />
+      {/* 닫히면 언마운트시킨다. 계속 그리면 useState 초기화 함수가 다시 안
+          돌아서 지난 결정의 값이 남는다. */}
+      {dialog && (
+        <DecisionDialog
+          open
+          mode={dialog.mode ?? 'record'}
+          launchId={launchId}
+          decision={dialog.mode === 'record' ? dialog.decision : null}
+          onClose={() => setDialog(null)}
+          onSaved={onSaved}
+        />
+      )}
     </div>
   );
 }

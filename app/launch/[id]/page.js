@@ -308,15 +308,20 @@ export default function LaunchDetailPage({ params }) {
         }}
       />
 
-      <LaunchContextDialog
-        open={contextOpen}
-        launchId={id}
-        context={launch.context ?? []}
-        onClose={() => setContextOpen(false)}
-        // 한 줄만 온 status 갱신과 달리 launch 전체를 돌려받는다 — PATCH 가
-        // context 를 포함한 launches 행 전체를 select 하기 때문이다.
-        onSaved={(next) => setLaunch(next)}
-      />
+      {/* 닫히면 언마운트시킨다. 계속 그리면 useState 초기화 함수가 다시 안
+          돌아서 지난 값이 남는다 — 가져오기로 전제가 바뀌어도 창에는 옛
+          줄이 뜬다. */}
+      {contextOpen && (
+        <LaunchContextDialog
+          open
+          launchId={id}
+          context={launch.context ?? []}
+          onClose={() => setContextOpen(false)}
+          // 한 줄만 온 status 갱신과 달리 launch 전체를 돌려받는다 — PATCH 가
+          // context 를 포함한 launches 행 전체를 select 하기 때문이다.
+          onSaved={(next) => setLaunch(next)}
+        />
+      )}
     </div>
   );
 }

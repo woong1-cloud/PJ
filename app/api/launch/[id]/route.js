@@ -27,7 +27,7 @@ export async function GET(request, { params }) {
       .select(
         // excluded_reason · source — 해당없음 사유와 항목 출처. 안 더하면
         // 화면(⋯ 메뉴·해당없음 줄)에 사유가 영영 빈칸이다.
-        'id, code, workstream, category, title, channel, decision_org, owner_org, owner_role, support_role, depends_on, day_offset, deliverable, note, is_critical, sort_order, status, blocked_reason, done_at, excluded_reason, source, assignee:team_members!launch_tasks_assignee_fkey(id, name)',
+        'id, code, workstream, category, title, channel, decision_org, owner_org, owner_role, support_role, depends_on, day_offset, deliverable, note, is_critical, sort_order, status, blocked_reason, done_at, excluded_reason, source, assignee_name, assignee:team_members!launch_tasks_assignee_fkey(id, name)',
       )
       .eq('launch_id', id)
       .order('workstream', { ascending: true })
