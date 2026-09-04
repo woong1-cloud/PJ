@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useIdentity } from '@/components/IdentityProvider';
 import { isGlobalAdmin } from '@/lib/tiers';
@@ -91,7 +92,12 @@ export default function LaunchGuidePage() {
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
       <div className="flex flex-wrap items-start gap-3">
         <div>
-          <h1 className="flex items-baseline gap-2 text-lg font-semibold text-slate-900">
+          {/* 돌아갈 길. 런칭 상세와 같은 자리·같은 모양이다 — 두 화면이
+              다르게 생기면 어디에 있었는지를 매번 다시 찾는다. */}
+          <Link href="/launch" className="text-xs text-slate-500 hover:text-slate-700">
+            ← 런칭 목록
+          </Link>
+          <h1 className="mt-1 flex items-baseline gap-2 text-lg font-semibold text-slate-900">
             {guide?.name ?? '런칭 가이드'}
             <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-normal text-slate-500">
               beta
