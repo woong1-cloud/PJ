@@ -51,10 +51,11 @@ export function MembersDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {/* 권한이 아직 안 열렸다는 사실을 화면이 말해야 한다. 안 그러면
-            "넣었는데 왜 못 들어오지"가 된다. */}
+        {/* 넣으면 그 순간부터 들어온다. 그 사실을 창이 말해야 넣는 손이
+            한 번 멈춘다. */}
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-[11.5px] text-amber-800">
-          지금은 명단만 만듭니다 — 참여자는 아직 런칭을 볼 수 없습니다.
+          명단에 넣으면 <b>그 사람은 바로 이 런칭을 보고 고칠 수 있습니다.</b>
+          엑셀 가져오기·내보내기와 항목 지우기는 전체 관리자만 합니다.
         </p>
 
         <div className="overflow-hidden rounded-xl border border-slate-200">
@@ -165,8 +166,11 @@ export function MembersDialog({
 // 끝난다 — 초대제를 유지하면서 클릭을 줄이는 방법이다.
 function AddRow({ roleName, people, members, taskCount, busy, onCancel, onSubmit }) {
   const [picked, setPicked] = useState(() => new Set());
+  const [query, setQuery] = useState('');
   const [error, setError] = useState('');
-  const candidates = memberCandidates({ people, members, roleName });
+  const { hits, total } = memberCandidates({
+    people, members, roleName, query, picked: [...picked],
+  });
 
   function toggle(id) {
     setPicked((prev) => {
@@ -192,16 +196,38 @@ function AddRow({ roleName, people, members, taskCount, busy, onCancel, onSubmit
 
   return (
     <div className="border-t border-slate-100 bg-slate-50/70 px-3 py-3">
-      {candidates.length === 0 ? (
+      {total === 0 ? (
         <p className="text-sm text-slate-500">
           넣을 수 있는 사람이 없습니다 — 이 역할에 이미 다 들어와 있습니다.
         </p>
       ) : (
         <>
-          {/* 두 줄로 세운다. 19명이 한 줄이면 창이 길어져 아래 단추가
+          {/* 찾기. 19명이면 체크박스를 다 깔아도 되지만 50명이 되면 벽이
+              된다. 이름과 소속으로 찾는다 — '재무' 를 치면 재무 조직
+              사람이 한 번에 나온다. */}
+          <div className="mb-1.5 flex flex-wrap items-center gap-2">
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="이름이나 소속으로 찾기"
+              aria-label={`${roleName} 에 넣을 사람 찾기`}
+              className="h-8 min-w-0 flex-1 rounded-lg border border-slate-300 px-2.5 text-[13px] focus:border-indigo-400 focus:outline-none"
+            />
+            <span className="shrink-0 text-[11px] tabular-nums text-slate-400">
+              {query ? `${total}명 중 ${hits.length}명` : `${total}명`}
+              {picked.size > 0 && ` · 고름 ${picked.size}`}
+            </span>
+          </div>
+
+          {/* 세 줄로 세운다. 19명이 한 줄이면 창이 길어져 아래 단추가
               화면 밖으로 나간다. */}
           <div className="grid max-h-44 grid-cols-1 gap-x-3 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2 sm:grid-cols-3">
-            {candidates.map((p) => (
+            {hits.length === 0 ? (
+              <p className="col-span-full px-1.5 py-3 text-center text-xs text-slate-400">
+                찾는 사람이 없습니다.
+              </p>
+            ) : hits.map((p) => (
               <label
                 key={p.id}
                 className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-[13px] hover:bg-slate-50"
@@ -222,12 +248,10 @@ function AddRow({ roleName, people, members, taskCount, busy, onCancel, onSubmit
             ))}
           </div>
 
-          {/* 넣는 것이 유일한 통제 지점이라 여기서 한 번 멈추게 한다.
-              1단계에는 권한이 아직 안 열려 실제로는 못 보지만, 이 문구를
-              나중에 붙이면 이미 20명이 들어간 뒤가 된다. */}
+          {/* 넣는 것이 유일한 통제 지점이라 여기서 한 번 멈추게 한다. */}
           <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800">
-            권한이 열리면 <b className="tabular-nums">{taskCount}건</b> 전부를 보게 됩니다 —
-            법인 설립 · 양수도 계약 · 계약 조건 비교가 포함됩니다. 엑셀 내보내기는 안 됩니다.
+            이 사람들은 <b className="tabular-nums">{taskCount}건</b> 전부를 보게 됩니다 —
+            법인 설립 · 양수도 계약 · 계약 조건 비교가 포함됩니다.
           </p>
 
           {error && <p className="mt-1.5 text-xs text-red-600">{error}</p>}
