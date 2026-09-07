@@ -43,6 +43,24 @@ function roleStorageKey(launchId) {
   return `moa.launch.${launchId}.role`;
 }
 
+// 역할을 물어봤는지. 고른 역할과 따로 둔다 — '전체 보기'나 '나중에'를
+// 고르면 역할은 빈 값인데 물어보기는 끝난 것이라, 하나로 합치면 화면을
+// 열 때마다 다시 묻는다.
+function askedStorageKey(launchId) {
+  return `moa.launch.${launchId}.roleAsked`;
+}
+
+function readAsked(launchId) {
+  if (!launchId) return false;
+  try {
+    return localStorage.getItem(askedStorageKey(launchId)) === '1';
+  } catch {
+    // 사생활 보호 모드. 기억을 못 하면 매번 묻게 되는데, 그 편이 한 번도
+    // 안 묻는 것보다 낫다 — 이 띠는 무시하고 지나갈 수 있다.
+    return false;
+  }
+}
+
 // 사생활 보호 모드에서 localStorage 가 던진다. 못 읽으면 안 고른 것으로 친다.
 function readStoredRole(launchId) {
   if (!launchId) return '';
@@ -116,6 +134,8 @@ export function LaunchBoard({
   // localStorage 읽기는 초기화 함수 안에 두면 effect 가 필요 없다.
   const [selectedRole, setSelectedRole] = useState(() => readStoredRole(launch?.id));
   const [roleTab, setRoleTab] = useState('owner');
+  // 역할을 물어봤나. 한 번 답하면(고르든 넘기든) 다시 안 묻는다.
+  const [roleAsked, setRoleAsked] = useState(() => readAsked(launch?.id));
   // 담당자 필터. 역할과 다른 축이라(회의에서 "물류팀 것" 과 "이 사람 것"은
   // 다른 질문이다) 따로 두고, 겹쳐 적용한다.
   const [selectedAssignee, setSelectedAssignee] = useState('');
@@ -134,6 +154,16 @@ export function LaunchBoard({
       // 사생활 보호 모드 등. 기억 못 해도 화면은 그대로 동작해야 한다.
     }
   }, [selectedRole, launch?.id]);
+
+  useEffect(() => {
+    if (!launch?.id) return;
+    try {
+      if (roleAsked) localStorage.setItem(askedStorageKey(launch.id), '1');
+      else localStorage.removeItem(askedStorageKey(launch.id));
+    } catch {
+      // 위와 같다.
+    }
+  }, [roleAsked, launch?.id]);
 
   // 바깥을 누르면 열린 메뉴를 닫는다.
   useEffect(() => {
@@ -216,6 +246,53 @@ export function LaunchBoard({
     }
     return [...set].sort((a, b) => a.localeCompare(b, 'ko'));
   }, [tasks]);
+
+  // 역할별로 지금 착수할 수 있는 건수.
+  //
+  // 고른 뒤에 실제로 보게 될 숫자와 같아야 한다. 고르면 보기는 '착수 가능'
+  // (기본값)이고 역할 탭은 '할 것'(주관)이라, 여기서도 주관만 센다 —
+  // 띠에 40 이라고 써 놓고 39 가 나오면 그 숫자를 다시 안 믿는다.
+  //
+  // 주관으로 한 번도 안 나오는 역할은 띠에 안 올린다 — 상품등록팀 ·
+  // 온라인BU AI 컨텐츠는 지원으로만 있어서, 고르면 '할 것'이 0건인
+  // 빈 화면으로 떨어진다. 지원만 하는 역할은 드롭다운에서 고르면 된다.
+  const readyByRole = useMemo(() => {
+    const map = new Map();
+    for (const task of tasks) {
+      for (const r of splitRoles(task.owner_role)) {
+        if (!map.has(r)) map.set(r, 0);
+      }
+    }
+    for (const task of tasks) {
+      if (!isReady({ task, tasks })) continue;
+      for (const r of splitRoles(task.owner_role)) {
+        if (map.has(r)) map.set(r, map.get(r) + 1);
+      }
+    }
+    // 많은 쪽이 앞이다. 숫자가 보이는 목록이 그 숫자로 안 정렬돼 있으면
+    // 눈이 한 번 더 훑어야 한다.
+    return [...map.entries()]
+      .map(([role, ready]) => ({ role, ready }))
+      .sort((a, b) => b.ready - a.ready || a.role.localeCompare(b.role, 'ko'));
+  }, [tasks]);
+
+  // 역할 고르기 띠를 지금 띄우나.
+  //
+  // 세 조건이 다 맞아야 한다 — 아직 안 골랐고, 물어본 적 없고, 고를
+  // 역할이 있다. 역할이 하나도 없는 런칭(가져오기 전)에서는 빈 띠가
+  // 자리만 차지한다.
+  const showRoleStrip = !selectedRole && !roleAsked && readyByRole.length > 0;
+
+  function pickRole(role) {
+    setSelectedRole(role);
+    // 새로 고른 역할이면 '할 것'부터 본다 — 드롭다운과 같은 규칙이다.
+    setRoleTab('owner');
+    setRoleAsked(true);
+    // 그 역할에 지금 착수할 것이 없으면 '전체'로 보낸다. 방금 자기 역할을
+    // 고른 사람에게 빈 화면을 주면 "내 일이 없다"가 아니라 "잘못 골랐나"로
+    // 읽힌다 — 띠에 숫자가 없던 역할이 여기로 온다.
+    if ((readyByRole.find((r) => r.role === role)?.ready ?? 0) === 0) setView('all');
+  }
 
   // 담당자 후보. 방금 생긴 값이라 대부분 비어 있다 — 드롭다운을 보일지
   // 말지(하나라도 있을 때만) 이 길이로 정한다.
@@ -437,6 +514,54 @@ export function LaunchBoard({
       {/* 보기 칩 줄. 역할·담당자 필터가 왼쪽 끝, 보기 칩, 오른쪽 끝에
           만들기·찾기·묶기. 예전에는 역할 필터가 따로 한 줄을 차지했다 —
           그 줄과 이 줄이 결국 "무엇을 보여줄까"라는 같은 질문이라 합친다. */}
+      {/* 역할 고르기 띠. 아직 역할을 안 고른 사람에게 딱 한 번.
+          창(모달)이 아니라 자리를 차지하는 띠다 — 뒤가 다 보이고, 무시하고
+          바로 목록을 봐도 된다. 창으로 만들면 하루 다섯 번 열 때 다섯 번
+          닫아야 하고, 무엇을 고르는지 안 보이는 채로 골라야 한다.
+          (docs 2026-09-04 첫 화면 목업에서 셋을 견주고 고른 안이다.) */}
+      {showRoleStrip && (
+        <div className="rounded-xl border border-indigo-100 bg-gradient-to-b from-indigo-50/60 to-white px-3.5 py-3">
+          <div className="mb-2 flex items-center gap-2">
+            <p className="text-sm font-medium text-slate-800">어느 역할로 보시겠어요?</p>
+            <button
+              type="button"
+              onClick={() => setRoleAsked(true)}
+              className="ml-auto text-xs text-slate-400 hover:text-slate-600"
+            >
+              나중에 ✕
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {readyByRole.map(({ role, ready }) => (
+              <button
+                key={role}
+                type="button"
+                onClick={() => pickRole(role)}
+                className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:border-indigo-500 hover:bg-indigo-50 hover:text-indigo-700"
+              >
+                {role}
+                {/* 0 은 안 쓴다. '재무팀 0' 은 고르지 말라는 말처럼 보이는데,
+                    지금 착수할 것이 없을 뿐 그 역할의 일은 있다. */}
+                {ready > 0 && (
+                  <span className="text-xs font-semibold text-emerald-600 tabular-nums">{ready}</span>
+                )}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setRoleAsked(true)}
+              className="rounded-full border border-dashed border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-500 hover:border-slate-400"
+            >
+              전체 보기
+            </button>
+          </div>
+          <p className="mt-2 text-[11.5px] text-slate-500">
+            초록 숫자는 <b className="font-medium text-slate-600">지금 착수할 수 있는 것</b>입니다.
+            고르면 이 브라우저에 기억하고 다시 묻지 않습니다.
+          </p>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         {/* 역할 필터. 모아의 조직과 런칭의 역할은 다른 축이라 이을 데이터가
             없다 — 그래서 자동으로 안 고르고 사람이 고른다. 빈 값(역할 전체)이
@@ -458,6 +583,19 @@ export function LaunchBoard({
             </option>
           ))}
         </select>
+
+        {/* 띠로 돌아가는 길. 넘긴 사람에게만, 역할 드롭다운 바로 옆에 둔다 —
+            역할 이야기를 찾을 때 눈이 가는 자리가 여기다.
+            드롭다운에는 없고 띠에만 있는 것이 역할별 착수 가능 건수다. */}
+        {!selectedRole && roleAsked && readyByRole.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setRoleAsked(false)}
+            className="text-xs text-indigo-600 hover:underline"
+          >
+            역할 고르기
+          </button>
+        )}
 
         {/* 담당자 필터. assignee_name 은 방금 생긴 값이라 대부분 비어
             있다 — 이름이 하나라도 있을 때만 보인다. 다 비어 있으면 자리만
