@@ -9,8 +9,8 @@ import { errorResponse, ApiError } from '@/lib/apiError';
 // 1단계는 권한을 안 연다 — 전부 requireGlobalAdmin 이다. 참여자는 아직
 // 런칭을 못 본다. 명단만 만든다.
 //
-// 문을 여는 것(참관·참여자)은 3·4단계이고, 그 앞에 라우트 보안 점검이
-// 있다(IDOR · 목록 새기 · 라우트 검사 강제).
+// 문을 여는 것은 3단계다. 참관은 안 만들기로 했으므로 한 단계다 —
+// 명단에 있으면 보고 고칠 수 있고, 없으면 403 이다.
 
 // FK 이름을 명시한다. 지금 launch_members 에서 team_members 로 가는 FK 는
 // member_id 와 created_by 둘이라, 안 적으면 PostgREST 가 어느 관계를 타야
@@ -88,9 +88,11 @@ export async function POST(request, { params }) {
         launch_id: id,
         member_id: memberId,
         role_name: roleName,
-        // 참관(false)이 기본이 아니다 — 넣는 이유는 대개 일을 시키려는 것이고,
-        // 화면이 라디오로 명시하게 되어 있다.
-        can_edit: body?.canEdit !== false,
+        // can_edit 은 늘 참이다. 참관은 안 만든다 — 런칭에 들어오는 사람은
+        // 대개 일을 할 사람이고, 경영자는 보고로 받는다(보고 화면은 따로).
+        // 컬럼은 남겨 둔다. 그 보고 화면을 만들 때 다시 쓸 자리이고,
+        // 지우는 마이그레이션은 되돌리기 어렵다.
+        can_edit: true,
         created_by: actor,
       }));
     if (rows.length === 0) throw new ApiError(400, '활성 팀원이 아닙니다.');
@@ -107,39 +109,6 @@ export async function POST(request, { params }) {
       { added: data?.length ?? 0, skipped: rows.length - (data?.length ?? 0) },
       { status: 201 },
     );
-  } catch (error) {
-    return errorResponse(error);
-  }
-}
-
-// 참여자 ↔ 참관을 바꾼다.
-//
-// 역할은 여기서 못 바꾼다. 역할이 PK 의 한 칸이라 바꾸는 것은 줄을 옮기는
-// 일이고, 그건 빼고 다시 넣는 것과 같다 — 화면도 그렇게 하게 되어 있다.
-export async function PATCH(request, { params }) {
-  try {
-    await requireGlobalAdmin();
-    const { id } = await params;
-    const body = await request.json();
-
-    const memberId = String(body?.memberId ?? '');
-    const roleName = String(body?.roleName ?? '').trim();
-    if (!memberId || !roleName) throw new ApiError(400, '누구의 어느 역할인지가 필요합니다.');
-    if (typeof body?.canEdit !== 'boolean') throw new ApiError(400, '참여자/참관을 고르세요.');
-
-    const supabase = getSupabaseAdmin();
-    const { data, error } = await supabase
-      .from('launch_members')
-      .update({ can_edit: body.canEdit })
-      .eq('launch_id', id)
-      .eq('member_id', memberId)
-      .eq('role_name', roleName)
-      .select('member_id')
-      .maybeSingle();
-    if (error) throw error;
-    if (!data) throw new ApiError(404, '명단에서 찾을 수 없습니다.');
-
-    return Response.json({ ok: true });
   } catch (error) {
     return errorResponse(error);
   }

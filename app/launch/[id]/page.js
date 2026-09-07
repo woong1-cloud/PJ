@@ -195,8 +195,8 @@ export default function LaunchDetailPage({ params }) {
 
   // 넣은 뒤에는 명단만 다시 받는다. 몇 명이 실제로 들어갔는지(이미 있던
   // 사람은 넘어간다) 서버가 알고 있어서, 화면에서 짐작해 붙이면 어긋난다.
-  async function addMembers({ roleName, memberIds, canEdit }) {
-    await memberFetch('POST', { roleName, memberIds, canEdit });
+  async function addMembers({ roleName, memberIds }) {
+    await memberFetch('POST', { roleName, memberIds });
     const res = await fetch(`/api/launch/${id}/members`);
     if (res.ok) setMembers((await res.json()).members ?? []);
   }
@@ -208,16 +208,6 @@ export default function LaunchDetailPage({ params }) {
     );
   }
 
-  async function toggleMemberEdit(m, canEdit) {
-    await memberFetch('PATCH', { memberId: m.member_id, roleName: m.role_name, canEdit });
-    setMembers((prev) =>
-      prev.map((x) =>
-        x.member_id === m.member_id && x.role_name === m.role_name
-          ? { ...x, can_edit: canEdit }
-          : x,
-      ),
-    );
-  }
 
   // 탭 셋. 건수를 붙이는 이유: 안 열어봐도 몇 건인지 보여야 한다. 주간
   // 진척은 다섯 칸을 합치면 뜻이 겹치는 숫자라 배지를 안 단다.
@@ -463,7 +453,6 @@ export default function LaunchDetailPage({ params }) {
           onClose={() => setMembersOpen(false)}
           onAdd={addMembers}
           onRemove={removeMember}
-          onToggleEdit={toggleMemberEdit}
         />
       )}
 

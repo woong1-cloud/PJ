@@ -18,11 +18,18 @@ import { memberCandidates, memberRows } from '@/lib/launchMembers';
 // 뒤의 역할 줄이 가려져 어디에 넣는 중인지를 놓친다. 줄이 그 자리에서
 // 펼쳐진다.
 //
-// props: open, launch, tasks, members, people, busy,
-//        onClose, onAdd, onRemove, onToggleEdit
+// 참관(can_edit 거짓)은 안 만든다. 런칭에 들어오는 사람은 대개 일을 할
+// 사람이고, 경영자는 보고로 받는다 — 보고 화면은 따로 고민한다. 고를 것이
+// 하나면 물을 이유가 없다.
+//
+// can_edit 컬럼은 남겨 둔다. 화면에 남기면 거짓말이 되지만(참관으로 넣었는데
+// 고칠 수 있으면), 컬럼을 지우면 되돌리기 어렵고 나중에 보고 메뉴를 만들
+// 때 다시 쓸 자리다. 값은 전부 참으로 들어간다.
+//
+// props: open, launch, tasks, members, people, busy, onClose, onAdd, onRemove
 export function MembersDialog({
   open, launch, tasks = [], members = [], people = [], busy = false,
-  onClose, onAdd, onRemove, onToggleEdit,
+  onClose, onAdd, onRemove,
 }) {
   const [openRole, setOpenRole] = useState(null);
   const rows = useMemo(() => memberRows({ tasks, members }), [tasks, members]);
@@ -78,26 +85,9 @@ export function MembersDialog({
                       row.members.map((m) => (
                         <span
                           key={`${m.member_id}-${m.role_name}`}
-                          className={`inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-2.5 pr-1 text-xs ${
-                            m.can_edit === false
-                              ? 'border-slate-200 bg-slate-50 text-slate-500'
-                              : 'border-indigo-100 bg-indigo-50 text-indigo-700'
-                          }`}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-indigo-100 bg-indigo-50 py-0.5 pl-2.5 pr-1 text-xs text-indigo-700"
                         >
                           {m.member?.name ?? '(지워진 사람)'}
-                          {/* 참여/참관을 글자로 늘 보여주고, 그 글자가 곧
-                              바꾸는 단추다. 색이나 아이콘으로 하면 무슨 뜻인지
-                              알 수 없고, 마우스를 올려야 나오게 하면 있는
-                              줄도 모른다. */}
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => onToggleEdit?.(m, m.can_edit === false)}
-                            title={m.can_edit === false ? '참여자로 바꾸기' : '참관으로 바꾸기'}
-                            className="rounded px-1 text-[10px] opacity-70 hover:bg-white/70 hover:underline hover:opacity-100 disabled:opacity-40"
-                          >
-                            {m.can_edit === false ? '참관' : '참여'}
-                          </button>
                           <button
                             type="button"
                             disabled={busy}
@@ -175,7 +165,6 @@ export function MembersDialog({
 // 끝난다 — 초대제를 유지하면서 클릭을 줄이는 방법이다.
 function AddRow({ roleName, people, members, taskCount, busy, onCancel, onSubmit }) {
   const [picked, setPicked] = useState(() => new Set());
-  const [canEdit, setCanEdit] = useState(true);
   const [error, setError] = useState('');
   const candidates = memberCandidates({ people, members, roleName });
 
@@ -195,7 +184,7 @@ function AddRow({ roleName, people, members, taskCount, busy, onCancel, onSubmit
       return;
     }
     try {
-      await onSubmit({ memberIds: [...picked], canEdit });
+      await onSubmit({ memberIds: [...picked] });
     } catch (err) {
       setError(err?.message ?? '넣지 못했습니다.');
     }
@@ -231,32 +220,6 @@ function AddRow({ roleName, people, members, taskCount, busy, onCancel, onSubmit
                 </span>
               </label>
             ))}
-          </div>
-
-          {/* 라디오다. 체크박스로 두면 안 눌렀을 때 무엇이 되는지가 안 보인다. */}
-          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
-            <label className="flex cursor-pointer items-center gap-1.5 text-[13px]">
-              <input
-                type="radio"
-                name={`can-edit-${roleName}`}
-                checked={canEdit}
-                onChange={() => setCanEdit(true)}
-                className="h-3.5 w-3.5 accent-indigo-600"
-              />
-              <b className="font-medium text-slate-800">참여자</b>
-              <span className="text-xs text-slate-500">상태를 바꾸고 내용을 고칩니다</span>
-            </label>
-            <label className="flex cursor-pointer items-center gap-1.5 text-[13px]">
-              <input
-                type="radio"
-                name={`can-edit-${roleName}`}
-                checked={!canEdit}
-                onChange={() => setCanEdit(false)}
-                className="h-3.5 w-3.5 accent-indigo-600"
-              />
-              <b className="font-medium text-slate-800">참관</b>
-              <span className="text-xs text-slate-500">보기만 합니다</span>
-            </label>
           </div>
 
           {/* 넣는 것이 유일한 통제 지점이라 여기서 한 번 멈추게 한다.
