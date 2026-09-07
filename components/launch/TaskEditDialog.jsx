@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { isWorkstream } from '@/lib/launchCode';
 import { parseDeps } from '@/lib/launchImport';
 import { byCode } from '@/lib/launchDeps';
-import { dueDate } from '@/lib/launchDate';
+import { dueDate, offsetFromDate } from '@/lib/launchDate';
 import { PickOrType } from '@/components/launch/PickOrType';
 
 // 항목 하나를 만들거나 고친다.
@@ -41,6 +41,13 @@ export function TaskEditDialog({
   onSaved,
 }) {
   const [form, setForm] = useState(() => fromTask(task, workstreams));
+  // 달력칸에 넣을 값. 숫자칸이 비었거나 숫자가 아니면 빈 칸으로 둔다 —
+  // 여기서 0 으로 떨어뜨리면 '-' 만 지운 순간 달력이 오픈일로 튄다.
+  const offset = Number(form.day_offset);
+  const dueValue =
+    launch?.open_date && form.day_offset !== '' && Number.isFinite(offset)
+      ? (dueDate(launch.open_date, offset) ?? '')
+      : '';
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -166,29 +173,51 @@ export function TaskEditDialog({
               />
             </Field>
 
-            <Field label="D-day" required htmlFor="te-d">
-              <input
-                id="te-d"
-                type="number"
-                value={form.day_offset}
-                onChange={(e) => set('day_offset', e.target.value)}
-                className={input}
-              />
-              {/* '-90' 이 며칠인지 아무도 모른다. 오픈일 기준 실제 기한을 옆에 보여준다. */}
-              {launch?.open_date && Number.isFinite(Number(form.day_offset)) && (
-                <span className="text-xs text-slate-400">
-                  {dueDate(launch.open_date, Number(form.day_offset))}
-                </span>
-              )}
-            </Field>
+            {/* 칸이 둘, 저장은 하나.
+                사람은 'D-90'으로 생각하지 않고 '11월 3일까지'로 생각한다.
+                그래서 달력으로도 찍게 하고, 저장은 여전히 day_offset 이다 —
+                오픈일이 하루 밀리면 487건이 통째로 따라 움직여야 한다
+                (lib/launchDate.js 맨 위 참고).
 
-            <div className="flex items-end pb-2 text-xs text-slate-400">
-              {mode === 'create' ? (
-                <span>코드는 저장할 때 붙습니다</span>
-              ) : (
-                <span className="tabular-nums">코드 {task?.code}</span>
-              )}
-            </div>
+                숫자칸을 안 없앤다. 엑셀 양식이 D-day 열이라 그 감각으로
+                일하는 사람이 있고, 'D-90 쯤'은 날짜보다 숫자가 빠르다. */}
+            <Field label="D-day" required htmlFor="te-d" className="col-span-2">
+              <div className="flex items-center gap-1.5">
+                <input
+                  id="te-d"
+                  type="number"
+                  value={form.day_offset}
+                  onChange={(e) => set('day_offset', e.target.value)}
+                  className={`${input} w-24 shrink-0`}
+                />
+                <span className="shrink-0 text-xs text-slate-400">또는</span>
+                <input
+                  type="date"
+                  aria-label="기한을 달력에서 고르기"
+                  value={dueValue}
+                  // 오픈일이 없으면 환산할 기준이 없다. 실제로는 not null 이라
+                  // 안 생기지만, 그때 달력이 0 을 넣는 것보다 잠기는 편이 낫다.
+                  disabled={!launch?.open_date}
+                  onChange={(e) => {
+                    const next = offsetFromDate(launch?.open_date, e.target.value);
+                    if (next !== null) set('day_offset', String(next));
+                  }}
+                  className={`${input} min-w-0 flex-1 disabled:bg-slate-50 disabled:text-slate-400`}
+                />
+              </div>
+              {/* 코드 안내가 칸 하나를 통째로 쓰고 있었다. 한 줄에 접는다 —
+                  D-day 가 두 칸을 쓰게 되면서 자리가 없기도 하고, 이 둘은
+                  다 '읽기만 하는 것'이라 같은 줄이 맞다. */}
+              <span className="text-xs text-slate-400">
+                {launch?.open_date && `오픈 ${launch.open_date} 기준`}
+                {launch?.open_date && ' · '}
+                {mode === 'create' ? (
+                  '코드는 저장할 때 붙습니다'
+                ) : (
+                  <span className="tabular-nums">코드 {task?.code}</span>
+                )}
+              </span>
+            </Field>
 
             <Field label="주관 (수행)" htmlFor="te-owner">
               <PickOrType

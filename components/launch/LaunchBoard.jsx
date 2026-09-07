@@ -55,8 +55,18 @@ function readStoredRole(launchId) {
 
 // 런칭 보드.
 //
-// 400건짜리 목록을 통째로 보여주면 아무도 안 본다. 그래서 기본은 '이번 주'다 —
-// 회의에서 실제로 말하는 것이 그것이고, 나머지는 필요할 때 켠다.
+// 400건짜리 목록을 통째로 보여주면 아무도 안 본다. 그래서 기본을 하나 건다.
+//
+// 기본은 '착수 가능'이다. 오래 '이번 주'였는데, 실제로 열어 보니 487건에서
+// 이번 주가 4건이었고 그 4건도 여는 사람의 것이 아니었다 — 오픈이 D-119 라
+// 기한이 이번 주에 몰릴 이유가 없고, 앞으로 몇 달 계속 그렇다.
+//
+// 어느 역할로 걸러도 마찬가지다: 브랜드PM 0 · 브랜드 0 · 개발PM 1 ·
+// 서비스기획 2. 역할 필터를 아무리 잘 만들어도 '이번 주'가 기본인 한
+// 첫 화면은 비어 있다.
+//
+// '이번 주'는 "언제까지"에 답하고 '착수 가능'은 "지금 뭐부터"에 답한다.
+// 회의를 여는 순간 필요한 것은 뒤쪽이다.
 //
 // 색은 lib/launchTask.js 의 taskTone 하나로 정한다. 화면마다 다르게 칠하면
 // 같은 항목이 여기서는 빨강, 저기서는 회색이 된다.
@@ -71,7 +81,7 @@ export function LaunchBoard({
   launch, tasks = [], today, onChanged, onReload, decisions = [], onDecisionCreated, onBlockedChanged,
   focusWorkstream = '', onClearFocus,
 }) {
-  const [view, setView] = useState('week');
+  const [view, setView] = useState('ready');
   const [query, setQuery] = useState('');
   const [closedGroups, setClosedGroups] = useState(() => new Set());
   const [busy, setBusy] = useState(null);
