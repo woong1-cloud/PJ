@@ -11,6 +11,7 @@ import { ImportDialog } from '@/components/launch/ImportDialog';
 import { DecisionList } from '@/components/launch/DecisionList';
 import { WeeklyProgress } from '@/components/launch/WeeklyProgress';
 import { GanttView } from '@/components/launch/GanttView';
+import { MembersView } from '@/components/launch/MembersView';
 import { dDay, dDayLabel } from '@/lib/launchDate';
 import { progress } from '@/lib/launchTask';
 import { todayInKst } from '@/lib/overdue';
@@ -30,6 +31,12 @@ export default function LaunchDetailPage({ params }) {
   // 제목' 표시가 같이 쓰기 때문에 페이지가 갖는다 — LaunchBoard 만 갖고
   // 있으면 탭 줄에서 건수를 못 본다.
   const [decisions, setDecisions] = useState([]);
+  // 참여자 명단과 넣을 수 있는 사람들. 참여자 탭을 처음 열 때 받는다 —
+  // 보드만 보는 사람에게 미리 실어 보낼 이유가 없다.
+  const [members, setMembers] = useState([]);
+  const [people, setPeople] = useState([]);
+  const [membersLoaded, setMembersLoaded] = useState(false);
+  const [memberBusy, setMemberBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [importOpen, setImportOpen] = useState(false);
@@ -134,6 +141,79 @@ export default function LaunchDetailPage({ params }) {
     [decisions],
   );
 
+  const memberHeads = useMemo(
+    () => new Set(members.map((m) => m.member_id)).size,
+    [members],
+  );
+
+  // 참여자 탭을 열 때 한 번 받는다. 넣고 빼는 것은 화면 상태만 고치고
+  // 다시 안 받는다 — 명단이 짧아 통째로 다시 받을 이유가 없고, 회의 중에
+  // 화면이 튀는 것이 더 나쁘다.
+  useEffect(() => {
+    if (tab !== 'members' || membersLoaded || !admin) return undefined;
+    let cancelled = false;
+    (async () => {
+      const [mRes, pRes] = await Promise.all([
+        fetch(`/api/launch/${id}/members`).catch(() => null),
+        fetch('/api/team-members').catch(() => null),
+      ]);
+      if (cancelled) return;
+      if (mRes?.ok) setMembers((await mRes.json()).members ?? []);
+      if (pRes?.ok) {
+        const body = await pRes.json();
+        // /api/team-members 는 기본으로 활성만 준다(includeInactive 를 안 붙임).
+        // 그래도 한 번 더 거른다 — 이 목록이 명단에 들어갈 사람을 정한다.
+        setPeople((body.teamMembers ?? []).filter((p) => p.is_active !== false));
+      }
+      setMembersLoaded(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, membersLoaded, admin, id]);
+
+  async function memberFetch(method, body) {
+    setMemberBusy(true);
+    try {
+      const res = await fetch(`/api/launch/${id}/members`, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error ?? '처리하지 못했습니다.');
+      return payload;
+    } finally {
+      setMemberBusy(false);
+    }
+  }
+
+  // 넣은 뒤에는 명단만 다시 받는다. 몇 명이 실제로 들어갔는지(이미 있던
+  // 사람은 넘어간다) 서버가 알고 있어서, 화면에서 짐작해 붙이면 어긋난다.
+  async function addMembers({ roleName, memberIds, canEdit }) {
+    await memberFetch('POST', { roleName, memberIds, canEdit });
+    const res = await fetch(`/api/launch/${id}/members`);
+    if (res.ok) setMembers((await res.json()).members ?? []);
+  }
+
+  async function removeMember(m) {
+    await memberFetch('DELETE', { memberId: m.member_id, roleName: m.role_name });
+    setMembers((prev) =>
+      prev.filter((x) => !(x.member_id === m.member_id && x.role_name === m.role_name)),
+    );
+  }
+
+  async function toggleMemberEdit(m, canEdit) {
+    await memberFetch('PATCH', { memberId: m.member_id, roleName: m.role_name, canEdit });
+    setMembers((prev) =>
+      prev.map((x) =>
+        x.member_id === m.member_id && x.role_name === m.role_name
+          ? { ...x, can_edit: canEdit }
+          : x,
+      ),
+    );
+  }
+
   // 탭 셋. 건수를 붙이는 이유: 안 열어봐도 몇 건인지 보여야 한다. 주간
   // 진척은 다섯 칸을 합치면 뜻이 겹치는 숫자라 배지를 안 단다.
   const tabs = useMemo(
@@ -143,8 +223,10 @@ export default function LaunchDetailPage({ params }) {
       { key: 'weekly', label: '주간 진척', count: null },
       // 간트는 건수를 안 단다 — 워크스트림 19줄이라 '19' 는 아무 말도 안 한다.
       { key: 'gantt', label: '간트', count: null },
+      // 사람 수를 센다(역할 자리 수가 아니라) — 한 사람이 두 역할일 수 있다.
+      { key: 'members', label: '참여자', count: memberHeads },
     ],
-    [stat.total, pendingDecisionCount],
+    [stat.total, pendingDecisionCount, memberHeads],
   );
 
   // 준비 ↔ 진행 중 — 엑셀 문의 열쇠. app/api/launch/[id]/route.js PATCH 참고.
@@ -345,6 +427,19 @@ export default function LaunchDetailPage({ params }) {
             setBoardFocus(workstream);
             setTab('board');
           }}
+        />
+      )}
+
+      {tab === 'members' && (
+        <MembersView
+          launch={launch}
+          tasks={tasks}
+          members={members}
+          people={people}
+          busy={memberBusy}
+          onAdd={addMembers}
+          onRemove={removeMember}
+          onToggleEdit={toggleMemberEdit}
         />
       )}
 
