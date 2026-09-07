@@ -94,6 +94,9 @@ export default function LoginPage() {
       memberId: meData.memberId,
       name: meData.name,
       isGlobalAdmin: meData.isGlobalAdmin,
+      // 런칭 명단에 낀 것이 있나. 상단바가 '런칭' 을 보일지 정한다.
+      // 여기서 안 담으면 /api/me 가 줘도 버려진다.
+      hasLaunch: meData.hasLaunch === true,
       brandId: brand.id,
       tier: brand.tier,
     });
