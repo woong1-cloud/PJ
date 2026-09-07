@@ -188,7 +188,7 @@ export function TaskEditDialog({
                   type="number"
                   value={form.day_offset}
                   onChange={(e) => set('day_offset', e.target.value)}
-                  className={`${input} w-24 shrink-0`}
+                  className={`${inputBase} w-20 shrink-0`}
                 />
                 <span className="shrink-0 text-xs text-slate-400">또는</span>
                 <input
@@ -202,7 +202,7 @@ export function TaskEditDialog({
                     const next = offsetFromDate(launch?.open_date, e.target.value);
                     if (next !== null) set('day_offset', String(next));
                   }}
-                  className={`${input} min-w-0 flex-1 disabled:bg-slate-50 disabled:text-slate-400`}
+                  className={`${inputBase} min-w-0 flex-1 disabled:bg-slate-50 disabled:text-slate-400`}
                 />
               </div>
               {/* 코드 안내가 칸 하나를 통째로 쓰고 있었다. 한 줄에 접는다 —
@@ -402,8 +402,16 @@ function fromTask(task, workstreams) {
   };
 }
 
-const input =
-  'h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm focus:border-indigo-400 focus:outline-none';
+// 너비를 뺀 알맹이. D-day 처럼 한 줄에 칸이 둘인 자리는 여기서 시작해
+// 제 너비를 붙인다.
+//
+// `${input} w-24` 라고 쓰면 안 된다 — 클래스 문자열의 순서가 아니라
+// 스타일시트의 순서가 이기기 때문에 w-full 이 그대로 이긴다. 실제로
+// 숫자칸이 100%를 먹고 달력을 창 바깥으로 밀어냈다.
+const inputBase =
+  'h-9 rounded-lg border border-slate-300 px-2.5 text-sm focus:border-indigo-400 focus:outline-none';
+
+const input = `${inputBase} w-full`;
 
 // 친 선행 코드를 그 자리에서 풀어 준다.
 //
