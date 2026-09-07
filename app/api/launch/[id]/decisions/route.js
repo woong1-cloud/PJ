@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { requireGlobalAdmin } from '@/lib/permissions';
+import { requireGlobalAdmin, requireLaunchAccess } from '@/lib/permissions';
 import { errorResponse, ApiError } from '@/lib/apiError';
 
 // 결정 대기 — RAID 로그의 D. 00_개요 의 [먼저 결정할 것] 14건과, 회의 중에
@@ -33,8 +33,8 @@ async function withWaitingCount(supabase, launchId, decisions) {
 
 export async function GET(request, { params }) {
   try {
-    await requireGlobalAdmin();
     const { id } = await params;
+    await requireLaunchAccess(id, 'member');
     const supabase = getSupabaseAdmin();
 
     const { data: decisions, error } = await supabase
@@ -149,8 +149,8 @@ async function addManual(supabase, launchId, body) {
 
 export async function POST(request, { params }) {
   try {
-    await requireGlobalAdmin();
     const { id } = await params;
+    await requireLaunchAccess(id, 'member');
     const body = await request.json();
     const supabase = getSupabaseAdmin();
 

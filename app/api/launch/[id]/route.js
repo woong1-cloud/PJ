@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { requireGlobalAdmin } from '@/lib/permissions';
+import { requireGlobalAdmin, requireLaunchAccess } from '@/lib/permissions';
 import { errorResponse, ApiError } from '@/lib/apiError';
 
 // 런칭 하나 — 항목 전부를 한 번에 준다.
@@ -10,8 +10,9 @@ import { errorResponse, ApiError } from '@/lib/apiError';
 
 export async function GET(request, { params }) {
   try {
-    await requireGlobalAdmin();
     const { id } = await params;
+    // 보기는 참여자에게 연다. 고치기(PATCH)·지우기(DELETE)는 관리자다.
+    await requireLaunchAccess(id, 'member');
     const supabase = getSupabaseAdmin();
 
     const { data: launch, error } = await supabase

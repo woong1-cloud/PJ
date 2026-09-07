@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { requireGlobalAdmin } from '@/lib/permissions';
+import { requireGlobalAdmin, myLaunchIds } from '@/lib/permissions';
 import { errorResponse, ApiError } from '@/lib/apiError';
 import { LAUNCH_KINDS } from '@/lib/launchKind';
 
@@ -8,24 +8,34 @@ const MAX_TASKS = 2000;
 
 // 브랜드 런칭 — 목록과 만들기.
 //
-// beta 동안은 전체 관리자만이다. 참여자 개념(launch_members)은 테이블에
-// 있지만 화면이 아직 없다 — 실제로 여러 부서가 들어오는 것은 메일이 붙는
-// 3단계부터이고, 그 전에 계정을 열면 아무 일도 안 하는 사람만 늘어난다.
+// 목록은 참여자에게도 연다. 다만 **자기가 낀 것만** 나가야 한다 —
+// 안 그러면 다른 브랜드의 런칭 이름과 오픈일이 샌다. 미공개 오픈 계획은
+// 그 존재 자체가 정보다.
+//
+// 만들기(POST)는 전체 관리자만이다.
 
 const LAUNCH_SELECT =
   'id, name, open_date, kind, status, note, guide_id, brand_id, created_at, updated_at';
 
 export async function GET() {
   try {
-    await requireGlobalAdmin();
+    // null 이면 전체 관리자라 안 거른다. 빈 배열은 "낀 것이 하나도 없다"라서
+    // 목록이 통째로 비어야 한다 — 둘을 구별해야 한다.
+    const mine = await myLaunchIds();
     const supabase = getSupabaseAdmin();
 
-    const { data, error } = await supabase
+    // .in() 에 빈 배열을 주면 400 이 난다. 어차피 빈 목록이니 질의를 안 한다.
+    if (mine !== null && mine.length === 0) return Response.json({ launches: [] });
+
+    let query = supabase
       .from('launches')
       // 오픈이 가까운 것이 위. 끝난 런칭은 아래로 밀리지만 목록에 남는다 —
       // 가이드의 실적이 어디서 왔는지가 이 목록이다.
       .select(LAUNCH_SELECT)
       .order('open_date', { ascending: true });
+    if (mine !== null) query = query.in('id', mine);
+
+    const { data, error } = await query;
     if (error) throw error;
 
     // 진척은 여기서 센다. 런칭마다 항목 수를 저장해 두면 항목을 더하거나

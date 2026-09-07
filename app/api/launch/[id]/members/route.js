@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { requireGlobalAdmin } from '@/lib/permissions';
+import { requireGlobalAdmin, requireLaunchAccess } from '@/lib/permissions';
 import { errorResponse, ApiError } from '@/lib/apiError';
 
 // 런칭 참여자 명단.
@@ -35,8 +35,10 @@ async function requireLaunch(supabase, launchId) {
 
 export async function GET(_request, { params }) {
   try {
-    await requireGlobalAdmin();
     const { id } = await params;
+    // 명단 읽기는 참여자에게도 연다 — 항목 창의 담당자 후보가 이걸 쓴다.
+    // 넣고 빼는 것(POST·DELETE)은 관리자다.
+    await requireLaunchAccess(id, 'member');
     const supabase = getSupabaseAdmin();
     await requireLaunch(supabase, id);
 

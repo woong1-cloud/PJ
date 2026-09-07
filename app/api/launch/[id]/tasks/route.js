@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { requireGlobalAdmin } from '@/lib/permissions';
+import { requireGlobalAdmin, requireLaunchAccess } from '@/lib/permissions';
 import { errorResponse, ApiError } from '@/lib/apiError';
 import { isWorkstream, nextCode } from '@/lib/launchCode';
 
@@ -12,8 +12,8 @@ import { isWorkstream, nextCode } from '@/lib/launchCode';
 // 나중에 "HOKA 에서 새로 생긴 것"을 뽑아 가이드로 되돌리는 근거다(4단계).
 export async function POST(request, { params }) {
   try {
-    await requireGlobalAdmin();
     const { id } = await params;
+    await requireLaunchAccess(id, 'member');
     const body = await request.json();
 
     const workstream = String(body?.workstream ?? '').trim();

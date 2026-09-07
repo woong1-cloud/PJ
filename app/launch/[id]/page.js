@@ -24,6 +24,9 @@ export default function LaunchDetailPage({ params }) {
   const { id } = use(params);
   const { identity } = useIdentity();
   const admin = isGlobalAdmin(identity);
+  // 명단에 든 사람도 들어온다. 진짜 판정은 서버가 한다(requireLaunchAccess) —
+  // 명단 밖이면 아래 load 가 403 을 받아 그 문구가 뜬다.
+  const sees = admin || identity?.hasLaunch === true;
 
   const [launch, setLaunch] = useState(null);
   const [tasks, setTasks] = useState([]);
@@ -78,7 +81,7 @@ export default function LaunchDetailPage({ params }) {
   }, [openMenu]);
 
   useEffect(() => {
-    if (!admin) return undefined;
+    if (!sees) return undefined;
     let cancelled = false;
 
     async function load() {
@@ -115,7 +118,7 @@ export default function LaunchDetailPage({ params }) {
     return () => {
       cancelled = true;
     };
-  }, [admin, id, reloadToken]);
+  }, [sees, id, reloadToken]);
 
   // 결정 목록만 다시 받는다. 항목 하나가 막히거나 풀리면 결정 쪽
   // waitingCount 가 그 순간 낡는다 — 보드 전체를 다시 받으면(reloadToken)
@@ -238,8 +241,8 @@ export default function LaunchDetailPage({ params }) {
     setLaunch(body.launch);
   }
 
-  if (!admin) {
-    return <p className="text-sm text-slate-500">전체 관리자만 볼 수 있는 화면입니다.</p>;
+  if (!sees) {
+    return <p className="text-sm text-slate-500">참여 중인 런칭이 없습니다.</p>;
   }
   if (loading) return <p className="text-sm text-slate-500">불러오는 중...</p>;
   if (error) return <p className="text-sm text-red-600">{error}</p>;
@@ -279,7 +282,15 @@ export default function LaunchDetailPage({ params }) {
               471건을 보는 렌즈(보드·결정 대기·주간 진척·간트)다. 명단은
               471건을 비추지 않으므로 여기에 붙는다.
               ⋯ 안에 숨기지 않는 이유는 발견이다 — 지금 0명인데 숨기면
-              아무도 안 열어 본다. 건수가 곧 신호다. */}
+              아무도 안 열어 본다. 건수가 곧 신호다.
+
+              여기부터 셋(참여자·내보내기·⋯)은 관리자만 본다. 회색으로
+              두지 않고 아예 안 그린다 — 못 누르는 단추는 "왜 안 되지"를
+              만들고, 그 답이 화면에 없다.
+              내보내기는 파일이 회사 밖으로 나가고, 가져오기는 471건을
+              통째로 갈아엎고, 명단은 누가 들어오는지를 정한다. */}
+          {admin && (
+          <>
           <button
             type="button"
             onClick={() => setMembersOpen(true)}
@@ -319,6 +330,8 @@ export default function LaunchDetailPage({ params }) {
               setStatus('준비');
             }}
           />
+          </>
+          )}
         </div>
       </div>
 
@@ -330,7 +343,10 @@ export default function LaunchDetailPage({ params }) {
           실제로 할 일을 알려준다. 진행 중일 때의 배너("이제부터 모아에서
           관리합니다")는 상태가 안 바뀌는 한 매번 같은 말이라 정보가 0이라
           없앴다 — 그 단추 셋(양식·가져오기·되돌리기)은 위 제목 줄로 옮겼다. */}
-      {launch.status === '준비' && (
+      {/* 준비 배너 안에 '양식 받기'(관리자 라우트)가 있다. 참여자에게
+          보이면 눌러서 403 을 본다 — 준비 단계의 런칭을 참여자가 볼 일도
+          아직 없다. */}
+      {launch.status === '준비' && admin && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <span>📋</span>
           <div>
@@ -402,6 +418,7 @@ export default function LaunchDetailPage({ params }) {
           today={today}
           decisions={decisions}
           members={members}
+          canAdmin={admin}
           // 서버가 돌려준 한 줄만 갈아 끼운다. 통째로 다시 부르면 스크롤이
           // 튀고, 회의 중에 그러면 보던 자리를 잃는다.
           onChanged={(task) =>

@@ -15,6 +15,9 @@ import { Button } from '@/components/ui/button';
 export default function LaunchPage() {
   const { identity } = useIdentity();
   const admin = isGlobalAdmin(identity);
+  // 명단에 든 사람도 본다. 서버가 자기 것만 내려 준다(/api/launch GET) —
+  // 여기서 다시 거르지 않는다. 두 곳에서 거르면 한쪽만 고쳐진다.
+  const sees = admin || identity?.hasLaunch === true;
 
   const [launches, setLaunches] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -25,7 +28,7 @@ export default function LaunchPage() {
   const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
-    if (!admin) return undefined;
+    if (!sees) return undefined;
     let cancelled = false;
 
     async function load() {
@@ -47,10 +50,10 @@ export default function LaunchPage() {
     return () => {
       cancelled = true;
     };
-  }, [admin, reloadToken]);
+  }, [sees, reloadToken]);
 
-  if (!admin) {
-    return <p className="text-sm text-slate-500">전체 관리자만 볼 수 있는 화면입니다.</p>;
+  if (!sees) {
+    return <p className="text-sm text-slate-500">참여 중인 런칭이 없습니다.</p>;
   }
 
   return (

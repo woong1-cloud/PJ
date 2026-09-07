@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { requireGlobalAdmin } from '@/lib/permissions';
+import { requireGlobalAdmin, requireLaunchAccess } from '@/lib/permissions';
 import { errorResponse, ApiError } from '@/lib/apiError';
 
 const DECIDED_STATUS = '결정';
@@ -21,8 +21,8 @@ function trimmedOrNull(value) {
 // 화면이 그 자리에서 보여줄 수 있게 한다.
 export async function PATCH(request, { params }) {
   try {
-    const { memberId } = await requireGlobalAdmin();
     const { id, decisionId } = await params;
+    const { memberId } = await requireLaunchAccess(id, 'member');
     const body = await request.json();
     const patch = {};
 
@@ -61,6 +61,7 @@ export async function PATCH(request, { params }) {
 
     if (Object.keys(patch).length === 0) throw new ApiError(400, '바꿀 내용이 없습니다.');
     patch.updated_at = new Date().toISOString();
+    patch.updated_by = memberId;
 
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
@@ -96,8 +97,10 @@ export async function PATCH(request, { params }) {
 // 항목이 고아가 되지 않는다 — 참조만 풀리고 항목은 그대로 남는다.
 export async function DELETE(request, { params }) {
   try {
-    await requireGlobalAdmin();
     const { id, decisionId } = await params;
+    // 지우기는 관리자다. 결정을 지우면 그것을 기다리던 항목의 연결이
+    // 풀리고, 참여자가 그걸 되돌릴 방법이 없다.
+    await requireLaunchAccess(id, 'admin');
     const supabase = getSupabaseAdmin();
     const { error } = await supabase
       .from('launch_decisions')

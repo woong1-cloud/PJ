@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { requireGlobalAdmin } from '@/lib/permissions';
+import { requireGlobalAdmin, requireLaunchAccess } from '@/lib/permissions';
 import { errorResponse, ApiError } from '@/lib/apiError';
 import { LAUNCH_STATUSES, DONE_STATUS, BLOCKED_STATUS, NA_STATUS } from '@/lib/launchTask';
 
@@ -31,8 +31,8 @@ const PLAN_FIELDS = [
 //    그대로 붙어 나온다.
 export async function PATCH(request, { params }) {
   try {
-    const { memberId } = await requireGlobalAdmin();
     const { id, taskId } = await params;
+    const { memberId } = await requireLaunchAccess(id, 'member');
     const body = await request.json();
     const patch = {};
 
@@ -116,6 +116,9 @@ export async function PATCH(request, { params }) {
 
     if (Object.keys(patch).length === 0) throw new ApiError(400, '바꿀 내용이 없습니다.');
     patch.updated_at = new Date().toISOString();
+    // 마지막에 누가 만졌나. 참여자가 여럿 들어오면 회의에서 바로 묻는다 —
+    // "이거 왜 완료로 바뀌었지?"
+    patch.updated_by = memberId;
 
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
@@ -143,8 +146,10 @@ export async function PATCH(request, { params }) {
 // 일이다. 화면에서도 구분선 아래에 둔다.
 export async function DELETE(request, { params }) {
   try {
-    await requireGlobalAdmin();
     const { id, taskId } = await params;
+    // 지우기는 관리자다. 되돌릴 수 없고, 참여자에게는 '해당없음으로
+    // 두기' 가 있다 — 우리는 이미 그쪽을 권하고 있다.
+    await requireLaunchAccess(id, 'admin');
     const supabase = getSupabaseAdmin();
     const { error } = await supabase
       .from('launch_tasks')

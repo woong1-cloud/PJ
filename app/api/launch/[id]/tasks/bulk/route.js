@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { requireGlobalAdmin } from '@/lib/permissions';
+import { requireGlobalAdmin, requireLaunchAccess } from '@/lib/permissions';
 import { errorResponse, ApiError } from '@/lib/apiError';
 import { NA_STATUS, TODO_STATUS } from '@/lib/launchTask';
 
@@ -12,8 +12,8 @@ const MAX = 500;
 
 export async function POST(request, { params }) {
   try {
-    const { memberId } = await requireGlobalAdmin();
     const { id } = await params;
+    const { memberId } = await requireLaunchAccess(id, 'member');
     const { taskIds, action, reason } = await request.json();
 
     const ids = Array.isArray(taskIds) ? taskIds.filter(Boolean) : [];
@@ -49,7 +49,7 @@ export async function POST(request, { params }) {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from('launch_tasks')
-      .update({ ...patch, updated_at: now })
+      .update({ ...patch, updated_at: now, updated_by: memberId })
       .eq('launch_id', id)
       .in('id', ids)
       .select('id');

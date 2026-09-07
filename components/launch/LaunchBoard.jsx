@@ -97,7 +97,7 @@ function readStoredRole(launchId) {
 // (탭 건수 배지가 필요해서) 보드는 읽기만 한다.
 export function LaunchBoard({
   launch, tasks = [], today, onChanged, onReload, decisions = [], onDecisionCreated, onBlockedChanged,
-  focusWorkstream = '', onClearFocus, members = [],
+  focusWorkstream = '', onClearFocus, members = [], canAdmin = false,
 }) {
   const [view, setView] = useState('ready');
   const [query, setQuery] = useState('');
@@ -851,6 +851,7 @@ export function LaunchBoard({
                       setMenuFor(null);
                       remove(task);
                     }}
+                    canAdmin={canAdmin}
                   />
                 ))}
               </ul>
@@ -994,7 +995,7 @@ const TONE_BAR = {
 
 function TaskRow({
   task, tasks, openDate, today, blockedDecisionTitle, busy, checked, onCheck, onStatus, menuOpen,
-  onToggleMenu, onEdit, onLinks, onAskNa, onRestore, onDelete,
+  onToggleMenu, onEdit, onLinks, onAskNa, onRestore, onDelete, canAdmin = false,
 }) {
   const tone = taskTone({ task, openDate, today, tasks });
   const due = dueDate(openDate, task.day_offset);
@@ -1182,17 +1183,23 @@ function TaskRow({
                 </p>
               </>
             )}
-            <hr className="my-1 border-slate-100" />
-            <button
-              type="button"
-              onClick={onDelete}
-              className="w-full rounded-md px-2.5 py-1.5 text-left text-sm text-rose-600 hover:bg-rose-50"
-            >
-              지우기
-            </button>
-            <p className="px-2.5 pt-0.5 text-[11px] text-slate-400">
-              잘못 넣은 것만. 상태와 사유가 함께 사라집니다.
-            </p>
+            {/* 지우기는 관리자만. 되돌릴 수 없고, 참여자에게는 위의
+                '해당없음으로 두기' 가 있다 — 우리는 이미 그쪽을 권한다. */}
+            {canAdmin && (
+              <>
+                <hr className="my-1 border-slate-100" />
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  className="w-full rounded-md px-2.5 py-1.5 text-left text-sm text-rose-600 hover:bg-rose-50"
+                >
+                  지우기
+                </button>
+                <p className="px-2.5 pt-0.5 text-[11px] text-slate-400">
+                  잘못 넣은 것만. 상태와 사유가 함께 사라집니다.
+                </p>
+              </>
+            )}
           </div>
         )}
       </div>

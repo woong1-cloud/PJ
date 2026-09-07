@@ -53,6 +53,10 @@ export function TopBar() {
   const manageBrand = canManageBrand(identity);
   const process = canProcess(identity);
   const globalAdmin = isGlobalAdmin(identity);
+  // 런칭은 명단에 든 사람에게 보인다. 전체 관리자는 늘 본다(/api/me 참고).
+  // 메뉴를 감추는 것은 보안이 아니다 — 막는 것은 서버다. 여기서는 누를 데가
+  // 없는 메뉴를 안 보이게 할 뿐이다.
+  const seesLaunch = identity?.hasLaunch === true || globalAdmin;
   const closeMenu = () => setMenuOpen(false);
 
   // 새로 온 의견 수. 메뉴를 열 때만 받는다 — 모든 화면에서 미리 받아 둘
@@ -127,7 +131,7 @@ export function TopBar() {
           {/* 브랜드 런칭. 403건짜리 새 개념이라 (beta) 를 붙여 무게를 낮춘다 —
               요구사항·주간회의와 같은 무게로 보이면 안 된다.
               1단계에서는 가이드와 가져오기뿐이라 전체 관리자에게만 보인다. */}
-          {globalAdmin && (
+          {seesLaunch && (
             <NavLink href="/launch" active={pathname.startsWith('/launch')}>
               런칭 <span className="text-[10px] text-slate-400">beta</span>
             </NavLink>
@@ -216,7 +220,7 @@ export function TopBar() {
                 >
                   프로젝트
                 </MenuLink>
-                {globalAdmin && (
+                {seesLaunch && (
                   <MenuLink href="/launch" onClick={closeMenu} active={pathname.startsWith('/launch')}>
                     런칭 (beta)
                   </MenuLink>

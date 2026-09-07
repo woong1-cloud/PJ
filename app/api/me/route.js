@@ -40,10 +40,27 @@ export async function GET() {
     }
     if (error) throw error;
 
+    // 런칭에 낀 것이 하나라도 있나. 상단바가 '런칭' 링크를 보일지 정한다.
+    //
+    // 여기 싣는 이유: 상단바는 모든 화면에 있어서, 매번 따로 물어보면
+    // 화면마다 요청이 하나씩 는다. 명단이 바뀌는 일은 드물고, 바뀐 직후엔
+    // 어차피 그 사람에게 따로 알려 준다.
+    //
+    // 전체 관리자는 명단과 무관하게 늘 본다.
+    let hasLaunch = isGlobalAdmin;
+    if (!hasLaunch) {
+      const { count } = await supabase
+        .from('launch_members')
+        .select('member_id', { count: 'exact', head: true })
+        .eq('member_id', memberId);
+      hasLaunch = (count ?? 0) > 0;
+    }
+
     return Response.json({
       memberId: member.id,
       name: member.name,
       isGlobalAdmin,
+      hasLaunch,
       mustChangePassword: member.must_change_password,
       // 조직 이름을 먼저 쓴다. 이관되지 않은 사람은 옛 값으로 떨어진다
       // (lib/organizations.js 의 displayAffiliation 과 같은 순서).
