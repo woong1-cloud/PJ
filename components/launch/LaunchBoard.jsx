@@ -97,7 +97,7 @@ function readStoredRole(launchId) {
 // (탭 건수 배지가 필요해서) 보드는 읽기만 한다.
 export function LaunchBoard({
   launch, tasks = [], today, onChanged, onReload, decisions = [], onDecisionCreated, onBlockedChanged,
-  focusWorkstream = '', onClearFocus,
+  focusWorkstream = '', onClearFocus, members = [],
 }) {
   const [view, setView] = useState('ready');
   const [query, setQuery] = useState('');
@@ -920,6 +920,7 @@ export function LaunchBoard({
           launch={launch}
           task={taskDialog.mode === 'edit' ? taskDialog.task : null}
           tasks={tasks}
+          members={members}
           workstreams={workstreams}
           roles={roleOptions}
           orgs={orgOptions}

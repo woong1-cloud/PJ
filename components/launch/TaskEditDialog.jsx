@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { isWorkstream } from '@/lib/launchCode';
 import { byCode, scheduleConflicts } from '@/lib/launchDeps';
+import { assigneeCandidates } from '@/lib/launchMembers';
 import { dueDate, offsetFromDate } from '@/lib/launchDate';
 import { PickOrType } from '@/components/launch/PickOrType';
 import { DepPicker } from '@/components/launch/DepPicker';
@@ -33,6 +34,7 @@ export function TaskEditDialog({
   launch,
   task,
   tasks = [],
+  members = [],
   workstreams = [],
   roles = [],
   orgs = [],
@@ -49,6 +51,16 @@ export function TaskEditDialog({
       ? (dueDate(launch.open_date, offset) ?? '')
       : '';
 
+  // 담당자 후보 — 이 항목의 주관 역할로 들어온 참여자들.
+  //
+  // 501건 중 담당자가 0건인 이유는 19명 중에서 손으로 골라 적게 되어
+  // 있어서다. 후보가 2~3명이 되면 고를 만해진다.
+  //
+  // 주관 역할을 창 안에서 바꾸면 후보도 따라 바뀐다 — 저장 전의 값으로
+  // 센다(task.owner_role 이 아니라 form.owner_role).
+  const candidates = assigneeCandidates({ task: { owner_role: form.owner_role }, members });
+  const pickedMember = candidates.find((m) => m.member_id === form.assignee);
+
   // 기한이 선행·후행과 어긋나나. 막지 않고 알리기만 한다 — 일부러 그렇게
   // 두는 경우가 있고, 그 판단은 이 창을 연 사람 몫이다.
   const conflicts = scheduleConflicts({
@@ -58,6 +70,12 @@ export function TaskEditDialog({
     tasks,
   });
   const [saving, setSaving] = useState(false);
+  // 담당자를 목록에서 고르는 중인가, 직접 적는 중인가. 값으로 표현하지
+  // 않는다 — 빈 문자열로는 '아직 안 골랐다'와 '적으려고 비웠다'를 못
+  // 가른다(PickOrType 이 같은 이유로 상태를 따로 든다).
+  const [assigneeTyping, setAssigneeTyping] = useState(
+    () => Boolean(task?.assignee_name) && !task?.assignee,
+  );
   const [error, setError] = useState('');
 
   function set(key, value) {
@@ -94,7 +112,10 @@ export function TaskEditDialog({
       decision_org: form.decision_org,
       owner_org: form.owner_org,
       owner_role: form.owner_role,
-      assigneeName: form.assignee_name,
+      // 계정으로 고르면 uuid 로, 직접 적으면 글자로 보낸다. 둘이 같이
+      // 차 있으면 화면이 어느 것을 보여줄지 정해야 하므로 한쪽만 남긴다.
+      assignee: form.assignee || null,
+      assigneeName: form.assignee ? '' : form.assignee_name,
       support_role: form.support_role,
       depends_on: form.depends_on,
       day_offset: Number(form.day_offset),
@@ -245,14 +266,64 @@ export function TaskEditDialog({
               />
             </Field>
 
-            <Field label="담당자 (이름)" htmlFor="te-assignee">
-              <input
-                id="te-assignee"
-                value={form.assignee_name}
-                onChange={(e) => set('assignee_name', e.target.value)}
-                placeholder="김지웅"
-                className={input}
-              />
+            {/* 참여자가 있으면 고르게, 없으면 지금처럼 적게 한다.
+                명단이 비어 있는 역할에서 빈 드롭다운을 주면 '고를 것이
+                없다'가 '적을 수도 없다'가 된다. */}
+            <Field label="담당자" htmlFor="te-assignee">
+              {candidates.length > 0 && !assigneeTyping ? (
+                <select
+                  id="te-assignee"
+                  value={form.assignee}
+                  onChange={(e) => {
+                    if (e.target.value === CUSTOM) {
+                      // 직접 적기로 넘어간다. 고른 계정은 놓는다 — 둘이
+                      // 같이 차 있으면 무엇이 저장될지 알 수 없다.
+                      set('assignee', '');
+                      setAssigneeTyping(true);
+                    } else {
+                      set('assignee', e.target.value);
+                    }
+                  }}
+                  className={input}
+                >
+                  <option value="">담당자 없음</option>
+                  {candidates.map((m) => (
+                    <option key={m.member_id} value={m.member_id}>
+                      {m.member.name}
+                    </option>
+                  ))}
+                  <option value={CUSTOM}>직접 적기…</option>
+                </select>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    id="te-assignee"
+                    value={form.assignee_name}
+                    onChange={(e) => set('assignee_name', e.target.value)}
+                    placeholder="김지웅"
+                    className={`${inputBase} min-w-0 flex-1`}
+                  />
+                  {candidates.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        set('assignee_name', '');
+                        setAssigneeTyping(false);
+                      }}
+                      className="shrink-0 rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-500 hover:bg-slate-50"
+                    >
+                      목록
+                    </button>
+                  )}
+                </div>
+              )}
+              <span className="text-xs text-slate-400">
+                {candidates.length > 0
+                  ? `${form.owner_role} 참여자 ${candidates.length}명`
+                  : form.owner_role
+                    ? `${form.owner_role} 참여자가 없습니다 — 이름을 적으세요`
+                    : '주관을 먼저 고르면 참여자에서 고를 수 있습니다'}
+              </span>
             </Field>
 
             <Field label="지원" htmlFor="te-support">
@@ -387,6 +458,7 @@ function fromTask(task, workstreams) {
     return {
       workstream: workstreams[0] ?? '',
       title: '',
+      assignee: '',
       assignee_name: '',
       owner_role: '',
       support_role: '',
@@ -405,6 +477,7 @@ function fromTask(task, workstreams) {
   return {
     workstream: task.workstream ?? '',
     title: task.title ?? '',
+    assignee: task.assignee?.id ?? '',
     assignee_name: task.assignee_name ?? '',
     owner_role: task.owner_role ?? '',
     support_role: task.support_role ?? '',
@@ -427,6 +500,9 @@ function fromTask(task, workstreams) {
 // `${input} w-24` 라고 쓰면 안 된다 — 클래스 문자열의 순서가 아니라
 // 스타일시트의 순서가 이기기 때문에 w-full 이 그대로 이긴다. 실제로
 // 숫자칸이 100%를 먹고 달력을 창 바깥으로 밀어냈다.
+// PickOrType 과 같은 뜻의 값. 드롭다운 안에서 '직접 적기'를 고르는 자리다.
+const CUSTOM = '__custom__';
+
 const inputBase =
   'h-9 rounded-lg border border-slate-300 px-2.5 text-sm focus:border-indigo-400 focus:outline-none';
 

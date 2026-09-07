@@ -86,9 +86,13 @@ export default function LaunchDetailPage({ params }) {
         // 작지만, 같은 reloadToken 을 쓰는 자리이니 한 번에 묶는다 —
         // 지우기·가져오기처럼 목록 길이가 바뀌는 일 뒤에는 결정 쪽의
         // waitingCount 도 같이 낡아 있을 수 있어서다.
-        const [res, decRes] = await Promise.all([
+        // 명단도 함께 받는다. 항목 창의 담당자 후보가 이걸 쓰기 때문에
+        // 참여자 탭을 열 때만 받으면, 보드에서 바로 항목을 연 사람에게는
+        // 후보가 조용히 비어 있다.
+        const [res, decRes, memRes] = await Promise.all([
           fetch(`/api/launch/${id}`),
           fetch(`/api/launch/${id}/decisions`),
+          fetch(`/api/launch/${id}/members`),
         ]);
         const body = await res.json();
         if (!res.ok) throw new Error(body.error ?? '불러오지 못했습니다.');
@@ -97,6 +101,7 @@ export default function LaunchDetailPage({ params }) {
         setLaunch(body.launch);
         setTasks(body.tasks ?? []);
         if (decRes.ok) setDecisions(decBody.decisions ?? []);
+        if (memRes.ok) setMembers((await memRes.json()).members ?? []);
         setError('');
       } catch (err) {
         if (!cancelled) setError(err.message);
@@ -149,20 +154,19 @@ export default function LaunchDetailPage({ params }) {
   // 참여자 탭을 열 때 한 번 받는다. 넣고 빼는 것은 화면 상태만 고치고
   // 다시 안 받는다 — 명단이 짧아 통째로 다시 받을 이유가 없고, 회의 중에
   // 화면이 튀는 것이 더 나쁘다.
+  // 넣을 수 있는 사람 19명은 참여자 탭을 열 때만 받는다. 명단과 달리
+  // 이건 넣기 창에서만 쓰여서, 보드만 보는 사람에게 전사 명부를 미리 실어
+  // 보낼 이유가 없다.
   useEffect(() => {
     if (tab !== 'members' || membersLoaded || !admin) return undefined;
     let cancelled = false;
     (async () => {
-      const [mRes, pRes] = await Promise.all([
-        fetch(`/api/launch/${id}/members`).catch(() => null),
-        fetch('/api/team-members').catch(() => null),
-      ]);
+      const res = await fetch('/api/team-members').catch(() => null);
       if (cancelled) return;
-      if (mRes?.ok) setMembers((await mRes.json()).members ?? []);
-      if (pRes?.ok) {
-        const body = await pRes.json();
-        // /api/team-members 는 기본으로 활성만 준다(includeInactive 를 안 붙임).
-        // 그래도 한 번 더 거른다 — 이 목록이 명단에 들어갈 사람을 정한다.
+      if (res?.ok) {
+        const body = await res.json();
+        // 기본으로 활성만 주지만(includeInactive 를 안 붙임) 한 번 더 거른다 —
+        // 이 목록이 명단에 들어갈 사람을 정한다.
         setPeople((body.teamMembers ?? []).filter((p) => p.is_active !== false));
       }
       setMembersLoaded(true);
@@ -392,6 +396,7 @@ export default function LaunchDetailPage({ params }) {
           tasks={tasks}
           today={today}
           decisions={decisions}
+          members={members}
           // 서버가 돌려준 한 줄만 갈아 끼운다. 통째로 다시 부르면 스크롤이
           // 튀고, 회의 중에 그러면 보던 자리를 잃는다.
           onChanged={(task) =>
