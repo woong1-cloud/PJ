@@ -2,6 +2,7 @@ import { HelpSection } from '@/components/help/HelpSection';
 import { HelpToc } from '@/components/help/HelpToc';
 import { NewsBody } from '@/components/help/NewsBody';
 import { AboutBody } from '@/components/help/AboutBody';
+import { LaunchBody } from '@/components/help/LaunchBody';
 import { StatusBody } from '@/components/help/StatusBody';
 import { TierBody } from '@/components/help/TierBody';
 import { HELP_SECTIONS } from '@/lib/helpSections';
@@ -14,6 +15,7 @@ import { APP_NAME } from '@/lib/branding';
 const BODIES = {
   news: NewsBody,
   about: AboutBody,
+  launch: LaunchBody,
   status: StatusBody,
   tier: TierBody,
 };
