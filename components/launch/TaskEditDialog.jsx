@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { isWorkstream } from '@/lib/launchCode';
 import { parseDeps } from '@/lib/launchImport';
-import { byCode } from '@/lib/launchDeps';
+import { byCode, scheduleConflicts } from '@/lib/launchDeps';
 import { dueDate, offsetFromDate } from '@/lib/launchDate';
 import { PickOrType } from '@/components/launch/PickOrType';
 
@@ -48,6 +48,15 @@ export function TaskEditDialog({
     launch?.open_date && form.day_offset !== '' && Number.isFinite(offset)
       ? (dueDate(launch.open_date, offset) ?? '')
       : '';
+
+  // 기한이 선행·후행과 어긋나나. 막지 않고 알리기만 한다 — 일부러 그렇게
+  // 두는 경우가 있고, 그 판단은 이 창을 연 사람 몫이다.
+  const conflicts = scheduleConflicts({
+    code: task?.code,
+    dayOffset: form.day_offset === '' ? NaN : offset,
+    dependsOn: parseDeps(form.depends_on),
+    tasks,
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -217,6 +226,13 @@ export function TaskEditDialog({
                   <span className="tabular-nums">코드 {task?.code}</span>
                 )}
               </span>
+
+              {/* 앞뒤가 어긋나면 그 자리에서 알린다.
+                  저장한 뒤에는 아무도 안 본다 — 이 흠이 19건 쌓이도록
+                  아무도 몰랐고, 찾아내는 데 쿼리 한 판이 필요했다.
+                  막지는 않는다. 실제로 01-05 를 일부러 미루면서 생긴
+                  건이 있고, 그것이 옳은 판단일 수 있다. */}
+              <ScheduleWarning conflicts={conflicts} openDate={launch?.open_date} />
             </Field>
 
             <Field label="주관 (수행)" htmlFor="te-owner">
@@ -412,6 +428,39 @@ const inputBase =
   'h-9 rounded-lg border border-slate-300 px-2.5 text-sm focus:border-indigo-400 focus:outline-none';
 
 const input = `${inputBase} w-full`;
+
+// 기한이 선행보다 이르거나 후행보다 늦을 때.
+function ScheduleWarning({ conflicts, openDate }) {
+  const { lateDeps, earlyFollowers } = conflicts;
+  if (lateDeps.length === 0 && earlyFollowers.length === 0) return null;
+
+  const line = (t, kind) => (
+    <li key={`${kind}-${t.code}`} className="flex gap-1.5">
+      <span className="shrink-0">{kind === 'dep' ? '선행' : '후행'}</span>
+      <span className="shrink-0 tabular-nums">{t.code}</span>
+      <span className="min-w-0 truncate">{t.title}</span>
+      <span className="shrink-0 tabular-nums">
+        {openDate ? dueDate(openDate, t.day_offset) : `D${t.day_offset}`}
+      </span>
+    </li>
+  );
+
+  return (
+    <div className="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800">
+      <p className="font-medium">
+        {lateDeps.length > 0 && '이 기한은 선행보다 이릅니다'}
+        {lateDeps.length > 0 && earlyFollowers.length > 0 && ' · '}
+        {earlyFollowers.length > 0 && '후행보다 늦습니다'}
+      </p>
+      <ul className="mt-0.5 flex flex-col gap-0.5 text-amber-700">
+        {lateDeps.map((t) => line(t, 'dep'))}
+        {earlyFollowers.map((t) => line(t, 'next'))}
+      </ul>
+      {/* 일부러 그렇게 두는 경우가 있다. 저장은 막지 않는다. */}
+      <p className="mt-1 text-amber-600">그대로 저장할 수 있습니다.</p>
+    </div>
+  );
+}
 
 // 친 선행 코드를 그 자리에서 풀어 준다.
 //
