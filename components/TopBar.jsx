@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useIdentity } from './IdentityProvider';
 import { BrandSwitcher } from './BrandSwitcher';
 import { NotificationBell } from './NotificationBell';
@@ -54,6 +54,20 @@ export function TopBar() {
   const process = canProcess(identity);
   const globalAdmin = isGlobalAdmin(identity);
   const closeMenu = () => setMenuOpen(false);
+
+  // 새로 온 의견 수. 메뉴를 열 때만 받는다 — 모든 화면에서 미리 받아 둘
+  // 만큼 급한 숫자가 아니고, 전체 관리자 둘뿐이라 폴링할 이유도 없다.
+  const [freshFeedback, setFreshFeedback] = useState(0);
+  useEffect(() => {
+    if (!menuOpen || !globalAdmin) return undefined;
+    let alive = true;
+    fetch('/api/admin/feedback?only=count')
+      .then((res) => (res.ok ? res.json() : null))
+      // 못 받으면 배지를 안 그린다. 메뉴가 안 열리는 것보다 낫다.
+      .then((data) => { if (alive && data) setFreshFeedback(data.fresh ?? 0); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [menuOpen, globalAdmin]);
 
   return (
     <header className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3">
@@ -218,31 +232,56 @@ export function TopBar() {
                 )}
                 <div className="my-1 border-t border-slate-100" />
               </div>
-              {globalAdmin && (
-                <span className="px-3 py-1.5 text-xs text-indigo-700">전체 관리자</span>
-              )}
+              {/* 누구인지가 맨 위다. 등급이 파란 글씨로 혼자 떠 있으면
+                  누를 수 있는 줄 알고 눌러 보게 된다 — 실제로 span 이라
+                  아무 일도 안 일어난다. 이름과 묶어 머리글로 만든다. */}
+              <div className="px-3 pb-1.5 pt-1">
+                <p className="truncate text-sm font-medium text-slate-800">
+                  {identity.name ?? '알 수 없음'}
+                </p>
+                {globalAdmin && <p className="text-xs text-slate-400">전체 관리자</p>}
+              </div>
+
+              {/* 세 덩어리다 — 관리 · 도움 · 계정.
+                  구분선을 항상 그리지 않는다. 일반 사용자에게는 관리 묶음이
+                  통째로 없어서 네 줄뿐인데, 거기에 선 셋을 그으면 빈 칸만
+                  늘어난다. */}
               {manageBrand && (
-                <MenuLink href="/requirements/settings" onClick={closeMenu}>
-                  설정
-                </MenuLink>
+                <>
+                  <div className="my-1 border-t border-slate-100" />
+                  {/* '설정'이라고만 적혀 있었다. 실제 화면 제목은 '브랜드
+                      설정'이고 바로 아래 '브랜드 관리'가 있어서, 계정 메뉴
+                      안의 '설정'은 내 계정 설정으로 읽힌다. 화면 제목과
+                      같은 이름을 쓴다. */}
+                  <MenuLink href="/requirements/settings" onClick={closeMenu}>
+                    브랜드 설정
+                  </MenuLink>
+                </>
               )}
               {/* 관리 화면이 둘로 갈렸으니 입구도 둘이다. 하나로 묶어 두면
                   "팀원 관리는 어디였지"를 브랜드 화면에서 다시 찾게 된다. */}
               {globalAdmin && (
-                <MenuLink href="/admin/brands" onClick={closeMenu}>
-                  브랜드 관리
-                </MenuLink>
+                <>
+                  {/* 브랜드 설정이 이미 선을 그었으면 또 긋지 않는다. */}
+                  {!manageBrand && <div className="my-1 border-t border-slate-100" />}
+                  <MenuLink href="/admin/brands" onClick={closeMenu}>
+                    브랜드 관리
+                  </MenuLink>
+                  <MenuLink href="/admin/members" onClick={closeMenu}>
+                    팀원 관리
+                  </MenuLink>
+                  <MenuLink href="/admin/feedback" onClick={closeMenu}>
+                    <span className="flex-1">받은 의견</span>
+                    {freshFeedback > 0 && (
+                      <span className="ml-2 rounded-full bg-indigo-600 px-1.5 py-0.5 text-[11px] font-medium text-white tabular-nums">
+                        {freshFeedback > 99 ? '99+' : freshFeedback}
+                      </span>
+                    )}
+                  </MenuLink>
+                </>
               )}
-              {globalAdmin && (
-                <MenuLink href="/admin/members" onClick={closeMenu}>
-                  팀원 관리
-                </MenuLink>
-              )}
-              {globalAdmin && (
-                <MenuLink href="/admin/feedback" onClick={closeMenu}>
-                  받은 의견
-                </MenuLink>
-              )}
+
+              <div className="my-1 border-t border-slate-100" />
               {/* 등급과 무관하게 누구나 볼 수 있다 — 설명이 가장 필요한 사람이
                   권한이 가장 낮은 요청자이기 때문이다. */}
               <MenuLink href="/help" onClick={closeMenu}>
@@ -261,6 +300,8 @@ export function TopBar() {
               >
                 의견 보내기
               </button>
+
+              <div className="my-1 border-t border-slate-100" />
               <MenuLink href="/change-password" onClick={closeMenu}>
                 비밀번호 변경
               </MenuLink>
