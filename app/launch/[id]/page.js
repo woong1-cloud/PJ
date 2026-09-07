@@ -11,7 +11,7 @@ import { ImportDialog } from '@/components/launch/ImportDialog';
 import { DecisionList } from '@/components/launch/DecisionList';
 import { WeeklyProgress } from '@/components/launch/WeeklyProgress';
 import { GanttView } from '@/components/launch/GanttView';
-import { MembersView } from '@/components/launch/MembersView';
+import { MembersDialog } from '@/components/launch/MembersDialog';
 import { dDay, dDayLabel } from '@/lib/launchDate';
 import { progress } from '@/lib/launchTask';
 import { todayInKst } from '@/lib/overdue';
@@ -37,6 +37,7 @@ export default function LaunchDetailPage({ params }) {
   const [people, setPeople] = useState([]);
   const [membersLoaded, setMembersLoaded] = useState(false);
   const [memberBusy, setMemberBusy] = useState(false);
+  const [membersOpen, setMembersOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [importOpen, setImportOpen] = useState(false);
@@ -158,7 +159,7 @@ export default function LaunchDetailPage({ params }) {
   // 이건 넣기 창에서만 쓰여서, 보드만 보는 사람에게 전사 명부를 미리 실어
   // 보낼 이유가 없다.
   useEffect(() => {
-    if (tab !== 'members' || membersLoaded || !admin) return undefined;
+    if (!membersOpen || membersLoaded || !admin) return undefined;
     let cancelled = false;
     (async () => {
       const res = await fetch('/api/team-members').catch(() => null);
@@ -174,7 +175,7 @@ export default function LaunchDetailPage({ params }) {
     return () => {
       cancelled = true;
     };
-  }, [tab, membersLoaded, admin, id]);
+  }, [membersOpen, membersLoaded, admin]);
 
   async function memberFetch(method, body) {
     setMemberBusy(true);
@@ -227,10 +228,8 @@ export default function LaunchDetailPage({ params }) {
       { key: 'weekly', label: '주간 진척', count: null },
       // 간트는 건수를 안 단다 — 워크스트림 19줄이라 '19' 는 아무 말도 안 한다.
       { key: 'gantt', label: '간트', count: null },
-      // 사람 수를 센다(역할 자리 수가 아니라) — 한 사람이 두 역할일 수 있다.
-      { key: 'members', label: '참여자', count: memberHeads },
     ],
-    [stat.total, pendingDecisionCount, memberHeads],
+    [stat.total, pendingDecisionCount],
   );
 
   // 준비 ↔ 진행 중 — 엑셀 문의 열쇠. app/api/launch/[id]/route.js PATCH 참고.
@@ -286,6 +285,22 @@ export default function LaunchDetailPage({ params }) {
             onToggle={() => setContextExpanded((v) => !v)}
             onAdd={() => setContextOpen(true)}
           />
+          {/* 제목 줄은 이 런칭에 대한 것(전제·참여자·내보내기·⋯), 탭 줄은
+              471건을 보는 렌즈(보드·결정 대기·주간 진척·간트)다. 명단은
+              471건을 비추지 않으므로 여기에 붙는다.
+              ⋯ 안에 숨기지 않는 이유는 발견이다 — 지금 0명인데 숨기면
+              아무도 안 열어 본다. 건수가 곧 신호다. */}
+          <button
+            type="button"
+            onClick={() => setMembersOpen(true)}
+            className={`rounded-lg border px-2.5 py-1.5 text-xs ${
+              memberHeads > 0
+                ? 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+                : 'border-dashed border-slate-300 bg-white text-slate-400 hover:border-indigo-400 hover:text-indigo-700'
+            }`}
+          >
+            참여자 {memberHeads > 0 ? <b className="tabular-nums">{memberHeads}</b> : '없음'}
+          </button>
           <ExportMenu
             id={id}
             open={openMenu === 'export'}
@@ -435,13 +450,17 @@ export default function LaunchDetailPage({ params }) {
         />
       )}
 
-      {tab === 'members' && (
-        <MembersView
+      {/* 조건부로 그린다. 닫혀도 그리면 useState 초기화가 다시 안 돌아
+          지난 역할의 펼침이 남는다 — 이 병이 네 창에 있었다. */}
+      {membersOpen && (
+        <MembersDialog
+          open
           launch={launch}
           tasks={tasks}
           members={members}
           people={people}
           busy={memberBusy}
+          onClose={() => setMembersOpen(false)}
           onAdd={addMembers}
           onRemove={removeMember}
           onToggleEdit={toggleMemberEdit}
