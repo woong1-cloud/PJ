@@ -11,10 +11,10 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { isWorkstream } from '@/lib/launchCode';
-import { parseDeps } from '@/lib/launchImport';
 import { byCode, scheduleConflicts } from '@/lib/launchDeps';
 import { dueDate, offsetFromDate } from '@/lib/launchDate';
 import { PickOrType } from '@/components/launch/PickOrType';
+import { DepPicker } from '@/components/launch/DepPicker';
 
 // 항목 하나를 만들거나 고친다.
 //
@@ -54,7 +54,7 @@ export function TaskEditDialog({
   const conflicts = scheduleConflicts({
     code: task?.code,
     dayOffset: form.day_offset === '' ? NaN : offset,
-    dependsOn: parseDeps(form.depends_on),
+    dependsOn: form.depends_on,
     tasks,
   });
   const [saving, setSaving] = useState(false);
@@ -96,7 +96,7 @@ export function TaskEditDialog({
       owner_role: form.owner_role,
       assigneeName: form.assignee_name,
       support_role: form.support_role,
-      depends_on: parseDeps(form.depends_on),
+      depends_on: form.depends_on,
       day_offset: Number(form.day_offset),
       deliverable: form.deliverable,
       note: form.note,
@@ -305,20 +305,6 @@ export function TaskEditDialog({
               />
             </Field>
 
-            <Field label="선행조건" htmlFor="te-dep">
-              <input
-                id="te-dep"
-                value={form.depends_on}
-                onChange={(e) => set('depends_on', e.target.value)}
-                placeholder="01-01, 01-02"
-                className={input}
-              />
-              {/* 친 코드가 무엇인지 그 자리에서 보여준다. 실제 자료에
-                  목록에 없는 코드를 가리키는 것이 4건 있는데, 저장할 때는
-                  아무 말이 없어서 아무도 몰랐다. */}
-              <DepHint value={form.depends_on} tasks={tasks} />
-            </Field>
-
             <Field label="산출물·증빙" htmlFor="te-out">
               <input
                 id="te-out"
@@ -329,6 +315,20 @@ export function TaskEditDialog({
               />
             </Field>
           </div>
+
+          {/* 선행조건은 그리드에서 뺐다. 네 칸 중 한 칸(151px)에 칩과
+              검색 결과를 넣을 수 없다 — 넣으면 지난번 D-day 처럼 밖으로
+              밀려난다. 창 전체 폭을 쓴다. */}
+          <Field label="선행조건 — 이것이 끝나야 시작할 수 있는 일" htmlFor="te-dep">
+            <DepPicker
+              id="te-dep"
+              code={task?.code}
+              value={form.depends_on}
+              tasks={tasks}
+              openDate={launch?.open_date}
+              onChange={(next) => set('depends_on', next)}
+            />
+          </Field>
 
           <Field label="쉬운 설명 — 무엇을 하는 일인지" htmlFor="te-plain">
             <input
@@ -377,8 +377,11 @@ export function TaskEditDialog({
 }
 
 // task 가 있으면(고치기) 그 값으로, 없으면(만들기) 빈 값으로 채운다.
-// 숫자·배열은 입력칸에 맞게 문자열로 편다 — day_offset 은 빈 입력을
-// 다루기 위해 문자열로, depends_on 은 쉼표 목록으로 보여준다.
+//
+// day_offset 만 문자열이다 — 빈 입력('-' 만 지운 순간)을 다뤄야 해서다.
+// depends_on 은 배열 그대로 든다. DepPicker 가 코드 배열로 주고받고
+// 서버도 배열로 받는다(app/api/launch/[id]/tasks/[taskId]/route.js).
+// 베끼는 이유: 원본 배열을 그대로 들면 '그만두기'가 안 되돌려진다.
 function fromTask(task, workstreams) {
   if (!task) {
     return {
@@ -392,7 +395,7 @@ function fromTask(task, workstreams) {
       channel: '공통',
       category: '',
       day_offset: '-90',
-      depends_on: '',
+      depends_on: [],
       deliverable: '',
       note: '',
       plain_text: '',
@@ -410,7 +413,7 @@ function fromTask(task, workstreams) {
     channel: task.channel ?? '',
     category: task.category ?? '',
     day_offset: String(task.day_offset ?? ''),
-    depends_on: (task.depends_on ?? []).join(', '),
+    depends_on: [...(task.depends_on ?? [])],
     deliverable: task.deliverable ?? '',
     note: task.note ?? '',
     plain_text: task.plain_text ?? '',
@@ -459,35 +462,6 @@ function ScheduleWarning({ conflicts, openDate }) {
       {/* 일부러 그렇게 두는 경우가 있다. 저장은 막지 않는다. */}
       <p className="mt-1 text-amber-600">그대로 저장할 수 있습니다.</p>
     </div>
-  );
-}
-
-// 친 선행 코드를 그 자리에서 풀어 준다.
-//
-// 막지는 않는다. 런칭 유형에 따라 안 가져온 워크스트림이 있어서(기존
-// 법인이면 01·02 가 통째로 빠진다) 없는 코드가 정상일 수 있다 —
-// 다만 그것이 오타인지 아닌지는 사람이 봐야 판단이 된다.
-function DepHint({ value, tasks }) {
-  const codes = parseDeps(value);
-  if (codes.length === 0) return null;
-  const index = byCode(tasks);
-
-  return (
-    <ul className="mt-1 flex flex-col gap-0.5">
-      {codes.map((code) => {
-        const found = index.get(code);
-        return (
-          <li key={code} className="flex gap-1.5 text-[11px]">
-            <span className="shrink-0 tabular-nums text-slate-400">{code}</span>
-            {found ? (
-              <span className="min-w-0 truncate text-slate-500">{found.title}</span>
-            ) : (
-              <span className="text-amber-700">이 런칭에 없는 코드입니다</span>
-            )}
-          </li>
-        );
-      })}
-    </ul>
   );
 }
 
