@@ -9,6 +9,9 @@ import { linksOf } from '@/lib/launchDeps';
 import { isDone, isNotApplicable } from '@/lib/launchTask';
 import { dDay, dDayLabel, dueDate } from '@/lib/launchDate';
 import { assigneeId } from '@/lib/launchMembers';
+import {
+  TaskActivity, TaskActivityComposer, TaskActivityList,
+} from '@/components/launch/TaskActivity';
 
 // 한 항목의 연계를 한 화면에.
 //
@@ -20,9 +23,15 @@ import { assigneeId } from '@/lib/launchMembers';
 // 그 줄을 볼 방법이 없다.
 //
 // props: open, task(지금 보는 항목), tasks, myMemberId, launchName, openDate,
-//        today, busy, onNavigate(code), onClose, onAssign(memberId|null), onEdit(task)
+//        today, busy, launchId, memberId, onNavigate(code), onClose,
+//        onAssign(memberId|null), onEdit(task)
+//
+// memberId 는 myMemberId 와 같은 값이지만 이름을 따로 받는다 — 담당자 칸의
+// '나'(맡을 수 있는 사람)와 활동의 '나'(자기 댓글만 고칠 수 있는 사람)는
+// 뜻이 다르고, 한쪽만 바뀌는 날이 오면 이름이 같은 편이 더 위험하다.
 export function TaskViewDialog({
   open, task, tasks = [], myMemberId, launchName, openDate, today, busy = false,
+  launchId, memberId,
   onNavigate, onClose, onAssign, onEdit,
 }) {
   // 지금 보는 항목은 주소가 정한다(prop 으로 온다). 줄을 타면 주소가 바뀌고
@@ -76,135 +85,152 @@ export function TaskViewDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {/* 기한·주관·담당자. 지금까지 이 창은 연계만 보여줘서 무엇을 언제까지 누가
-              하는지는 고치기 창을 열어야 알 수 있었다. */}
-          <div className="mb-3 grid grid-cols-1 gap-x-4 gap-y-2 border-b border-slate-100 pb-3 sm:grid-cols-2">
-            <Field label="기한">
-              {due ? (
-                <span className="tabular-nums">
-                  {due}
-                  {days !== null && (
-                    <span className={days < 0 ? 'ml-1 text-rose-600' : 'ml-1 text-slate-400'}>
-                      {dDayLabel(days)}
-                    </span>
-                  )}
-                </span>
+        {/* 몸통과 발을 함께 감싼다. 목록은 몸통 맨 아래, 입력칸은 발에 놓이는데
+            둘이 한 조회를 나눠 쓰기 때문이다(components/launch/TaskActivity.jsx).
+            Provider 는 DOM 을 만들지 않으므로 2단계에서 잡아 둔 뼈대
+            (머리 shrink-0 · 몸통 flex-1 스크롤 · 발 shrink-0)는 그대로다. */}
+        <TaskActivity launchId={launchId} taskId={current.id} memberId={memberId}>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {/* 기한·주관·담당자. 지금까지 이 창은 연계만 보여줘서 무엇을 언제까지 누가
+                하는지는 고치기 창을 열어야 알 수 있었다. */}
+            <div className="mb-3 grid grid-cols-1 gap-x-4 gap-y-2 border-b border-slate-100 pb-3 sm:grid-cols-2">
+              <Field label="기한">
+                {due ? (
+                  <span className="tabular-nums">
+                    {due}
+                    {days !== null && (
+                      <span className={days < 0 ? 'ml-1 text-rose-600' : 'ml-1 text-slate-400'}>
+                        {dDayLabel(days)}
+                      </span>
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-slate-400">없음</span>
+                )}
+              </Field>
+
+              <Field label="담당자">
+                <Assignee task={current} myMemberId={myMemberId} busy={busy} onAssign={onAssign} />
+              </Field>
+
+              <Field label="주관">{current.owner_role || <span className="text-slate-400">없음</span>}</Field>
+              <Field label="지원">{current.support_role || <span className="text-slate-400">없음</span>}</Field>
+              <Field label="결정권">{current.decision_org || <span className="text-slate-400">없음</span>}</Field>
+              <Field label="상태">{current.status}</Field>
+            </div>
+
+            {/* 끊긴 선행이 맨 위다. 이건 자료의 흠이라 다른 무엇보다 먼저
+                보여야 고쳐진다 — 조용히 무시하면 오타로 끊긴 줄과 안 가져온
+                워크스트림을 구별할 수 없다. */}
+            {missing.length > 0 && (
+              <p className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11.5px] text-amber-800">
+                선행 <b className="tabular-nums">{missing.join(', ')}</b> 이(가) 이 런칭에
+                없습니다. 안 가져온 워크스트림이거나 코드가 틀렸습니다 — 대기로는 치지 않습니다.
+              </p>
+            )}
+
+            <div className="overflow-hidden rounded-xl border border-slate-200">
+              {up.line.length > 0 ? (
+                <>
+                  <p className="border-b border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-500">
+                    선행 {up.line.length}단 — 위에서부터 순서대로
+                  </p>
+                  {up.line.map((node) => (
+                    <div key={node.code}>
+                      <LinkRow
+                        node={node}
+                        openDate={openDate}
+                        today={today}
+                        tasks={tasks}
+                        onGo={go}
+                      />
+                      <Arrow />
+                    </div>
+                  ))}
+                </>
               ) : (
-                <span className="text-slate-400">없음</span>
-              )}
-            </Field>
-
-            <Field label="담당자">
-              <Assignee task={current} myMemberId={myMemberId} busy={busy} onAssign={onAssign} />
-            </Field>
-
-            <Field label="주관">{current.owner_role || <span className="text-slate-400">없음</span>}</Field>
-            <Field label="지원">{current.support_role || <span className="text-slate-400">없음</span>}</Field>
-            <Field label="결정권">{current.decision_org || <span className="text-slate-400">없음</span>}</Field>
-            <Field label="상태">{current.status}</Field>
-          </div>
-
-          {/* 끊긴 선행이 맨 위다. 이건 자료의 흠이라 다른 무엇보다 먼저
-              보여야 고쳐진다 — 조용히 무시하면 오타로 끊긴 줄과 안 가져온
-              워크스트림을 구별할 수 없다. */}
-          {missing.length > 0 && (
-            <p className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11.5px] text-amber-800">
-              선행 <b className="tabular-nums">{missing.join(', ')}</b> 이(가) 이 런칭에
-              없습니다. 안 가져온 워크스트림이거나 코드가 틀렸습니다 — 대기로는 치지 않습니다.
-            </p>
-          )}
-
-          <div className="overflow-hidden rounded-xl border border-slate-200">
-            {up.line.length > 0 ? (
-              <>
                 <p className="border-b border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-500">
-                  선행 {up.line.length}단 — 위에서부터 순서대로
+                  {up.branched
+                    ? `선행이 ${prev.length}건이라 한 줄로 그릴 수 없습니다 — 아래에 나란히 둡니다`
+                    : '선행 없음 — 다른 항목을 기다리지 않습니다'}
                 </p>
-                {up.line.map((node) => (
+              )}
+
+              {/* 갈라지는 경우에만 선행을 나란히 보여준다. 한 줄이면 위에
+                  이미 나왔으니 두 번 쓰지 않는다. */}
+              {up.branched &&
+                prev.map((node) => (
                   <div key={node.code}>
+                    <LinkRow node={node} openDate={openDate} today={today} tasks={tasks} onGo={go} />
+                    <Arrow />
+                  </div>
+                ))}
+
+              <LinkRow
+                node={{ code: current.code, task: current }}
+                openDate={openDate}
+                today={today}
+                tasks={tasks}
+                self
+              />
+
+              <Arrow />
+              {next.length > 0 ? (
+                <>
+                  <p className="border-y border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-500">
+                    후행 {next.length}건
+                    {unlock > 0 && ` — 이걸 끝내면 ${unlock}건이 풀립니다`}
+                  </p>
+                  {next.map((t) => (
                     <LinkRow
-                      node={node}
+                      key={t.code}
+                      node={{ code: t.code, task: t }}
                       openDate={openDate}
                       today={today}
                       tasks={tasks}
                       onGo={go}
                     />
-                    <Arrow />
-                  </div>
-                ))}
-              </>
-            ) : (
-              <p className="border-b border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-500">
-                {up.branched
-                  ? `선행이 ${prev.length}건이라 한 줄로 그릴 수 없습니다 — 아래에 나란히 둡니다`
-                  : '선행 없음 — 다른 항목을 기다리지 않습니다'}
-              </p>
-            )}
-
-            {/* 갈라지는 경우에만 선행을 나란히 보여준다. 한 줄이면 위에
-                이미 나왔으니 두 번 쓰지 않는다. */}
-            {up.branched &&
-              prev.map((node) => (
-                <div key={node.code}>
-                  <LinkRow node={node} openDate={openDate} today={today} tasks={tasks} onGo={go} />
-                  <Arrow />
-                </div>
-              ))}
-
-            <LinkRow
-              node={{ code: current.code, task: current }}
-              openDate={openDate}
-              today={today}
-              tasks={tasks}
-              self
-            />
-
-            <Arrow />
-            {next.length > 0 ? (
-              <>
-                <p className="border-y border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-500">
-                  후행 {next.length}건
-                  {unlock > 0 && ` — 이걸 끝내면 ${unlock}건이 풀립니다`}
+                  ))}
+                </>
+              ) : (
+                <p className="border-t border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-500">
+                  후행 없음 — 이걸 기다리는 항목이 없습니다
                 </p>
-                {next.map((t) => (
-                  <LinkRow
-                    key={t.code}
-                    node={{ code: t.code, task: t }}
-                    openDate={openDate}
-                    today={today}
-                    tasks={tasks}
-                    onGo={go}
-                  />
-                ))}
-              </>
-            ) : (
-              <p className="border-t border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-500">
-                후행 없음 — 이걸 기다리는 항목이 없습니다
-              </p>
+              )}
+            </div>
+
+            {from && (
+              <button
+                type="button"
+                onClick={() => {
+                  const back = from;
+                  setFrom(null);
+                  onNavigate?.(back);
+                }}
+                className="mt-2 text-[11.5px] text-indigo-700 hover:underline"
+              >
+                ← {from} 으로 돌아가기
+              </button>
             )}
+
+            <TaskActivityList />
           </div>
 
-          {from && (
-            <button
-              type="button"
-              onClick={() => {
-                const back = from;
-                setFrom(null);
-                onNavigate?.(back);
-              }}
-              className="mt-2 text-[11.5px] text-indigo-700 hover:underline"
-            >
-              ← {from} 으로 돌아가기
-            </button>
-          )}
-        </div>
-
-        <DialogFooter className="shrink-0">
-          <Button type="button" variant="outline" onClick={onClose}>
-            닫기
-          </Button>
-        </DialogFooter>
+          {/* 발을 세로로 쌓는다. 기본값은 flex-col-reverse + sm:flex-row
+              sm:justify-end 이라, 그대로 두면 넓은 화면에서 입력칸과 「닫기」가
+              한 줄에 나란히 서서 입력칸이 반 칸으로 줄어든다. 입력칸이 한 줄을
+              다 쓰고 「닫기」가 그 아래 오른쪽에 붙게 뒤집지 않은 세로로 고정한다. */}
+          <DialogFooter className="shrink-0 flex-col sm:flex-col sm:justify-start">
+            <TaskActivityComposer />
+            {/* 발은 items-stretch 라 단추가 한 줄을 다 먹는다. 한 겹 싸서
+                오른쪽에 붙인다 — 원래 자리와 같다. */}
+            <div className="flex justify-end">
+              <Button type="button" variant="outline" onClick={onClose}>
+                닫기
+              </Button>
+            </div>
+          </DialogFooter>
+        </TaskActivity>
       </DialogContent>
     </Dialog>
   );
