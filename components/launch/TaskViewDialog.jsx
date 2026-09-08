@@ -53,7 +53,11 @@ export function TaskViewDialog({
     <Dialog open onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
       <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden sm:max-w-2xl">
         <DialogHeader className="shrink-0">
-          <DialogTitle className="flex flex-wrap items-center gap-2">
+          {/* pr-10 이 없으면 「고치기」가 DialogContent 의 기본 닫기 X 밑에 깔린다.
+              그 X 는 absolute top-2 right-2 에 size-7 이라 오른쪽 36px 을 먹고,
+              DOM 상 children 뒤에 그려져 위에 얹힌다 — 단추 오른쪽을 누르면
+              고치기가 아니라 창이 닫힌다. pr-8(32px)로는 4px 모자란다. */}
+          <DialogTitle className="flex flex-wrap items-center gap-2 pr-10">
             <span className="text-sm tabular-nums text-slate-400">{current.code}</span>
             <span className="min-w-0 flex-1">{current.title}</span>
             {onEdit && (
