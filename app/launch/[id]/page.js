@@ -70,7 +70,7 @@ function LaunchDetailView({ launchId }) {
   // ws 는 간트가 정하고 보드가 쓰는 값이라 탭을 넘나든다. 그래서 보드 안이
   // 아니라 이 위에 둔다.
   const {
-    tab, view, group, role, assignee, ws, q, roleInUrl,
+    tab, view, group, role, assignee, ws, q, task, roleInUrl,
     setParams, setQ, reset,
   } = useLaunchFilters();
   // 가져오기 결과. 476건을 올렸는데 아무 숫자도 안 뜨면 무엇이 들어갔는지
@@ -450,6 +450,11 @@ function LaunchDetailView({ launchId }) {
           assignee={assignee}
           query={q}
           myMemberId={identity?.memberId ?? ''}
+          // 열려 있는 항목의 코드. 창을 state 가 아니라 주소가 연다.
+          // 이름이 task 가 아니라 taskCode 인 것은 LaunchBoard 안에 이미
+          // task 라는 이름이 여러 map 콜백에 있어서다 — prop 을 task 로 두면
+          // 그것들을 가린다(1단계에서 role 로 실제로 겪었다).
+          taskCode={task}
           onParams={setParams}
           onQuery={setQ}
           onReset={reset}

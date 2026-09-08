@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { linksOf } from '@/lib/launchDeps';
 import { isDone, isNotApplicable } from '@/lib/launchTask';
 import { dDay, dDayLabel, dueDate } from '@/lib/launchDate';
+import { assigneeId } from '@/lib/launchMembers';
 
 // 한 항목의 연계를 한 화면에.
 //
@@ -18,32 +19,92 @@ import { dDay, dDayLabel, dueDate } from '@/lib/launchDate';
 // 하면 아무도 두 칸 이상 따라가지 않는다 — 9단짜리 줄이 있는데 그러면
 // 그 줄을 볼 방법이 없다.
 //
-// props: open, task, tasks, openDate, today, onClose, onEdit(task)
-export function TaskLinksDialog({ open, task, tasks = [], openDate, today, onClose, onEdit }) {
-  // 어느 항목을 보고 있나. 처음 연 항목에서 시작해 줄을 따라 옮겨 다닌다.
-  const [code, setCode] = useState(() => task?.code ?? null);
+// props: open, task(지금 보는 항목), tasks, myMemberId, launchName, openDate,
+//        today, busy, onNavigate(code), onClose, onAssign(memberId|null), onEdit(task)
+export function TaskViewDialog({
+  open, task, tasks = [], myMemberId, launchName, openDate, today, busy = false,
+  onNavigate, onClose, onAssign, onEdit,
+}) {
+  // 지금 보는 항목은 주소가 정한다(prop 으로 온다). 줄을 타면 주소가 바뀌고
+  // 이 창이 다시 그려진다.
+  const current = task;
 
-  // 목록이 새로 오면(상태를 바꾸고 돌아오면) 같은 코드의 최신 항목을 쓴다.
-  const current = tasks.find((t) => t.code === code) ?? task;
+  // 어디서 왔나. 주소는 '지금 보는 곳'만 가리키므로 되돌아갈 곳은 주소에 없다 —
+  // 창이 스스로 기억한다. 주소를 replace 로 갈아서 브라우저 뒤로가기가 이 자리를
+  // 대신하지 못한다(뒤로가기는 이 화면을 떠난다).
+  const [from, setFrom] = useState(null);
+
   const links = linksOf({ task: current, tasks });
   const { prev, missing, up, next, unlock } = links;
 
-  if (!open || !current) return null;
+  const due = dueDate(openDate, current?.day_offset);
+  const days = dDay(due, today);
 
-  const from = task?.code && task.code !== current.code ? task.code : null;
+  // 줄을 탄다. 어디서 왔는지 남기고 주소를 바꾼다.
+  function go(nextCode) {
+    if (!nextCode || nextCode === current?.code) return;
+    setFrom(current?.code ?? null);
+    onNavigate?.(nextCode);
+  }
+
+  if (!open || !current) return null;
 
   return (
     <Dialog open onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>
-            <span className="mr-1.5 text-sm tabular-nums text-slate-400">{current.code}</span>
-            연계된 항목
+      <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden sm:max-w-2xl">
+        <DialogHeader className="shrink-0">
+          {/* pr-10 이 없으면 「고치기」가 DialogContent 의 기본 닫기 X 밑에 깔린다.
+              그 X 는 absolute top-2 right-2 에 size-7 이라 오른쪽 36px 을 먹고,
+              DOM 상 children 뒤에 그려져 위에 얹힌다 — 단추 오른쪽을 누르면
+              고치기가 아니라 창이 닫힌다. pr-8(32px)로는 4px 모자란다. */}
+          <DialogTitle className="flex flex-wrap items-center gap-2 pr-10">
+            <span className="text-sm tabular-nums text-slate-400">{current.code}</span>
+            <span className="min-w-0 flex-1">{current.title}</span>
+            {onEdit && (
+              <button
+                type="button"
+                onClick={() => onEdit(current)}
+                className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs font-normal text-slate-600 hover:bg-slate-50"
+              >
+                고치기
+              </button>
+            )}
           </DialogTitle>
-          <DialogDescription>{current.title}</DialogDescription>
+          <DialogDescription>
+            {launchName}
+            {current.workstream && ` · ${current.workstream}`}
+          </DialogDescription>
         </DialogHeader>
 
-        <div className="max-h-[60vh] overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {/* 기한·주관·담당자. 지금까지 이 창은 연계만 보여줘서 무엇을 언제까지 누가
+              하는지는 고치기 창을 열어야 알 수 있었다. */}
+          <div className="mb-3 grid grid-cols-1 gap-x-4 gap-y-2 border-b border-slate-100 pb-3 sm:grid-cols-2">
+            <Field label="기한">
+              {due ? (
+                <span className="tabular-nums">
+                  {due}
+                  {days !== null && (
+                    <span className={days < 0 ? 'ml-1 text-rose-600' : 'ml-1 text-slate-400'}>
+                      {dDayLabel(days)}
+                    </span>
+                  )}
+                </span>
+              ) : (
+                <span className="text-slate-400">없음</span>
+              )}
+            </Field>
+
+            <Field label="담당자">
+              <Assignee task={current} myMemberId={myMemberId} busy={busy} onAssign={onAssign} />
+            </Field>
+
+            <Field label="주관">{current.owner_role || <span className="text-slate-400">없음</span>}</Field>
+            <Field label="지원">{current.support_role || <span className="text-slate-400">없음</span>}</Field>
+            <Field label="결정권">{current.decision_org || <span className="text-slate-400">없음</span>}</Field>
+            <Field label="상태">{current.status}</Field>
+          </div>
+
           {/* 끊긴 선행이 맨 위다. 이건 자료의 흠이라 다른 무엇보다 먼저
               보여야 고쳐진다 — 조용히 무시하면 오타로 끊긴 줄과 안 가져온
               워크스트림을 구별할 수 없다. */}
@@ -67,7 +128,7 @@ export function TaskLinksDialog({ open, task, tasks = [], openDate, today, onClo
                       openDate={openDate}
                       today={today}
                       tasks={tasks}
-                      onGo={setCode}
+                      onGo={go}
                     />
                     <Arrow />
                   </div>
@@ -86,7 +147,7 @@ export function TaskLinksDialog({ open, task, tasks = [], openDate, today, onClo
             {up.branched &&
               prev.map((node) => (
                 <div key={node.code}>
-                  <LinkRow node={node} openDate={openDate} today={today} tasks={tasks} onGo={setCode} />
+                  <LinkRow node={node} openDate={openDate} today={today} tasks={tasks} onGo={go} />
                   <Arrow />
                 </div>
               ))}
@@ -113,7 +174,7 @@ export function TaskLinksDialog({ open, task, tasks = [], openDate, today, onClo
                     openDate={openDate}
                     today={today}
                     tasks={tasks}
-                    onGo={setCode}
+                    onGo={go}
                   />
                 ))}
               </>
@@ -127,7 +188,11 @@ export function TaskLinksDialog({ open, task, tasks = [], openDate, today, onClo
           {from && (
             <button
               type="button"
-              onClick={() => setCode(from)}
+              onClick={() => {
+                const back = from;
+                setFrom(null);
+                onNavigate?.(back);
+              }}
               className="mt-2 text-[11.5px] text-indigo-700 hover:underline"
             >
               ← {from} 으로 돌아가기
@@ -135,22 +200,70 @@ export function TaskLinksDialog({ open, task, tasks = [], openDate, today, onClo
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0">
           <Button type="button" variant="outline" onClick={onClose}>
             닫기
           </Button>
-          {onEdit && (
-            <Button
-              type="button"
-              onClick={() => onEdit(current)}
-              className="bg-indigo-600 hover:bg-indigo-700"
-            >
-              {current.code} 고치기
-            </Button>
-          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// 이름과 값 한 쌍. 이름 칸을 고정폭으로 두면 값이 세로로 줄맞춤된다.
+function Field({ label, children }) {
+  return (
+    <div className="flex min-w-0 items-baseline gap-2">
+      <span className="w-14 shrink-0 text-[11.5px] text-slate-400">{label}</span>
+      <span className="min-w-0 text-[13px] text-slate-800">{children}</span>
+    </div>
+  );
+}
+
+// 담당자 칸.
+//
+// 비어 있으면 「나에게 맡기」 한 줄. 드롭다운으로는 471건의 0 을 못 채운다 —
+// 드롭다운은 "내가 후보에 있나"부터 알아야 하고(assigneeCandidates 는 그 항목의
+// 주관 역할 참여자만 준다), 없으면 왜 없는지도 모른다.
+//
+// 남이 맡고 있으면 이 링크를 안 그린다. 남의 일을 한 번 눌러 가져가는 자리가
+// 되면 안 된다 — 그때는 고치기 창의 드롭다운으로 바꾼다.
+function Assignee({ task, myMemberId, busy, onAssign }) {
+  // assignee 는 목록 API 에서 객체로 온다({ id, name }). === 문자열로 견주면
+  // 늘 거짓이다 — 1단계에서 「내 담당」이 그래서 영영 0이었다.
+  const current = assigneeId(task);
+  const name = task?.assignee?.name ?? task?.assignee_name ?? '';
+
+  if (!current && !name) {
+    if (!myMemberId) return <span className="text-slate-400">없음</span>;
+    return (
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => onAssign?.(myMemberId)}
+        className="text-[13px] text-indigo-600 underline underline-offset-2 hover:text-indigo-800 disabled:opacity-50"
+      >
+        나에게 맡기
+      </button>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-2">
+      <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[12.5px] text-indigo-700">
+        {name || '(이름 없음)'}
+      </span>
+      {current && current === myMemberId && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onAssign?.(null)}
+          className="text-[11px] text-slate-400 underline hover:text-slate-600 disabled:opacity-50"
+        >
+          놓기
+        </button>
+      )}
+    </span>
   );
 }
 
