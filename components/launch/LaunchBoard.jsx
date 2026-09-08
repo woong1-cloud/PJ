@@ -1026,9 +1026,13 @@ export function LaunchBoard({
           open
           task={viewTask}
           tasks={tasks}
+          myMemberId={myMemberId}
+          launchName={launch?.name}
           openDate={openDate}
           today={today}
+          busy={busy === viewTask.id}
           onNavigate={(code) => onParams?.({ task: code })}
+          onAssign={(next) => patchTask(viewTask, { assignee: next })}
           onClose={() => onParams?.({ task: '' })}
           onEdit={(t) => setTaskDialog({ mode: 'edit', task: t })}
         />
