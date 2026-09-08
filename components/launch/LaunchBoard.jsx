@@ -1027,6 +1027,8 @@ export function LaunchBoard({
           task={viewTask}
           tasks={tasks}
           myMemberId={myMemberId}
+          launchId={launch?.id}
+          memberId={myMemberId}
           launchName={launch?.name}
           openDate={openDate}
           today={today}

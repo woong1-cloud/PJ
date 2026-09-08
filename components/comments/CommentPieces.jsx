@@ -201,8 +201,14 @@ export function CommentEntry({ comment, mentionable, mine, onEdit, onDelete, onD
 // 요구사항도 0026 으로 나중에 붙였다. 무엇을 받고 몇 장까지 받는지는 이 부품이
 // 정할 일이 아니라 부르는 쪽의 정책이라, 상수를 안에 두지 않고 prop 으로 받는다.
 //
-// props: onSubmit(body, files), mentionable, imageTypes([mime]), maxImages(수)
-export function CommentComposer({ onSubmit, mentionable, imageTypes, maxImages }) {
+// 안내 문구도 같은 이유로 prop 이다. 여기 박아두면 "이 요청"이라는 말이 런칭
+// 항목 창에도 그대로 나온다 — 요구사항의 말투이지 이 부품의 것이 아니다.
+// 기본값을 두지 않는다. 두면 새로 부르는 쪽이 안 넘겼을 때 남의 화면 문구가
+// 조용히 딸려 온다.
+//
+// props: onSubmit(body, files), mentionable, imageTypes([mime]), maxImages(수),
+//        placeholder(안내 문구)
+export function CommentComposer({ onSubmit, mentionable, imageTypes, maxImages, placeholder }) {
   const [body, setBody] = useState('');
   const [saving, setSaving] = useState(false);
   // 등록 전까지 붙여둔 시안. 코멘트가 있어야 붙일 곳이 생기므로, 파일은
@@ -277,7 +283,7 @@ export function CommentComposer({ onSubmit, mentionable, imageTypes, maxImages }
         members={mentionable}
         rows={2}
         aria-label="코멘트"
-        placeholder="이 요청에 대해 남길 말을 적어 주세요. @로 팀원을 부를 수 있습니다."
+        placeholder={placeholder}
       />
       {mentionedNames.length > 0 && (
         <p className="flex flex-wrap items-center gap-1 text-xs text-slate-500">

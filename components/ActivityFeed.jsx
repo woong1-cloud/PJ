@@ -201,12 +201,15 @@ export function ActivityFeed({ requirementId, brandId, history, memberId }) {
         )}
       </ul>
       {/* 시안 첨부는 요구사항 쪽 정책이라 여기서 넘긴다. 지금까지 부품 안에
-          박혀 있던 것과 같은 상수다. */}
+          박혀 있던 것과 같은 상수다. 안내 문구도 같다 — 부품 안에 있던 문장을
+          그대로 옮겼을 뿐이라 이 화면은 바뀌지 않는다. 런칭 항목 창이 자기
+          문구를 넘길 수 있게 prop 으로 뺐다. */}
       <CommentComposer
         onSubmit={addComment}
         mentionable={mentionable}
         imageTypes={ALLOWED_IMAGE_TYPES}
         maxImages={MAX_ATTACHMENTS_PER_COMMENT}
+        placeholder="이 요청에 대해 남길 말을 적어 주세요. @로 팀원을 부를 수 있습니다."
       />
     </section>
   );
