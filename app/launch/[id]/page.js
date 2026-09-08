@@ -17,13 +17,11 @@ import { dDay, dDayLabel } from '@/lib/launchDate';
 import { progress } from '@/lib/launchTask';
 import { todayInKst } from '@/lib/overdue';
 
-// 런칭 하나 — 머리에 요약, 아래에 보드.
-//
-// 항목 전부를 한 번에 받아 브라우저에서 센다. 400건은 그러기에 작고, 서버를
-// 다시 부르지 않으니 보기를 바꿔도 숫자가 안 갈린다.
 // useSearchParams 를 쓰는 부분은 Suspense 경계 안에 있어야 한다. 없으면
 // 프로덕션 빌드가 "Missing Suspense boundary with useSearchParams" 로 실패한다
 // (개발 서버는 on-demand 렌더라 그냥 통과해서 눈치채기 어렵다).
+//
+// 이 껍데기가 하는 일은 경계를 치는 것뿐이다. 화면은 아래 LaunchDetailView 다.
 export default function LaunchDetailPage({ params }) {
   const { id } = use(params);
   return (
@@ -33,6 +31,14 @@ export default function LaunchDetailPage({ params }) {
   );
 }
 
+// 런칭 하나 — 머리에 요약, 아래에 보드.
+//
+// 항목 전부를 한 번에 받아 브라우저에서 센다. 400건은 그러기에 작고, 서버를
+// 다시 부르지 않으니 보기를 바꿔도 숫자가 안 갈린다.
+//
+// 화면 상태(탭·보기·역할·담당자·검색·묶기)는 여기서 useLaunchFilters 로 한 번만
+// 읽어 아래로 내린다. LaunchBoard 가 그 훅을 또 부르면 router.replace 를 둘이
+// 쏘고, 낡은 주소를 기준으로 병합해서 방금 쓴 변경이 되살아난다.
 function LaunchDetailView({ launchId }) {
   const id = launchId;
   const { identity } = useIdentity();
