@@ -154,9 +154,13 @@ export function LaunchBoard({
   // 기억이 안 지워진 채 이 effect 가 곧바로 되돌려, 전체를 영영 못 고른다.
   const roleHydrated = useRef(false);
   useEffect(() => {
-    if (roleHydrated.current) return;
+    // launch 가 아직 안 왔으면 아무것도 정하지 않는다. ref 를 여기서 태우면
+    // 첫 렌더(launch 가 null)에 한 번 태우고 끝나서, 데이터가 도착한 뒤에는
+    // 이미 늦다 — 데이터가 빨리 오면 되고 늦게 오면 안 되는 화면이 된다.
+    if (roleHydrated.current || !launch?.id) return;
+    // 여기서부터는 정할 수 있다. 정했으니 다시 안 정한다.
     roleHydrated.current = true;
-    if (roleInUrl || !launch?.id) return;
+    if (roleInUrl) return;
     const stored = readStoredRole(launch.id);
     if (stored) onParams?.({ role: stored });
   }, [roleInUrl, launch?.id, onParams]);

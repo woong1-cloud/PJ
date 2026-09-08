@@ -57,7 +57,7 @@ export function WeeklyProgress({ launch, tasks = [], decisions = [], today }) {
         count={buckets.blocked.length}
         tone="amber"
         empty="막힌 항목이 없습니다."
-        href={`/launch/${launch.id}?view=blocked`}
+        href={`/launch/${launch.id}?view=blocked&role=`}
       >
         {buckets.blocked.map((t) => {
           const linked = t.blocked_decision_id ? decisionsById.get(t.blocked_decision_id) : null;
@@ -83,7 +83,7 @@ export function WeeklyProgress({ launch, tasks = [], decisions = [], today }) {
         count={buckets.late.length}
         tone="rose"
         empty="지난 항목이 없습니다."
-        href={`/launch/${launch.id}?view=late`}
+        href={`/launch/${launch.id}?view=late&role=`}
       >
         {buckets.late.map((t) => (
           <TaskLine key={t.id} task={t} openDate={openDate} today={today} />
@@ -96,7 +96,7 @@ export function WeeklyProgress({ launch, tasks = [], decisions = [], today }) {
         count={buckets.thisWeek.length}
         tone="slate"
         empty="이번 주 마감인 항목이 없습니다."
-        href={`/launch/${launch.id}?view=week`}
+        href={`/launch/${launch.id}?view=week&role=`}
       >
         {buckets.thisWeek.map((t) => (
           <TaskLine key={t.id} task={t} openDate={openDate} today={today} />
@@ -132,6 +132,11 @@ const TONE = {
 };
 
 // href 를 받으면 머리 오른쪽에 보드로 가는 길을 낸다.
+//
+// href 마다 role= 를 빈 값으로 붙인다. 이 화면의 숫자는 런칭 전체 기준인데,
+// 그냥 보내면 보드가 브라우저에 기억된 역할을 얹어 "기한 지남 2"를 눌렀더니
+// 0건인 화면이 뜬다 — 숫자가 데려간 곳에 그 숫자가 없으면 안 된다.
+// 주소의 role 은 localStorage 를 안 덮어쓰므로 그 사람의 기본 역할은 남는다.
 //
 // 이 화면은 읽는 자리라 상태를 못 바꾼다. 회의에서 "막힌 5건"을 보고 손을
 // 대려면 보드로 가서 필터를 다시 걸어야 했다 — 그 두 걸음을 한 걸음으로.
