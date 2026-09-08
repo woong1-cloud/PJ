@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { use, useEffect, useMemo, useState } from 'react';
+import { Suspense, use, useEffect, useMemo, useState } from 'react';
 import { useIdentity } from '@/components/IdentityProvider';
+import { useLaunchFilters } from '@/components/useLaunchFilters';
 import { isGlobalAdmin } from '@/lib/tiers';
 import { LaunchBoard } from '@/components/launch/LaunchBoard';
 import { LaunchContextButton, LaunchContextPanel } from '@/components/launch/LaunchContext';
@@ -20,8 +21,20 @@ import { todayInKst } from '@/lib/overdue';
 //
 // 항목 전부를 한 번에 받아 브라우저에서 센다. 400건은 그러기에 작고, 서버를
 // 다시 부르지 않으니 보기를 바꿔도 숫자가 안 갈린다.
+// useSearchParams 를 쓰는 부분은 Suspense 경계 안에 있어야 한다. 없으면
+// 프로덕션 빌드가 "Missing Suspense boundary with useSearchParams" 로 실패한다
+// (개발 서버는 on-demand 렌더라 그냥 통과해서 눈치채기 어렵다).
 export default function LaunchDetailPage({ params }) {
   const { id } = use(params);
+  return (
+    <Suspense fallback={<p className="p-6 text-sm text-slate-500">불러오는 중...</p>}>
+      <LaunchDetailView launchId={id} />
+    </Suspense>
+  );
+}
+
+function LaunchDetailView({ launchId }) {
+  const id = launchId;
   const { identity } = useIdentity();
   const admin = isGlobalAdmin(identity);
   // 명단에 든 사람도 들어온다. 진짜 판정은 서버가 한다(requireLaunchAccess) —
@@ -44,13 +57,16 @@ export default function LaunchDetailPage({ params }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [importOpen, setImportOpen] = useState(false);
-  // 탭 셋. 기본은 보드다 — 지금까지 보드가 바로 나오던 화면이라 습관을
-  // 안 바꾼다.
-  const [tab, setTab] = useState('board');
-  // 간트에서 막대를 눌러 넘어올 때 보드가 걸 워크스트림. 보드 안에 두지
-  // 않는 이유는 간트가 그것을 정하기 때문이다 — 탭을 넘나드는 값이라
-  // 페이지가 갖는다.
-  const [boardFocus, setBoardFocus] = useState('');
+  // 화면 상태(탭·보기·역할·검색·간트에서 넘어온 워크스트림)는 주소가 갖는다.
+  // 기본 탭은 보드다 — 지금까지 보드가 바로 나오던 화면이라 습관을 안 바꾼다
+  // (기본값이라 주소에는 안 남는다).
+  //
+  // ws 는 간트가 정하고 보드가 쓰는 값이라 탭을 넘나든다. 그래서 보드 안이
+  // 아니라 이 위에 둔다.
+  const {
+    tab, view, group, role, assignee, ws, q, roleInUrl,
+    setParams, setQ, reset,
+  } = useLaunchFilters();
   // 가져오기 결과. 476건을 올렸는데 아무 숫자도 안 뜨면 무엇이 들어갔는지
   // 알 길이 없다 — 특히 시트에서 빠진 것과 진행 중이라 안 바꾼 것은
   // 여기서만 보인다.
@@ -383,7 +399,7 @@ export default function LaunchDetailPage({ params }) {
           <button
             key={t.key}
             type="button"
-            onClick={() => setTab(t.key)}
+            onClick={() => setParams({ tab: t.key })}
             className={`rounded-full border px-3 py-1.5 text-sm ${
               tab === t.key
                 ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
@@ -419,6 +435,18 @@ export default function LaunchDetailPage({ params }) {
           decisions={decisions}
           members={members}
           canAdmin={admin}
+          // 주소가 들고 있는 화면 상태. LaunchBoard 는 이 값들을 props 로만 받는다 —
+          // 거기서 useLaunchFilters 를 또 부르면 router.replace 를 둘이 쏜다.
+          view={view}
+          group={group}
+          role={role}
+          roleInUrl={roleInUrl}
+          assignee={assignee}
+          query={q}
+          myMemberId={identity?.memberId ?? ''}
+          onParams={setParams}
+          onQuery={setQ}
+          onReset={reset}
           // 서버가 돌려준 한 줄만 갈아 끼운다. 통째로 다시 부르면 스크롤이
           // 튀고, 회의 중에 그러면 보던 자리를 잃는다.
           onChanged={(task) =>
@@ -429,8 +457,8 @@ export default function LaunchDetailPage({ params }) {
           onReload={() => setReloadToken((t) => t + 1)}
           onDecisionCreated={saveDecision}
           onBlockedChanged={refreshDecisions}
-          focusWorkstream={boardFocus}
-          onClearFocus={() => setBoardFocus('')}
+          focusWorkstream={ws}
+          onClearFocus={() => setParams({ ws: '' })}
         />
       )}
 
@@ -450,10 +478,9 @@ export default function LaunchDetailPage({ params }) {
           // 막대를 누르면 보드로 넘어가 그 워크스트림만 건다. 간트는
           // "언제 몰리나"를 보는 자리고, 답이 보이면 바로 그 줄들을 열어보게
           // 된다 — 탭을 손으로 다시 누르게 하면 그 흐름이 끊긴다.
-          onPick={(workstream) => {
-            setBoardFocus(workstream);
-            setTab('board');
-          }}
+          // 두 상태를 따로 바꾸면 중간 렌더에서 '보드 탭인데 걸림이 아직 없는'
+          // 한 프레임이 생긴다. 주소를 한 번에 얹으면 그 틈이 없다.
+          onPick={(workstream) => setParams({ ws: workstream, tab: 'board' })}
         />
       )}
 
