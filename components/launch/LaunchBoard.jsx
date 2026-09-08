@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { dueDate, dDay, dDayLabel } from '@/lib/launchDate';
 import { matchesItem } from '@/lib/launchSearch';
+import { assigneeId } from '@/lib/launchMembers';
 import { GROUP_MODES, groupTasks } from '@/lib/launchGroup';
 import {
   BOARD_STATUSES,
@@ -232,7 +233,7 @@ export function LaunchBoard({
   // 겹쳐 걸리는 축이라 그래야 맞다.
   const mineCount = useMemo(() => {
     if (!myMemberId) return 0;
-    return tasks.filter((t) => t.assignee === myMemberId && inView(t)).length;
+    return tasks.filter((t) => assigneeId(t) === myMemberId && inView(t)).length;
   }, [tasks, myMemberId, inView]);
 
   // 무언가 걸려 있을 때만 초기화를 보여준다. 아무것도 안 걸렸는데 초기화가
@@ -252,7 +253,7 @@ export function LaunchBoard({
 
     // 내 담당. 보기 칩과 겹쳐 걸리는 다른 축이라 여기서 따로 건다 —
     // "내 담당 중 이번 주"가 되어야 한다.
-    if (assignee) list = list.filter((task) => task.assignee === assignee);
+    if (assignee) list = list.filter((task) => assigneeId(task) === assignee);
 
     const keep = (task) => touched.has(task.id);
     // 해당없음 보기에서는 keep 을 안 쓴다 — 되돌린 줄이 '해당없음' 목록에
