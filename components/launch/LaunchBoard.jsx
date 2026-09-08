@@ -288,18 +288,23 @@ export function LaunchBoard({
 
   // 사람이 고른 것만 기억한다. 링크로 들어온 역할은 이 자리를 안 지나므로
   // 남의 링크 한 번 열었다가 내 기본 역할이 바뀌는 일이 없다.
-  function chooseRole(next) {
+  // extra 는 role 과 같이 주소에 얹을 것. 따로 두 번 부르면 두 번째가 낡은
+  // 주소를 기준으로 병합될 수 있어 한 번에 보낸다.
+  function chooseRole(next, extra = {}) {
     try {
       if (next) localStorage.setItem(roleStorageKey(launch.id), next);
       else localStorage.removeItem(roleStorageKey(launch.id));
     } catch { /* 사생활 보호 모드에서 던진다. 기억을 못 해도 화면은 돌아야 한다. */ }
-    onParams?.({ role: next });
+    onParams?.({ role: next, ...extra });
     // 새로 고른 역할이면 '할 것'부터 본다 — 가장 흔히 찾는 것이다.
     setRoleTab('owner');
   }
 
   function pickRole(next) {
-    chooseRole(next);
+    // 그 역할에 지금 착수할 것이 없으면 '전체'로 보낸다. 방금 자기 역할을 고른
+    // 사람에게 빈 화면을 주면 "내 일이 없다"가 아니라 "잘못 골랐나"로 읽힌다.
+    const ready = readyByRole.find((r) => r.role === next)?.ready ?? 0;
+    chooseRole(next, ready === 0 ? { view: 'all' } : {});
     setRoleAsked(true);
   }
 
@@ -540,14 +545,17 @@ export function LaunchBoard({
             </button>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {readyByRole.map(({ role, ready }) => (
+            {/* 맵 변수를 role 로 두면 이제 같은 이름의 prop 을 가린다. 지금은
+                안에서 prop 을 안 써서 동작하지만, 다음에 이 블록에 "지금 고른
+                역할인가"를 더하려는 사람이 조용히 맵 변수를 읽는다. */}
+            {readyByRole.map(({ role: r, ready }) => (
               <button
-                key={role}
+                key={r}
                 type="button"
-                onClick={() => pickRole(role)}
+                onClick={() => pickRole(r)}
                 className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:border-indigo-500 hover:bg-indigo-50 hover:text-indigo-700"
               >
-                {role}
+                {r}
                 {/* 0 은 안 쓴다. '재무팀 0' 은 고르지 말라는 말처럼 보이는데,
                     지금 착수할 것이 없을 뿐 그 역할의 일은 있다. */}
                 {ready > 0 && (
@@ -769,6 +777,9 @@ export function LaunchBoard({
         </p>
       )}
 
+      {/* 이 map 의 group 은 묶음 객체라 같은 이름의 prop(문자열)을 가린다.
+          안에서 prop 을 쓸 일이 없고, 잘못 읽으면 group.tasks 가 undefined 라
+          시끄럽게 깨진다 — 조용히 틀리지 않으므로 이름을 그대로 둔다. */}
       {groups.map((group) => {
         const closed = closedGroups.has(group.key);
         const groupStat = progress({ tasks: group.tasks, openDate, today });
