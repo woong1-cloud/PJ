@@ -214,7 +214,7 @@ export function mergeLaunchParams(currentSearch, patch) {
 - [ ] **Step 4: 통과를 확인한다**
 
 Run: `npx vitest run lib/launchFilters.test.js`
-Expected: PASS — 12 tests
+Expected: PASS — 11 tests (it 블록 기준. '기본값을 넣으면 키가 빠진다' 하나가 expect 셋을 품는다)
 
 - [ ] **Step 5: 커밋**
 
