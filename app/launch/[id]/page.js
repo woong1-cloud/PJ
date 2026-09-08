@@ -433,7 +433,19 @@ function LaunchDetailView({ launchId }) {
         </div>
       </div>
 
-      {tab === 'board' && (
+      {/* 보드는 탭을 떠나도 마운트한 채 감춘다.
+          항목 창이 LaunchBoard 안에 있는데, 그 창은 다른 탭에서도 열려야 한다
+          — 주간 진척에서 막힌 항목 하나를 보려고 보드로 튕겨 가면 보던 자리를
+          잃는다. 창은 DialogPortal 로 document.body 에 그려지므로 부모의
+          display:none 을 탈출한다.
+
+          창을 페이지로 올리는 것이 더 옳은 모양이지만(patchTask 는 원래 페이지
+          것이다), 그러려면 patchTask·busy·touched·창 4개·파생 4개가 함께 이사해야
+          하고 렌더 테스트가 없어 회귀를 자동으로 못 잡는다. 지금 그것을 할 이유가
+          "주간 진척에서 줄 하나 누르기" 하나뿐이라 여기서 멈춘다.
+          결정 대기에서도 열고 싶어지면 그때가 올릴 때다.
+          (스펙: docs/superpowers/specs/2026-09-09-launch-task-view-anywhere-design.md) */}
+      <div hidden={tab !== 'board'}>
         <LaunchBoard
           launch={launch}
           tasks={tasks}
@@ -471,14 +483,22 @@ function LaunchDetailView({ launchId }) {
           focusWorkstream={ws}
           onClearFocus={() => setParams({ ws: '' })}
         />
-      )}
+      </div>
 
       {tab === 'decisions' && (
         <DecisionList launchId={id} decisions={decisions} onSaved={saveDecision} />
       )}
 
       {tab === 'weekly' && (
-        <WeeklyProgress launch={launch} tasks={tasks} decisions={decisions} today={today} />
+        <WeeklyProgress
+          launch={launch}
+          tasks={tasks}
+          decisions={decisions}
+          today={today}
+          // 줄을 누르면 그 항목 창이 뜬다. tab 은 안 건드린다 — 주간 진척에
+          // 머문 채로 열리고, 닫으면 보던 자리 그대로다.
+          onOpenTask={(code) => setParams({ task: code })}
+        />
       )}
 
       {tab === 'gantt' && (
