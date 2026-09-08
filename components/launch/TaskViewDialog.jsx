@@ -19,7 +19,7 @@ import { dDay, dDayLabel, dueDate } from '@/lib/launchDate';
 // 그 줄을 볼 방법이 없다.
 //
 // props: open, task, tasks, openDate, today, onClose, onEdit(task)
-export function TaskLinksDialog({ open, task, tasks = [], openDate, today, onClose, onEdit }) {
+export function TaskViewDialog({ open, task, tasks = [], openDate, today, onClose, onEdit }) {
   // 어느 항목을 보고 있나. 처음 연 항목에서 시작해 줄을 따라 옮겨 다닌다.
   const [code, setCode] = useState(() => task?.code ?? null);
 

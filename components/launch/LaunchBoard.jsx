@@ -22,8 +22,9 @@ import {
   progress,
 } from '@/lib/launchTask';
 import { missingDeps, prevTasks, unlockCount } from '@/lib/launchDeps';
+import { taskByCode } from '@/lib/launchTaskLink';
 import { NotApplicableDialog } from '@/components/launch/NotApplicableDialog';
-import { TaskLinksDialog } from '@/components/launch/TaskLinksDialog';
+import { TaskViewDialog } from '@/components/launch/TaskViewDialog';
 import { TaskEditDialog } from '@/components/launch/TaskEditDialog';
 import { BlockDialog } from '@/components/launch/BlockDialog';
 
@@ -101,7 +102,7 @@ export function LaunchBoard({
   focusWorkstream = '', onClearFocus, members = [], canAdmin = false,
   // 화면 상태는 주소가 갖는다. 여기서 useState 로 들고 있으면 링크를 보내도
   // 받는 사람은 다른 화면을 본다 — 보기·묶기·역할·담당자·검색이 그렇다.
-  view, group, role, roleInUrl, assignee, query, myMemberId,
+  view, group, role, roleInUrl, assignee, query, myMemberId, taskCode,
   onParams, onQuery, onReset,
 }) {
   const [closedGroups, setClosedGroups] = useState(() => new Set());
@@ -121,9 +122,6 @@ export function LaunchBoard({
   // 해당없음 사유 창을 띄운 항목. 단건·다중 모두 { ids, title } 모양으로
   // 통일한다 — 다이얼로그 하나가 양쪽을 다 받게 하려고.
   const [naFor, setNaFor] = useState(null);
-  // 연계 창을 띄운 항목. 창 안에서 줄을 따라 옮겨 다니므로 여기서는
-  // 시작점만 잡는다.
-  const [linksFor, setLinksFor] = useState(null);
   // 막힘 사유 창을 띄운 항목. window.prompt 대신 종류를 가르는 창을 연다.
   const [blockFor, setBlockFor] = useState(null);
   // ⋯ 메뉴가 열린 항목. 마찬가지로 한 번에 하나만 연다.
@@ -194,6 +192,14 @@ export function LaunchBoard({
   // 착수 가능은 런칭 전체 목록에서만 셀 수 있다 — 선행이 워크스트림을
   // 넘나든다. 그래서 progress 와 따로 센다(lib/launchTask.js 참고).
   const readyTotal = useMemo(() => readyCount(tasks), [tasks]);
+
+  // 창은 state 가 아니라 주소가 연다. 입구가 셋(줄 제목·「풀림 N」·선행 칩)인데
+  // state 로 두면 링크로 들어온 사람만 다른 길을 타게 되고, 창 안에서 연계를
+  // 타고 옮겨 다닌 것이 주소에 안 남아 그 화면을 남에게 못 보낸다.
+  const { task: viewTask, missing: missingCode } = useMemo(
+    () => taskByCode({ tasks, code: taskCode }),
+    [tasks, taskCode],
+  );
 
   // 막힌 줄의 '결정 대기 · 제목' 표시가 쓴다.
   const decisionsById = useMemo(() => new Map(decisions.map((d) => [d.id, d])), [decisions]);
@@ -814,6 +820,15 @@ export function LaunchBoard({
         </p>
       )}
 
+      {/* 조용히 넘기지 않는다. 링크를 누른 사람은 무언가 열릴 것을 기대했다.
+          주소의 task 는 안 지운다 — 지우면 왜 안 열렸는지 물을 근거가 사라진다. */}
+      {missingCode && (
+        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          링크가 가리키는 항목 <b className="tabular-nums">{missingCode}</b> 를 이 런칭에서
+          못 찾았습니다 — 지워졌거나 다른 런칭의 항목입니다.
+        </p>
+      )}
+
       {/* 역할을 고른 뒤에만 나오는 얇은 줄. 역할 이름은 위 드롭다운에 이미
           있으니 여기서는 반복하지 않는다(할 것/도울 것/둘 다). */}
       {role && (
@@ -956,7 +971,7 @@ export function LaunchBoard({
                     }}
                     onLinks={() => {
                       setMenuFor(null);
-                      setLinksFor(task);
+                      onParams?.({ task: task.code });
                     }}
                     onAskNa={() => {
                       setMenuFor(null);
@@ -1002,20 +1017,20 @@ export function LaunchBoard({
       />
       )}
 
-      {/* 조건부로 그린다. 닫혀도 그리면 창 안의 '지금 보는 코드'가
-          지난 항목에 머문다 — 이 병이 네 창에 있었다. */}
-      {linksFor && (
-        <TaskLinksDialog
+      {/* 조건부로 그린다. 닫혀도 그리면 창 안의 '지금 보는 코드'가 지난 항목에
+          머문다 — 이 병이 네 창에 있었다.
+          고치기 창이 열려 있으면 이 창은 안 그린다. 주소의 task 는 그대로라
+          고치기를 닫으면 다시 보기 창으로 돌아온다. */}
+      {viewTask && !taskDialog && (
+        <TaskViewDialog
           open
-          task={linksFor}
+          task={viewTask}
           tasks={tasks}
           openDate={openDate}
           today={today}
-          onClose={() => setLinksFor(null)}
-          onEdit={(task) => {
-            setLinksFor(null);
-            setTaskDialog({ mode: 'edit', task });
-          }}
+          onNavigate={(code) => onParams?.({ task: code })}
+          onClose={() => onParams?.({ task: '' })}
+          onEdit={(t) => setTaskDialog({ mode: 'edit', task: t })}
         />
       )}
 
@@ -1148,7 +1163,15 @@ function TaskRow({
           {/* ★ 는 해당없음일 때 감춘다 — 할 일이 아니니 핵심 표시가 무의미하다. */}
           {task.is_critical && !na && <span className="mr-1 text-amber-500">★</span>}
           <span className="mr-1.5 text-xs tabular-nums text-slate-400">{task.code}</span>
-          {task.title}
+          {/* 제목을 누르면 그 항목을 연다. 지금까지 제목은 아무 일도 안 했고,
+              항목을 열려면 ⋯ 메뉴를 거쳐야 했다. */}
+          <button
+            type="button"
+            onClick={onLinks}
+            className="text-left hover:underline hover:decoration-indigo-300"
+          >
+            {task.title}
+          </button>
           {na && (
             <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-normal text-slate-500">
               해당없음
