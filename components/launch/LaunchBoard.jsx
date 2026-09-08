@@ -226,7 +226,10 @@ export function LaunchBoard({
 
   // 무언가 걸려 있을 때만 초기화를 보여준다. 아무것도 안 걸렸는데 초기화가
   // 떠 있으면 누를 것을 찾게 된다.
-  const hasFilter = Boolean(role || assignee || query.trim()) || view !== 'ready';
+  // 걸린 것이 하나라도 있나. selectedAssignee(이름 드롭다운)도 센다 — 빼면
+  // 그것만 골랐을 때 '필터 초기화'가 안 떠서 되돌릴 길이 없다.
+  const hasFilter =
+    Boolean(role || assignee || selectedAssignee || query.trim()) || view !== 'ready';
 
   const shown = useMemo(() => {
     const q = query.trim();
@@ -412,6 +415,14 @@ export function LaunchBoard({
   // 묶는 기준을 바꾸면 접힘·선택을 놓는다. 다른 기준의 그룹 키(예:
   // 워크스트림 이름과 담당자 이름이 우연히 같음)가 엉뚱하게 접힌 채로
   // 넘어오는 것을 막고, 안 보이게 된 줄이 '골랐다'고 남는 것도 막는다.
+  // 주소에 있는 것은 훅이 지우고, 이 화면만 들고 있는 것은 여기서 지운다.
+  // selectedAssignee 를 빼먹으면 '초기화'를 눌러도 이름 필터가 조용히 살아남아,
+  // 왜 몇 건밖에 없는지 알 수 없는 화면이 된다.
+  function resetAll() {
+    setSelectedAssignee('');
+    onReset?.();
+  }
+
   function changeGroupMode(mode) {
     setClosedGroups(new Set());
     setPicked(new Set());
@@ -743,13 +754,13 @@ export function LaunchBoard({
             {view === 'na' ? stat.notApplicable : stat.total}건
           </b>
           {' 중 '}
-          <b className="font-medium text-slate-700">{shown.length}건</b>
+          <b className="font-medium text-slate-700">{roleFiltered.length}건</b>
         </span>
 
         {hasFilter && (
           <button
             type="button"
-            onClick={onReset}
+            onClick={resetAll}
             className="shrink-0 text-xs text-slate-500 underline hover:text-slate-700"
           >
             필터 초기화
