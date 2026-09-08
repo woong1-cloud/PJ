@@ -435,6 +435,12 @@ export function launchCommentRecipients(task, actorId, mentionedIds = []) { /* .
 
 ### 3.5 `ActivityFeed` 일반화
 
+> **정정 (2026-09-08, 3단계 스펙 작성 중).** 아래 "두 URL 을 props 로 뺀다"는
+> **틀렸다.** 실제로 세어 보니 하드코딩된 URL 이 **다섯**이고 그중 하나는 이미지
+> 업로드다. 대신 **안쪽 부품이 이미 깨끗하다**(`MentionTextarea` 127줄에
+> requirement/fetch 참조 0). 껍데기를 일반화하지 말고 부품을 꺼낸다 —
+> `2026-09-08-launch-activity-step3-design.md` §4 참조.
+
 지금 URL 이 박혀 있다.
 
 ```js
