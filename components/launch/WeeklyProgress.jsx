@@ -18,7 +18,7 @@ import { weeklyBuckets } from '@/lib/launchWeekly';
 // 만들지 않는다 — 보드와 숫자가 갈리면 안 된다.
 //
 // props: launch, tasks, decisions, today
-export function WeeklyProgress({ launch, tasks = [], decisions = [], today }) {
+export function WeeklyProgress({ launch, tasks = [], decisions = [], today, onOpenTask }) {
   const openDate = launch?.open_date;
   const decisionsById = new Map(decisions.map((d) => [d.id, d]));
   const buckets = weeklyBuckets({ tasks, decisions, openDate, today });
@@ -63,8 +63,7 @@ export function WeeklyProgress({ launch, tasks = [], decisions = [], today }) {
           const linked = t.blocked_decision_id ? decisionsById.get(t.blocked_decision_id) : null;
           return (
             <li key={t.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-4 py-2">
-              <span className="text-xs tabular-nums text-slate-400">{t.code}</span>
-              <span className="text-sm text-slate-800">{t.title}</span>
+              <TaskTitle task={t} onOpenTask={onOpenTask} />
               {t.blocked_decision_id ? (
                 <span className="text-xs text-indigo-700">
                   결정 대기 · {linked?.title ?? '(지워진 결정)'}
@@ -86,7 +85,7 @@ export function WeeklyProgress({ launch, tasks = [], decisions = [], today }) {
         href={`/launch/${launch.id}?view=late&role=`}
       >
         {buckets.late.map((t) => (
-          <TaskLine key={t.id} task={t} openDate={openDate} today={today} />
+          <TaskLine key={t.id} task={t} openDate={openDate} today={today} onOpenTask={onOpenTask} />
         ))}
       </Section>
 
@@ -99,7 +98,7 @@ export function WeeklyProgress({ launch, tasks = [], decisions = [], today }) {
         href={`/launch/${launch.id}?view=week&role=`}
       >
         {buckets.thisWeek.map((t) => (
-          <TaskLine key={t.id} task={t} openDate={openDate} today={today} />
+          <TaskLine key={t.id} task={t} openDate={openDate} today={today} onOpenTask={onOpenTask} />
         ))}
       </Section>
 
@@ -114,8 +113,7 @@ export function WeeklyProgress({ launch, tasks = [], decisions = [], today }) {
       >
         {buckets.doneThisWeek.map((t) => (
           <li key={t.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-4 py-2">
-            <span className="text-xs tabular-nums text-slate-400">{t.code}</span>
-            <span className="text-sm text-slate-800">{t.title}</span>
+            <TaskTitle task={t} onOpenTask={onOpenTask} />
           </li>
         ))}
       </Section>
@@ -168,13 +166,39 @@ function Section({ step, title, count, tone, empty, href, children }) {
   );
 }
 
-function TaskLine({ task, openDate, today }) {
+// 코드 + 제목. 세 자리(막힘·TaskLine·이번 주 완료)가 같은 모양을 그린다.
+//
+// 제목을 누르면 그 항목 창이 뜬다. 이 화면은 읽는 자리라 상태를 못 바꿨고,
+// 손을 대려면 보드로 가서 필터를 다시 걸어야 했다 — 그 두 걸음을 없앤다.
+// tab 은 안 건드린다. 주간 진척에 머문 채로 열리고 닫으면 제자리다.
+//
+// onOpenTask 가 없으면 그냥 글자다. 누를 수 없는 것을 누를 수 있어 보이게
+// 하지 않는다.
+function TaskTitle({ task, onOpenTask }) {
+  return (
+    <>
+      <span className="text-xs tabular-nums text-slate-400">{task.code}</span>
+      {onOpenTask ? (
+        <button
+          type="button"
+          onClick={() => onOpenTask(task.code)}
+          className="text-left text-sm text-slate-800 hover:underline hover:decoration-indigo-300"
+        >
+          {task.title}
+        </button>
+      ) : (
+        <span className="text-sm text-slate-800">{task.title}</span>
+      )}
+    </>
+  );
+}
+
+function TaskLine({ task, openDate, today, onOpenTask }) {
   const due = dueDate(openDate, task.day_offset);
   const days = dDay(due, today);
   return (
     <li className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-4 py-2">
-      <span className="text-xs tabular-nums text-slate-400">{task.code}</span>
-      <span className="text-sm text-slate-800">{task.title}</span>
+      <TaskTitle task={task} onOpenTask={onOpenTask} />
       {due && (
         <span className="text-xs tabular-nums text-slate-400">
           {due}
