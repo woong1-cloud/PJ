@@ -77,6 +77,9 @@ export function useLaunchFilters() {
     setDebouncedQ('');
     // role 은 '' 로 보내 키를 지운다. task/ws 는 필터가 아니라 안 건드린다 —
     // '필터 초기화'가 열린 창을 닫으면 놀란다.
+    //
+    // tab 도 같은 이유로 안 건드린다. 필터를 지우려고 누른 단추가 보고 있던
+    // 탭까지 바꾸면, 초기화가 아니라 화면을 잃은 것으로 읽힌다.
     setParams({ view: '', role: '', assignee: '', q: '', group: '' });
   }, [setParams]);
 
