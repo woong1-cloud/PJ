@@ -108,12 +108,17 @@ export function MentionTextarea({ value, onChange, members, ...textareaProps }) 
         aria-controls="mention-listbox"
         className="w-full rounded-lg border border-slate-300 p-2 text-sm focus:border-indigo-400 focus:outline-none"
       />
+        {/* max-h-72(288px). 한 행이 py-1.5 + text-sm 이라 약 32px 이고
+            MENTION_CANDIDATE_LIMIT 가 8 이므로 8행 256px + py-1 8px = 264px 다.
+            예전 max-h-56(224px)으로는 8명일 때 마지막 한둘이 스크롤 뒤로 숨었는데,
+            그러면 후보를 8로 자른 이유("스크롤해야 보이는 후보는 아무도 안
+            고른다" — lib/mentions.js)와 상한이 서로 어긋난다. */}
       {open && (
         <ul
           id="mention-listbox"
           role="listbox"
           aria-label="언급할 팀원"
-          className="absolute bottom-full left-0 z-20 mb-1 max-h-56 w-56 overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+          className="absolute bottom-full left-0 z-20 mb-1 max-h-72 w-56 overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
         >
           {candidates.map((member, i) => (
             <li key={member.id}>
