@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { dueDate, dDay, dDayLabel } from '@/lib/launchDate';
 import { matchesItem } from '@/lib/launchSearch';
 import { GROUP_MODES, groupTasks } from '@/lib/launchGroup';
@@ -148,7 +148,14 @@ export function LaunchBoard({
   // 마운트 때 한 번 주소에 올리는 것이 요점이다. 안 그러면 역할을 안 건드리고
   // 보기만 바꿔 링크를 보냈을 때, 받는 사람은 자기 역할로 본다 — 링크가
   // 사람마다 다른 것을 가리키면 안 된다.
+  // 한 번만 도는 것을 ref 로 못 박는다. roleInUrl 만 보면 '마운트 때 한 번'이
+  // 아니라 '주소에서 role 이 사라질 때마다'가 된다 — localStorage 읽기는 되는데
+  // 쓰기만 실패하는 자리(사생활 보호 모드·용량 초과)에서 「역할 전체」를 고르면
+  // 기억이 안 지워진 채 이 effect 가 곧바로 되돌려, 전체를 영영 못 고른다.
+  const roleHydrated = useRef(false);
   useEffect(() => {
+    if (roleHydrated.current) return;
+    roleHydrated.current = true;
     if (roleInUrl || !launch?.id) return;
     const stored = readStoredRole(launch.id);
     if (stored) onParams?.({ role: stored });
