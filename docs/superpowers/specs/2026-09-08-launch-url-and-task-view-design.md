@@ -39,6 +39,7 @@
 
 | 키 | 값 | 기본 |
 |---|---|---|
+| `tab` | `board` `decisions` `weekly` `gantt` | `board` |
 | `view` | `week` `late` `blocked` `ready` `na` `all` | `ready` |
 | `role` | 역할 이름 (한글, `encodeURIComponent`) | 없음 = 역할 전체 |
 | `assignee` | `team_members.id` (uuid) | 없음 |
@@ -48,7 +49,13 @@
 | `task` | 항목 **코드** (`18-22`) — 2단계 | 없음 |
 
 **기본값은 안 쓴다.** `mergeFilterParams` 와 같은 규칙이다 — 빈 값은 키째 지운다.
-`/launch/hoka` 는 착수 가능·워크스트림 묶기다.
+`/launch/hoka` 는 보드 탭·착수 가능·워크스트림 묶기다.
+
+**`tab` 도 주소에 넣는다.** 지금 `tab` 과 `boardFocus`(=`ws`)는 페이지의
+`useState` 다. `tab` 을 안 넣으면 §1.5 의 「보드에서 열기」가 동작하지 않는다 —
+주간 진척 탭에서 그 링크를 눌러 봐야 쿼리스트링만 바뀌고 탭은 주간 진척에
+그대로 머문다. 링크는 `/launch/<id>?view=blocked` 이고, `tab` 키가 없으니
+기본값인 보드로 간다.
 
 **`assignee` 는 uuid 다, `me` 가 아니다.** 「내 담당」을 켜면 내 `memberId` 가
 주소에 박힌다. 누가 열든 같은 목록이어야 한다 — 링크를 보내는 이유가 대부분
@@ -70,6 +77,8 @@
 `lib/requirementFilters.js` 와 같은 모양. 순수 함수라 테스트한다.
 
 ```js
+export const LAUNCH_TABS = ['board', 'decisions', 'weekly', 'gantt'];
+export const DEFAULT_TAB = 'board';
 export const LAUNCH_VIEWS = ['week', 'late', 'blocked', 'ready', 'na', 'all'];
 export const DEFAULT_VIEW = 'ready';
 export const LAUNCH_GROUPS = ['workstream', 'assignee', 'week'];
@@ -79,9 +88,11 @@ export const DEFAULT_GROUP = 'workstream';
 // 사람에게 빈 화면 대신 기본 화면을 준다.
 export function parseLaunchParams(searchParams) {
   const get = (k) => searchParams.get(k) ?? '';
+  const tab = get('tab');
   const view = get('view');
   const group = get('group');
   return {
+    tab: LAUNCH_TABS.includes(tab) ? tab : DEFAULT_TAB,
     view: LAUNCH_VIEWS.includes(view) ? view : DEFAULT_VIEW,
     group: LAUNCH_GROUPS.includes(group) ? group : DEFAULT_GROUP,
     role: get('role'),
@@ -98,6 +109,11 @@ export function parseLaunchParams(searchParams) {
 // 화면 상태 → 주소. 기본값·빈 값은 키째 뺀다.
 export function mergeLaunchParams(currentSearch, patch) { /* mergeFilterParams 와 동형 */ }
 ```
+
+**`useSearchParams` 는 Suspense 경계 안에 있어야 한다.** 없으면 프로덕션 빌드가
+"Missing Suspense boundary with useSearchParams" 로 실패한다 — 개발 서버는
+on-demand 렌더라 그냥 통과해서 눈치채기 어렵다. `app/requirements/page.js` 가
+같은 이유로 경계를 두고 있다. `app/launch/[id]/page.js` 도 같은 모양으로 가른다.
 
 `view` 별 거르기는 이미 `LaunchBoard` 안에 있다(`isThisWeek`/`isLate`/`isBlocked`/
 `isReady`/`isNotApplicable`). **옮기지 않는다** — 이번 작업은 상태를 어디에 두느냐지
