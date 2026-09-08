@@ -201,6 +201,33 @@ export function LaunchBoard({
     [stat, readyTotal],
   );
 
+  // 지금 보기의 순수 판정. shown 과 「내 담당」 건수가 같이 쓴다.
+  //
+  // keep(방금 건드린 줄 남기기)은 여기 안 넣는다. 칩의 숫자에 그것이 섞이면
+  // 줄을 하나 건드릴 때마다 "내 담당 7"이 8이 됐다 7이 됐다 한다.
+  const inView = useCallback((task) => {
+    if (view === 'week') return isThisWeek({ task, openDate, today });
+    if (view === 'late') return isLate({ task, openDate, today });
+    if (view === 'blocked') return isBlocked(task);
+    // 선행이 다 끝난 할 것. 기한 필터를 안 건다 — D-120 짜리도 지금 시작할 수
+    // 있으면 여기 있어야 한다, 그게 이 보기의 쓸모다.
+    if (view === 'ready') return isReady({ task, tasks });
+    if (view === 'na') return isNotApplicable(task);
+    // '전체'에서는 해당없음을 뺀다. 451줄 사이에 섞이면 읽기 어렵다.
+    return !isNotApplicable(task);
+  }, [view, openDate, today, tasks]);
+
+  // 지금 보기 안에서 내 담당이 몇 건인가. 보기를 바꾸면 이 숫자도 바뀐다 —
+  // 겹쳐 걸리는 축이라 그래야 맞다.
+  const mineCount = useMemo(() => {
+    if (!myMemberId) return 0;
+    return tasks.filter((t) => t.assignee === myMemberId && inView(t)).length;
+  }, [tasks, myMemberId, inView]);
+
+  // 무언가 걸려 있을 때만 초기화를 보여준다. 아무것도 안 걸렸는데 초기화가
+  // 떠 있으면 누를 것을 찾게 된다.
+  const hasFilter = Boolean(role || assignee || query.trim()) || view !== 'ready';
+
   const shown = useMemo(() => {
     const q = query.trim();
     let list = tasks;
@@ -214,25 +241,17 @@ export function LaunchBoard({
     if (assignee) list = list.filter((task) => task.assignee === assignee);
 
     const keep = (task) => touched.has(task.id);
-    if (view === 'week')
-      list = list.filter((task) => isThisWeek({ task, openDate, today }) || keep(task));
-    else if (view === 'late')
-      list = list.filter((task) => isLate({ task, openDate, today }) || keep(task));
-    else if (view === 'blocked') list = list.filter((task) => isBlocked(task) || keep(task));
-    // 선행이 다 끝난 할 것. 기한 필터를 안 건다 — D-120 짜리도 지금
-    // 시작할 수 있으면 여기 있어야 한다, 그게 이 보기의 쓸모다.
-    else if (view === 'ready')
-      list = list.filter((task) => isReady({ task, tasks }) || keep(task));
-    else if (view === 'na') list = list.filter(isNotApplicable);
-    // '전체'에서는 해당없음을 뺀다. 451줄 사이에 섞이면 읽기 어렵다 —
-    // 해당없음은 'na' 보기에서만 본다.
-    else list = list.filter((task) => !isNotApplicable(task) || keep(task));
+    // 해당없음 보기에서는 keep 을 안 쓴다 — 되돌린 줄이 '해당없음' 목록에
+    // 남아 있을 이유가 없다. (기존 동작 그대로다.)
+    list = view === 'na'
+      ? list.filter(inView)
+      : list.filter((task) => inView(task) || keep(task));
 
     // 찾는 규칙은 lib/launchSearch.js 하나다. 가이드와 같은 함수를 쓴다 —
     // 두 화면에 따로 쓰면 한쪽만 고쳐진다.
     if (q) list = list.filter((task) => matchesItem(task, q));
     return list;
-  }, [tasks, view, query, openDate, today, touched, focusWorkstream, assignee]);
+  }, [tasks, inView, view, query, touched, focusWorkstream, assignee]);
 
   // 워크스트림·역할·소속 후보. 항목 편집 창의 datalist 와 역할 필터
   // 드롭다운이 같이 쓴다 — 어차피 같은 476건에서 뽑는 값이다.
@@ -628,6 +647,33 @@ export function LaunchBoard({
           </select>
         )}
 
+        {/* 내 담당은 보기 칩이 아니라 그 왼쪽이다. 이번 주·지남·막힘은 서로
+            배타적인 한 축(라디오)이고, 내 담당은 겹쳐 걸리는 다른 축이라 같은
+            묶음에 섞으면 "내 담당 중 이번 주"를 못 본다. 구분선 둘이 세 덩어리를
+            만든다 — 누구의 것 · 내 것 · 어느 덩어리. */}
+        <span className="h-4 w-px shrink-0 bg-slate-300" />
+        <button
+          type="button"
+          onClick={() => onParams?.({ assignee: assignee ? '' : myMemberId })}
+          disabled={!myMemberId}
+          aria-pressed={Boolean(assignee)}
+          className={`shrink-0 rounded-full border px-3 py-1.5 text-sm disabled:opacity-40 ${
+            assignee
+              ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+              : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          내 담당
+          {/* 0 을 감추지 않는다. 담당자가 471건 모두 비어 있는 지금 이 칸을 숨기면
+              담당자를 붙일 이유가 영영 안 보인다. */}
+          <span className={`ml-1.5 text-xs tabular-nums ${
+            mineCount > 0 ? 'font-semibold text-emerald-600' : 'text-slate-400'
+          }`}>
+            {mineCount}
+          </span>
+        </button>
+        <span className="h-4 w-px shrink-0 bg-slate-300" />
+
         {views.map((v) => (
           <button
             key={v.key}
@@ -658,19 +704,19 @@ export function LaunchBoard({
             </span>
           </button>
         ))}
-        <button
-          type="button"
-          onClick={() => setTaskDialog({ mode: 'create' })}
-          className="ml-auto rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
-        >
-          ＋ 항목
-        </button>
+      </div>
+
+      {/* 둘째 줄 = 뭐가 보이나 · 뭘 할까. 첫째 줄에 내 담당과 구분선을 더하면
+          한 줄 유지 최소 폭이 1283px 이라 13″ 노트북에서 「묶기」 하나만
+          둘째 줄에 홀로 떨어진다 — 우연히 생긴 둘째 줄 대신 뜻이 있는
+          둘째 줄로 나눈다. */}
+      <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2">
         <input
           type="search"
           value={query}
           onChange={(e) => { onQuery?.(e.target.value); setPicked(new Set()); }}
           placeholder="항목·역할로 찾기"
-          className="h-9 w-56 rounded-lg border border-slate-300 px-3 text-sm focus:border-indigo-400 focus:outline-none"
+          className="h-9 w-56 shrink-0 rounded-lg border border-slate-300 px-3 text-sm focus:border-indigo-400 focus:outline-none"
         />
 
         {/* 묶는 기준. 기본은 워크스트림 — 안 건드리면 예전과 똑같이
@@ -680,7 +726,7 @@ export function LaunchBoard({
           aria-label="묶는 기준"
           value={group}
           onChange={(e) => changeGroupMode(e.target.value)}
-          className="h-9 rounded-lg border border-slate-300 bg-white px-2 text-sm text-slate-600 focus:border-indigo-400 focus:outline-none"
+          className="h-9 shrink-0 rounded-lg border border-slate-300 bg-white px-2 text-sm text-slate-600 focus:border-indigo-400 focus:outline-none"
         >
           {GROUP_MODES.map((m) => (
             <option key={m.key} value={m.key}>
@@ -688,6 +734,36 @@ export function LaunchBoard({
             </option>
           ))}
         </select>
+
+        {/* 지금 몇 건을 보고 있나. 참여자 넣기 창의 "19명 중 4명"과 같은 규칙이다.
+            해당없음 보기에서는 분모가 다르다 — stat.total 은 해당없음을 뺀 수라
+            "451건 중 25건"이 되어 버린다. */}
+        <span className="shrink-0 text-xs tabular-nums text-slate-500">
+          <b className="font-medium text-slate-700">
+            {view === 'na' ? stat.notApplicable : stat.total}건
+          </b>
+          {' 중 '}
+          <b className="font-medium text-slate-700">{shown.length}건</b>
+        </span>
+
+        {hasFilter && (
+          <button
+            type="button"
+            onClick={onReset}
+            className="shrink-0 text-xs text-slate-500 underline hover:text-slate-700"
+          >
+            필터 초기화
+          </button>
+        )}
+
+        {/* ml-auto 가 여기로 온다. 첫째 줄에서 ＋항목을 오른쪽으로 밀던 것이다. */}
+        <button
+          type="button"
+          onClick={() => setTaskDialog({ mode: 'create' })}
+          className="ml-auto shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+        >
+          ＋ 항목
+        </button>
       </div>
 
       {/* 간트에서 넘어온 걸림. 어디서 온 것인지 말해 주지 않으면 "왜 몇 건밖에
@@ -705,6 +781,14 @@ export function LaunchBoard({
             전체 보기
           </button>
         </div>
+      )}
+
+      {/* 0 을 감추지 않는다. 눌러서 빈 목록을 보여주는 대신 무엇을 하면 되는지
+          말한다 — 이 문구가 다음 단계(항목 창의 「나에게 맡기」)를 가리킨다. */}
+      {assignee && mineCount === 0 && (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          아직 <b>내 담당이 없습니다.</b> 항목을 열어 담당자에 자기 이름을 붙이면 여기 모입니다.
+        </p>
       )}
 
       {/* 역할을 고른 뒤에만 나오는 얇은 줄. 역할 이름은 위 드롭다운에 이미
