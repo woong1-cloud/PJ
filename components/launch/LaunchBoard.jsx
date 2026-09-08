@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { dueDate, dDay, dDayLabel } from '@/lib/launchDate';
 import { matchesItem } from '@/lib/launchSearch';
 import { GROUP_MODES, groupTasks } from '@/lib/launchGroup';
@@ -98,9 +98,11 @@ function readStoredRole(launchId) {
 export function LaunchBoard({
   launch, tasks = [], today, onChanged, onReload, decisions = [], onDecisionCreated, onBlockedChanged,
   focusWorkstream = '', onClearFocus, members = [], canAdmin = false,
+  // 화면 상태는 주소가 갖는다. 여기서 useState 로 들고 있으면 링크를 보내도
+  // 받는 사람은 다른 화면을 본다 — 보기·묶기·역할·담당자·검색이 그렇다.
+  view, group, role, roleInUrl, assignee, query, myMemberId,
+  onParams, onQuery, onReset,
 }) {
-  const [view, setView] = useState('ready');
-  const [query, setQuery] = useState('');
   const [closedGroups, setClosedGroups] = useState(() => new Set());
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState('');
@@ -131,29 +133,37 @@ export function LaunchBoard({
   // 역할 필터. 회의에서 "물류팀 것 봅시다" 하고 고르는 사람 기준이지, 화면을
   // 띄운 사람 기준이 아니다 — 그래서 자동으로는 안 고른다.
   //
-  // localStorage 읽기는 초기화 함수 안에 두면 effect 가 필요 없다.
-  const [selectedRole, setSelectedRole] = useState(() => readStoredRole(launch?.id));
+  // 고른 값은 주소가 갖는다(role props). 브라우저 기억은 아래 effect 가
+  // 주소로 한 번 올릴 때만 읽는다.
   const [roleTab, setRoleTab] = useState('owner');
   // 역할을 물어봤나. 한 번 답하면(고르든 넘기든) 다시 안 묻는다.
   const [roleAsked, setRoleAsked] = useState(() => readAsked(launch?.id));
   // 담당자 필터. 역할과 다른 축이라(회의에서 "물류팀 것" 과 "이 사람 것"은
   // 다른 질문이다) 따로 두고, 겹쳐 적용한다.
   const [selectedAssignee, setSelectedAssignee] = useState('');
-  // 묶는 기준. 기본은 워크스트림 — 지금까지의 화면과 똑같이 동작해야
-  // 습관이 안 깨진다.
-  const [groupMode, setGroupMode] = useState('workstream');
 
-  // 고른 역할을 런칭별로 기억한다. 서버 작업은 없다 — 이 브라우저에서 다음에
-  // 같은 런칭을 열 때만 쓰는, 회의 준비용 편의다.
+  // 역할의 출처는 하나다. 주소에 role 키가 있으면 주소가 이기고, 없으면
+  // 브라우저 기억을 읽어 곧바로 주소에 쓴다.
+  //
+  // 마운트 때 한 번 주소에 올리는 것이 요점이다. 안 그러면 역할을 안 건드리고
+  // 보기만 바꿔 링크를 보냈을 때, 받는 사람은 자기 역할로 본다 — 링크가
+  // 사람마다 다른 것을 가리키면 안 된다.
+  // 한 번만 도는 것을 ref 로 못 박는다. roleInUrl 만 보면 '마운트 때 한 번'이
+  // 아니라 '주소에서 role 이 사라질 때마다'가 된다 — localStorage 읽기는 되는데
+  // 쓰기만 실패하는 자리(사생활 보호 모드·용량 초과)에서 「역할 전체」를 고르면
+  // 기억이 안 지워진 채 이 effect 가 곧바로 되돌려, 전체를 영영 못 고른다.
+  const roleHydrated = useRef(false);
   useEffect(() => {
-    if (!launch?.id) return;
-    try {
-      if (selectedRole) localStorage.setItem(roleStorageKey(launch.id), selectedRole);
-      else localStorage.removeItem(roleStorageKey(launch.id));
-    } catch {
-      // 사생활 보호 모드 등. 기억 못 해도 화면은 그대로 동작해야 한다.
-    }
-  }, [selectedRole, launch?.id]);
+    // launch 가 아직 안 왔으면 아무것도 정하지 않는다. ref 를 여기서 태우면
+    // 첫 렌더(launch 가 null)에 한 번 태우고 끝나서, 데이터가 도착한 뒤에는
+    // 이미 늦다 — 데이터가 빨리 오면 되고 늦게 오면 안 되는 화면이 된다.
+    if (roleHydrated.current || !launch?.id) return;
+    // 여기서부터는 정할 수 있다. 정했으니 다시 안 정한다.
+    roleHydrated.current = true;
+    if (roleInUrl) return;
+    const stored = readStoredRole(launch.id);
+    if (stored) onParams?.({ role: stored });
+  }, [roleInUrl, launch?.id, onParams]);
 
   useEffect(() => {
     if (!launch?.id) return;
@@ -202,6 +212,36 @@ export function LaunchBoard({
     [stat, readyTotal],
   );
 
+  // 지금 보기의 순수 판정. shown 과 「내 담당」 건수가 같이 쓴다.
+  //
+  // keep(방금 건드린 줄 남기기)은 여기 안 넣는다. 칩의 숫자에 그것이 섞이면
+  // 줄을 하나 건드릴 때마다 "내 담당 7"이 8이 됐다 7이 됐다 한다.
+  const inView = useCallback((task) => {
+    if (view === 'week') return isThisWeek({ task, openDate, today });
+    if (view === 'late') return isLate({ task, openDate, today });
+    if (view === 'blocked') return isBlocked(task);
+    // 선행이 다 끝난 할 것. 기한 필터를 안 건다 — D-120 짜리도 지금 시작할 수
+    // 있으면 여기 있어야 한다, 그게 이 보기의 쓸모다.
+    if (view === 'ready') return isReady({ task, tasks });
+    if (view === 'na') return isNotApplicable(task);
+    // '전체'에서는 해당없음을 뺀다. 451줄 사이에 섞이면 읽기 어렵다.
+    return !isNotApplicable(task);
+  }, [view, openDate, today, tasks]);
+
+  // 지금 보기 안에서 내 담당이 몇 건인가. 보기를 바꾸면 이 숫자도 바뀐다 —
+  // 겹쳐 걸리는 축이라 그래야 맞다.
+  const mineCount = useMemo(() => {
+    if (!myMemberId) return 0;
+    return tasks.filter((t) => t.assignee === myMemberId && inView(t)).length;
+  }, [tasks, myMemberId, inView]);
+
+  // 무언가 걸려 있을 때만 초기화를 보여준다. 아무것도 안 걸렸는데 초기화가
+  // 떠 있으면 누를 것을 찾게 된다.
+  // 걸린 것이 하나라도 있나. selectedAssignee(이름 드롭다운)도 센다 — 빼면
+  // 그것만 골랐을 때 '필터 초기화'가 안 떠서 되돌릴 길이 없다.
+  const hasFilter =
+    Boolean(role || assignee || selectedAssignee || query.trim()) || view !== 'ready';
+
   const shown = useMemo(() => {
     const q = query.trim();
     let list = tasks;
@@ -210,26 +250,22 @@ export function LaunchBoard({
     // 치면 그건 다른 것을 찾겠다는 뜻이라 이 걸림은 남아 있어야 한다.
     if (focusWorkstream) list = list.filter((t) => t.workstream === focusWorkstream);
 
+    // 내 담당. 보기 칩과 겹쳐 걸리는 다른 축이라 여기서 따로 건다 —
+    // "내 담당 중 이번 주"가 되어야 한다.
+    if (assignee) list = list.filter((task) => task.assignee === assignee);
+
     const keep = (task) => touched.has(task.id);
-    if (view === 'week')
-      list = list.filter((task) => isThisWeek({ task, openDate, today }) || keep(task));
-    else if (view === 'late')
-      list = list.filter((task) => isLate({ task, openDate, today }) || keep(task));
-    else if (view === 'blocked') list = list.filter((task) => isBlocked(task) || keep(task));
-    // 선행이 다 끝난 할 것. 기한 필터를 안 건다 — D-120 짜리도 지금
-    // 시작할 수 있으면 여기 있어야 한다, 그게 이 보기의 쓸모다.
-    else if (view === 'ready')
-      list = list.filter((task) => isReady({ task, tasks }) || keep(task));
-    else if (view === 'na') list = list.filter(isNotApplicable);
-    // '전체'에서는 해당없음을 뺀다. 451줄 사이에 섞이면 읽기 어렵다 —
-    // 해당없음은 'na' 보기에서만 본다.
-    else list = list.filter((task) => !isNotApplicable(task) || keep(task));
+    // 해당없음 보기에서는 keep 을 안 쓴다 — 되돌린 줄이 '해당없음' 목록에
+    // 남아 있을 이유가 없다. (기존 동작 그대로다.)
+    list = view === 'na'
+      ? list.filter(inView)
+      : list.filter((task) => inView(task) || keep(task));
 
     // 찾는 규칙은 lib/launchSearch.js 하나다. 가이드와 같은 함수를 쓴다 —
     // 두 화면에 따로 쓰면 한쪽만 고쳐진다.
     if (q) list = list.filter((task) => matchesItem(task, q));
     return list;
-  }, [tasks, view, query, openDate, today, touched, focusWorkstream]);
+  }, [tasks, inView, view, query, touched, focusWorkstream, assignee]);
 
   // 워크스트림·역할·소속 후보. 항목 편집 창의 datalist 와 역할 필터
   // 드롭다운이 같이 쓴다 — 어차피 같은 476건에서 뽑는 값이다.
@@ -281,17 +317,28 @@ export function LaunchBoard({
   // 세 조건이 다 맞아야 한다 — 아직 안 골랐고, 물어본 적 없고, 고를
   // 역할이 있다. 역할이 하나도 없는 런칭(가져오기 전)에서는 빈 띠가
   // 자리만 차지한다.
-  const showRoleStrip = !selectedRole && !roleAsked && readyByRole.length > 0;
+  const showRoleStrip = !role && !roleAsked && readyByRole.length > 0;
 
-  function pickRole(role) {
-    setSelectedRole(role);
-    // 새로 고른 역할이면 '할 것'부터 본다 — 드롭다운과 같은 규칙이다.
+  // 사람이 고른 것만 기억한다. 링크로 들어온 역할은 이 자리를 안 지나므로
+  // 남의 링크 한 번 열었다가 내 기본 역할이 바뀌는 일이 없다.
+  // extra 는 role 과 같이 주소에 얹을 것. 따로 두 번 부르면 두 번째가 낡은
+  // 주소를 기준으로 병합될 수 있어 한 번에 보낸다.
+  function chooseRole(next, extra = {}) {
+    try {
+      if (next) localStorage.setItem(roleStorageKey(launch.id), next);
+      else localStorage.removeItem(roleStorageKey(launch.id));
+    } catch { /* 사생활 보호 모드에서 던진다. 기억을 못 해도 화면은 돌아야 한다. */ }
+    onParams?.({ role: next, ...extra });
+    // 새로 고른 역할이면 '할 것'부터 본다 — 가장 흔히 찾는 것이다.
     setRoleTab('owner');
+  }
+
+  function pickRole(next) {
+    // 그 역할에 지금 착수할 것이 없으면 '전체'로 보낸다. 방금 자기 역할을 고른
+    // 사람에게 빈 화면을 주면 "내 일이 없다"가 아니라 "잘못 골랐나"로 읽힌다.
+    const ready = readyByRole.find((r) => r.role === next)?.ready ?? 0;
+    chooseRole(next, ready === 0 ? { view: 'all' } : {});
     setRoleAsked(true);
-    // 그 역할에 지금 착수할 것이 없으면 '전체'로 보낸다. 방금 자기 역할을
-    // 고른 사람에게 빈 화면을 주면 "내 일이 없다"가 아니라 "잘못 골랐나"로
-    // 읽힌다 — 띠에 숫자가 없던 역할이 여기로 온다.
-    if ((readyByRole.find((r) => r.role === role)?.ready ?? 0) === 0) setView('all');
   }
 
   // 담당자 후보. 방금 생긴 값이라 대부분 비어 있다 — 드롭다운을 보일지
@@ -333,61 +380,68 @@ export function LaunchBoard({
   // 브랜드PM인데 물류팀 것을 보고 있을 수 있어 '내가 할 것'은 거짓말이다.
   // 역할을 드롭다운으로 이미 골랐으니 라벨에 역할 이름을 반복하지 않는다.
   const roleTabs = useMemo(() => {
-    if (!selectedRole) return [];
+    if (!role) return [];
     return [
       {
         key: 'owner',
         label: '할 것',
-        count: assigneeFilteredShown.filter((task) => hasRole(task.owner_role, selectedRole)).length,
+        count: assigneeFilteredShown.filter((task) => hasRole(task.owner_role, role)).length,
       },
       {
         key: 'support',
         label: '도울 것',
-        count: assigneeFilteredShown.filter((task) => hasRole(task.support_role, selectedRole)).length,
+        count: assigneeFilteredShown.filter((task) => hasRole(task.support_role, role)).length,
       },
       {
         key: 'all',
         label: '둘 다',
         count: assigneeFilteredShown.filter(
-          (task) => hasRole(task.owner_role, selectedRole) || hasRole(task.support_role, selectedRole),
+          (task) => hasRole(task.owner_role, role) || hasRole(task.support_role, role),
         ).length,
       },
     ];
-  }, [assigneeFilteredShown, selectedRole]);
+  }, [assigneeFilteredShown, role]);
 
   // 역할·담당자 필터는 기존 보기 칩과 겹쳐 적용된다 — '물류팀이 할 것' +
   // '이번 주'가 함께 걸린다. 둘 다 안 고르면 지금과 똑같이 동작해야 하니
   // 그대로 통과시킨다.
   const roleFiltered = useMemo(() => {
     const base = assigneeFilteredShown;
-    if (!selectedRole) return base;
-    if (roleTab === 'owner') return base.filter((task) => hasRole(task.owner_role, selectedRole));
-    if (roleTab === 'support') return base.filter((task) => hasRole(task.support_role, selectedRole));
+    if (!role) return base;
+    if (roleTab === 'owner') return base.filter((task) => hasRole(task.owner_role, role));
+    if (roleTab === 'support') return base.filter((task) => hasRole(task.support_role, role));
     return base.filter(
-      (task) => hasRole(task.owner_role, selectedRole) || hasRole(task.support_role, selectedRole),
+      (task) => hasRole(task.owner_role, role) || hasRole(task.support_role, role),
     );
-  }, [assigneeFilteredShown, selectedRole, roleTab]);
+  }, [assigneeFilteredShown, role, roleTab]);
 
   // 묶는 기준은 여기 하나로 — lib/launchGroup.js. 워크스트림 하나만 있던
   // 자리에 담당자·주·안 묶음이 더해졌다. 세는 규칙은 그대로 launchTask.js
   // 에서 온 progress() 를 그룹별로 다시 부른다(아래).
   const groups = useMemo(
-    () => groupTasks({ tasks: roleFiltered, mode: groupMode, openDate, today }),
-    [roleFiltered, groupMode, openDate, today],
+    () => groupTasks({ tasks: roleFiltered, mode: group, openDate, today }),
+    [roleFiltered, group, openDate, today],
   );
 
   // 묶는 기준을 바꾸면 접힘·선택을 놓는다. 다른 기준의 그룹 키(예:
   // 워크스트림 이름과 담당자 이름이 우연히 같음)가 엉뚱하게 접힌 채로
   // 넘어오는 것을 막고, 안 보이게 된 줄이 '골랐다'고 남는 것도 막는다.
+  // 주소에 있는 것은 훅이 지우고, 이 화면만 들고 있는 것은 여기서 지운다.
+  // selectedAssignee 를 빼먹으면 '초기화'를 눌러도 이름 필터가 조용히 살아남아,
+  // 왜 몇 건밖에 없는지 알 수 없는 화면이 된다.
+  function resetAll() {
+    setSelectedAssignee('');
+    onReset?.();
+  }
+
   function changeGroupMode(mode) {
-    setGroupMode(mode);
     setClosedGroups(new Set());
     setPicked(new Set());
-    // '이번 주만 보기'와 '주별로 묶어 보기'는 서로 상쇄된다 — 한 주만
-    // 남겨놓고 주별로 묶으면 묶음이 하나거나 빈 화면이다. 실제로
-    // 온라인BU 서비스기획의 할 일 22건은 전부 D-95~D-25 라 이번 주에
-    // 0건이고, 그대로 두면 아무것도 안 보인다.
-    if (mode === 'week' && view === 'week') setView('all');
+    // '이번 주만 보기'와 '주별로 묶어 보기'는 서로 상쇄된다 — 한 주만 남겨놓고
+    // 주별로 묶으면 묶음이 하나거나 빈 화면이다. 실제로 온라인BU 서비스기획의
+    // 할 일 22건은 전부 D-95~D-25 라 이번 주에 0건이고, 그대로 두면 아무것도
+    // 안 보인다.
+    onParams?.(mode === 'week' && view === 'week' ? { group: mode, view: 'all' } : { group: mode });
   }
 
   function toggleGroup(key) {
@@ -532,14 +586,17 @@ export function LaunchBoard({
             </button>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {readyByRole.map(({ role, ready }) => (
+            {/* 맵 변수를 role 로 두면 이제 같은 이름의 prop 을 가린다. 지금은
+                안에서 prop 을 안 써서 동작하지만, 다음에 이 블록에 "지금 고른
+                역할인가"를 더하려는 사람이 조용히 맵 변수를 읽는다. */}
+            {readyByRole.map(({ role: r, ready }) => (
               <button
-                key={role}
+                key={r}
                 type="button"
-                onClick={() => pickRole(role)}
+                onClick={() => pickRole(r)}
                 className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:border-indigo-500 hover:bg-indigo-50 hover:text-indigo-700"
               >
-                {role}
+                {r}
                 {/* 0 은 안 쓴다. '재무팀 0' 은 고르지 말라는 말처럼 보이는데,
                     지금 착수할 것이 없을 뿐 그 역할의 일은 있다. */}
                 {ready > 0 && (
@@ -568,12 +625,8 @@ export function LaunchBoard({
             예전의 '역할 해제' 단추를 대신한다. */}
         <select
           aria-label="역할로 보기"
-          value={selectedRole}
-          onChange={(e) => {
-            setSelectedRole(e.target.value);
-            // 새로 고른 역할이면 '할 것'부터 본다 — 가장 흔히 찾는 것이다.
-            setRoleTab('owner');
-          }}
+          value={role}
+          onChange={(e) => chooseRole(e.target.value)}
           className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-600 focus:border-indigo-400 focus:outline-none"
         >
           <option value="">역할 전체</option>
@@ -587,7 +640,7 @@ export function LaunchBoard({
         {/* 띠로 돌아가는 길. 넘긴 사람에게만, 역할 드롭다운 바로 옆에 둔다 —
             역할 이야기를 찾을 때 눈이 가는 자리가 여기다.
             드롭다운에는 없고 띠에만 있는 것이 역할별 착수 가능 건수다. */}
-        {!selectedRole && roleAsked && readyByRole.length > 0 && (
+        {!role && roleAsked && readyByRole.length > 0 && (
           <button
             type="button"
             onClick={() => setRoleAsked(false)}
@@ -616,12 +669,39 @@ export function LaunchBoard({
           </select>
         )}
 
+        {/* 내 담당은 보기 칩이 아니라 그 왼쪽이다. 이번 주·지남·막힘은 서로
+            배타적인 한 축(라디오)이고, 내 담당은 겹쳐 걸리는 다른 축이라 같은
+            묶음에 섞으면 "내 담당 중 이번 주"를 못 본다. 구분선 둘이 세 덩어리를
+            만든다 — 누구의 것 · 내 것 · 어느 덩어리. */}
+        <span className="h-4 w-px shrink-0 bg-slate-300" />
+        <button
+          type="button"
+          onClick={() => onParams?.({ assignee: assignee ? '' : myMemberId })}
+          disabled={!myMemberId}
+          aria-pressed={Boolean(assignee)}
+          className={`shrink-0 rounded-full border px-3 py-1.5 text-sm disabled:opacity-40 ${
+            assignee
+              ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+              : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          내 담당
+          {/* 0 을 감추지 않는다. 담당자가 471건 모두 비어 있는 지금 이 칸을 숨기면
+              담당자를 붙일 이유가 영영 안 보인다. */}
+          <span className={`ml-1.5 text-xs tabular-nums ${
+            mineCount > 0 ? 'font-semibold text-emerald-600' : 'text-slate-400'
+          }`}>
+            {mineCount}
+          </span>
+        </button>
+        <span className="h-4 w-px shrink-0 bg-slate-300" />
+
         {views.map((v) => (
           <button
             key={v.key}
             type="button"
             onClick={() => {
-              setView(v.key);
+              onParams?.({ view: v.key });
               // 보기를 옮기면 남겨 두던 것을 놓는다. 안 그러면 '이번 주'에서
               // 완료한 줄이 '막힘' 목록에 따라 들어온다.
               setTouched(new Set());
@@ -646,22 +726,19 @@ export function LaunchBoard({
             </span>
           </button>
         ))}
-        <button
-          type="button"
-          onClick={() => setTaskDialog({ mode: 'create' })}
-          className="ml-auto rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
-        >
-          ＋ 항목
-        </button>
+      </div>
+
+      {/* 둘째 줄 = 뭐가 보이나 · 뭘 할까. 첫째 줄에 내 담당과 구분선을 더하면
+          한 줄 유지 최소 폭이 1283px 이라 13″ 노트북에서 「묶기」 하나만
+          둘째 줄에 홀로 떨어진다 — 우연히 생긴 둘째 줄 대신 뜻이 있는
+          둘째 줄로 나눈다. */}
+      <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2">
         <input
           type="search"
           value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setPicked(new Set());
-          }}
+          onChange={(e) => { onQuery?.(e.target.value); setPicked(new Set()); }}
           placeholder="항목·역할로 찾기"
-          className="h-9 w-56 rounded-lg border border-slate-300 px-3 text-sm focus:border-indigo-400 focus:outline-none"
+          className="h-9 w-56 shrink-0 rounded-lg border border-slate-300 px-3 text-sm focus:border-indigo-400 focus:outline-none"
         />
 
         {/* 묶는 기준. 기본은 워크스트림 — 안 건드리면 예전과 똑같이
@@ -669,9 +746,9 @@ export function LaunchBoard({
             뭐 하지"를 보고 싶다는 요청이 있어 추가한다. */}
         <select
           aria-label="묶는 기준"
-          value={groupMode}
+          value={group}
           onChange={(e) => changeGroupMode(e.target.value)}
-          className="h-9 rounded-lg border border-slate-300 bg-white px-2 text-sm text-slate-600 focus:border-indigo-400 focus:outline-none"
+          className="h-9 shrink-0 rounded-lg border border-slate-300 bg-white px-2 text-sm text-slate-600 focus:border-indigo-400 focus:outline-none"
         >
           {GROUP_MODES.map((m) => (
             <option key={m.key} value={m.key}>
@@ -679,6 +756,36 @@ export function LaunchBoard({
             </option>
           ))}
         </select>
+
+        {/* 지금 몇 건을 보고 있나. 참여자 넣기 창의 "19명 중 4명"과 같은 규칙이다.
+            해당없음 보기에서는 분모가 다르다 — stat.total 은 해당없음을 뺀 수라
+            "451건 중 25건"이 되어 버린다. */}
+        <span className="shrink-0 text-xs tabular-nums text-slate-500">
+          <b className="font-medium text-slate-700">
+            {view === 'na' ? stat.notApplicable : stat.total}건
+          </b>
+          {' 중 '}
+          <b className="font-medium text-slate-700">{roleFiltered.length}건</b>
+        </span>
+
+        {hasFilter && (
+          <button
+            type="button"
+            onClick={resetAll}
+            className="shrink-0 text-xs text-slate-500 underline hover:text-slate-700"
+          >
+            필터 초기화
+          </button>
+        )}
+
+        {/* ml-auto 가 여기로 온다. 첫째 줄에서 ＋항목을 오른쪽으로 밀던 것이다. */}
+        <button
+          type="button"
+          onClick={() => setTaskDialog({ mode: 'create' })}
+          className="ml-auto shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+        >
+          ＋ 항목
+        </button>
       </div>
 
       {/* 간트에서 넘어온 걸림. 어디서 온 것인지 말해 주지 않으면 "왜 몇 건밖에
@@ -698,9 +805,17 @@ export function LaunchBoard({
         </div>
       )}
 
+      {/* 0 을 감추지 않는다. 눌러서 빈 목록을 보여주는 대신 무엇을 하면 되는지
+          말한다 — 이 문구가 다음 단계(항목 창의 「나에게 맡기」)를 가리킨다. */}
+      {assignee && mineCount === 0 && (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          아직 <b>내 담당이 없습니다.</b> 항목을 열어 담당자에 자기 이름을 붙이면 여기 모입니다.
+        </p>
+      )}
+
       {/* 역할을 고른 뒤에만 나오는 얇은 줄. 역할 이름은 위 드롭다운에 이미
           있으니 여기서는 반복하지 않는다(할 것/도울 것/둘 다). */}
-      {selectedRole && (
+      {role && (
         <div className="-mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 pl-1">
           {roleTabs.map((t) => (
             <button
@@ -753,8 +868,8 @@ export function LaunchBoard({
 
       {groups.length === 0 && (
         <p className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-8 text-center text-sm text-slate-500">
-          {selectedRole ? (
-            `${roleTabs.find((t) => t.key === roleTab)?.label ?? selectedRole} 항목이 이 보기에 없습니다.`
+          {role ? (
+            `${roleTabs.find((t) => t.key === roleTab)?.label ?? role} 항목이 이 보기에 없습니다.`
           ) : (
             <>
               {view === 'week' && '이번 주에 할 것이 없습니다.'}
@@ -768,6 +883,9 @@ export function LaunchBoard({
         </p>
       )}
 
+      {/* 이 map 의 group 은 묶음 객체라 같은 이름의 prop(문자열)을 가린다.
+          안에서 prop 을 쓸 일이 없고, 잘못 읽으면 group.tasks 가 undefined 라
+          시끄럽게 깨진다 — 조용히 틀리지 않으므로 이름을 그대로 둔다. */}
       {groups.map((group) => {
         const closed = closedGroups.has(group.key);
         const groupStat = progress({ tasks: group.tasks, openDate, today });

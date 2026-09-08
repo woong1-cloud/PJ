@@ -28,9 +28,13 @@
 상태(낡은 주소를 기준으로 병합해서 방금 쓴 변경이 되살아남)를 그대로 만난다.
 **페이지가 하나만 갖고 props 로 내린다.**
 
-**담당자 이름 드롭다운(`selectedAssignee`)은 이번에 안 건드린다.** `assignee_name`
-이 471건 모두 비어 있어 `assigneeOptions.length > 0` 에 걸려 화면에 안 그려진다.
-안 보이는 칸을 주소에 넣는 것은 앞질러 하는 일이다. URL 의 `assignee` 는
+**담당자 이름 드롭다운(`selectedAssignee`)은 이번에 주소로 안 옮긴다.**
+2단계의 「나에게 맡기」가 uuid 를 채우기 시작하면 그때 합친다.
+
+> **정정 (브라우저 확인 후):** 여기 처음에 "`assignee_name` 이 471건 모두 비어
+> 있어 화면에 안 그려진다"고 적었는데 **틀렸다.** 실제로는 그려진다(한지웅).
+> 그래서 「필터 초기화」가 이 필터를 안 지우던 것은 상상 속 문제가 아니라
+> 사용자에게 실제로 보이는 버그였다 — `resetAll` 로 고쳤다. URL 의 `assignee` 는
 **uuid**(`launch_tasks.assignee`)이고 「내 담당」 칩만 쓴다. 2단계의
 「나에게 맡기」가 uuid 를 채우기 시작하면 그때 둘을 합친다.
 
@@ -214,7 +218,7 @@ export function mergeLaunchParams(currentSearch, patch) {
 - [ ] **Step 4: 통과를 확인한다**
 
 Run: `npx vitest run lib/launchFilters.test.js`
-Expected: PASS — 12 tests
+Expected: PASS — 11 tests (it 블록 기준. '기본값을 넣으면 키가 빠진다' 하나가 expect 셋을 품는다)
 
 - [ ] **Step 5: 커밋**
 

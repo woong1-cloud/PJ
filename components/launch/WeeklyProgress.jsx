@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { dueDate, dDay, dDayLabel } from '@/lib/launchDate';
 import { weeklyBuckets } from '@/lib/launchWeekly';
 
@@ -24,6 +25,8 @@ export function WeeklyProgress({ launch, tasks = [], decisions = [], today }) {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* 여기엔 '보드에서 열기'가 없다. 이 칸은 항목이 아니라 결정을 보여주는데,
+          보드에는 결정에 대응하는 보기가 없다. */}
       <Section
         step="①"
         title="결정 대기"
@@ -54,6 +57,7 @@ export function WeeklyProgress({ launch, tasks = [], decisions = [], today }) {
         count={buckets.blocked.length}
         tone="amber"
         empty="막힌 항목이 없습니다."
+        href={`/launch/${launch.id}?view=blocked&role=`}
       >
         {buckets.blocked.map((t) => {
           const linked = t.blocked_decision_id ? decisionsById.get(t.blocked_decision_id) : null;
@@ -79,6 +83,7 @@ export function WeeklyProgress({ launch, tasks = [], decisions = [], today }) {
         count={buckets.late.length}
         tone="rose"
         empty="지난 항목이 없습니다."
+        href={`/launch/${launch.id}?view=late&role=`}
       >
         {buckets.late.map((t) => (
           <TaskLine key={t.id} task={t} openDate={openDate} today={today} />
@@ -91,12 +96,15 @@ export function WeeklyProgress({ launch, tasks = [], decisions = [], today }) {
         count={buckets.thisWeek.length}
         tone="slate"
         empty="이번 주 마감인 항목이 없습니다."
+        href={`/launch/${launch.id}?view=week&role=`}
       >
         {buckets.thisWeek.map((t) => (
           <TaskLine key={t.id} task={t} openDate={openDate} today={today} />
         ))}
       </Section>
 
+      {/* 여기도 없다. 보드의 보기 여섯(이번 주·지남·막힘·착수 가능·해당없음·전체)에
+          '완료'가 없어서 가리킬 주소가 없다. */}
       <Section
         step="⑤"
         title="이번 주 완료 — 확인"
@@ -123,15 +131,33 @@ const TONE = {
   emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700',
 };
 
-function Section({ step, title, count, tone, empty, children }) {
+// href 를 받으면 머리 오른쪽에 보드로 가는 길을 낸다.
+//
+// href 마다 role= 를 빈 값으로 붙인다. 이 화면의 숫자는 런칭 전체 기준인데,
+// 그냥 보내면 보드가 브라우저에 기억된 역할을 얹어 "기한 지남 2"를 눌렀더니
+// 0건인 화면이 뜬다 — 숫자가 데려간 곳에 그 숫자가 없으면 안 된다.
+// 주소의 role 은 localStorage 를 안 덮어쓰므로 그 사람의 기본 역할은 남는다.
+//
+// 이 화면은 읽는 자리라 상태를 못 바꾼다. 회의에서 "막힌 5건"을 보고 손을
+// 대려면 보드로 가서 필터를 다시 걸어야 했다 — 그 두 걸음을 한 걸음으로.
+function Section({ step, title, count, tone, empty, href, children }) {
   return (
     <section className="rounded-xl border border-slate-200 bg-white">
-      <div className={`flex items-center gap-2 rounded-t-xl border-b px-4 py-2.5 ${TONE[tone]}`}>
+      <div className={`flex flex-wrap items-center gap-2 rounded-t-xl border-b px-4 py-2.5 ${TONE[tone]}`}>
         <span className="text-xs font-medium">{step}</span>
         <span className="text-sm font-medium">{title}</span>
         <span className="ml-1 rounded-full bg-white/70 px-2 py-0.5 text-xs font-medium tabular-nums">
           {count}
         </span>
+        {/* 0건이면 안 그린다. 갈 곳이 빈 목록인 링크는 누르면 실망만 준다. */}
+        {href && count > 0 && (
+          <Link
+            href={href}
+            className="ml-auto shrink-0 rounded-md bg-white/70 px-2 py-0.5 text-[11.5px] font-medium hover:bg-white"
+          >
+            보드에서 열기 ↗
+          </Link>
+        )}
       </div>
       {count === 0 ? (
         <p className="px-4 py-3 text-sm text-slate-400">{empty}</p>
