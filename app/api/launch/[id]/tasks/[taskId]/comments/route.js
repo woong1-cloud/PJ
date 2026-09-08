@@ -6,6 +6,7 @@ import {
   MAX_COMMENT_BODY,
   normalizeCommentBody,
 } from '@/lib/comments';
+import { notifyLaunchComment } from '@/lib/notify';
 
 // 런칭 항목 코멘트 목록/등록.
 //
@@ -83,6 +84,13 @@ export async function POST(request, { params }) {
       .select(LAUNCH_COMMENT_SELECT)
       .single();
     if (error) throw error;
+
+    // 댓글은 이미 저장됐다. 알림은 부가 기능이라 실패해도 조용히 넘어간다
+    // (notifyLaunchComment 는 절대 throw 하지 않는다).
+    //
+    // 본문을 함께 넘긴다. @멘션은 본문에서만 나오고, 누가 불렸는지는 서버가
+    // 다시 만든 참여자 목록으로 판정한다(화면이 보낸 목록을 믿지 않는다).
+    await notifyLaunchComment({ launchId: id, taskId, actorId: memberId, body: trimmed });
 
     return Response.json({ comment: data }, { status: 201 });
   } catch (error) {
