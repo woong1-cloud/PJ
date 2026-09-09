@@ -135,11 +135,25 @@ alter table launch_task_comments
 ```
 POST /api/launch/[id]/help-requests
   { taskIds: [uuid], roles: [string], message: string }
-GET  /api/launch/[id]/help-requests/recent?taskIds=...&roles=...
+GET  /api/launch/[id]/help-requests/recent?taskIds=...
 ```
 
-둘 다 `requireLaunchAccess(id, 'member')`. `launchRouteGuard.test.js` 가 자동으로
-잡는다.
+**`recent` 는 `roles` 를 안 받는다**(2026-09-09 구현 중 정정). 창이 열릴 때 한 번
+부르고, 그때는 사용자가 아직 역할을 안 골랐거나 고르는 중이다. 겹치는 역할을
+가리는 일은 화면이 `recentlyAsked(comments, roles)` 로 한다 — 그러면 역할을
+바꿀 때마다 서버를 다시 부르지 않아도 경고가 따라 움직인다.
+
+**`recent` 는 404 를 안 낸다.** 항목 하나가 그 사이 지워져도 찾은 것만으로 좁혀
+200 으로 답한다. 정보성 호출이라 패널 전체가 「항목을 찾을 수 없습니다」가 되면
+안 된다. **보내는 POST 는 다르다** — 거기서는 못 찾으면 404 로 세운다.
+
+둘 다 `requireLaunchAccess(id, 'member')`. `launchRouteGuard.test.js` 가 그 문지기가
+있는지는 자동으로 잡는다.
+
+**하지만 `launch_id` 확인은 자동으로 안 잡힌다**(내가 계획에 잘못 적었다).
+그 테스트의 부모 범위 검사는 경로에 `[...]` 가 **둘 이상**일 때만 돈다 —
+3단계 댓글 라우트는 `[id]/tasks/[taskId]` 라서 걸리지만, 여기는 `[id]` 하나뿐이라
+안 걸린다. **`.eq('launch_id', id)` 는 사람이 지켜야 한다.** 두 라우트 모두 걸었다.
 
 **POST 가 하는 일** — 순서가 중요하다:
 

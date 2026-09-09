@@ -1,20 +1,13 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { requireLaunchAccess } from '@/lib/permissions';
-import { errorResponse, ApiError } from '@/lib/apiError';
+import { errorResponse } from '@/lib/apiError';
+import { RECENT_HOURS } from '@/lib/helpRequest';
 
 // 창이 열릴 때 한 번 부른다. 보내기 전에 "어제 이미 보냈습니다"를 말할
 // 재료다 — 막지 않고 알려만 준다.
 //
 // 정말 다시 보내야 할 때가 있다(어제 답이 없었다면 오늘 또 물어야 한다).
 // 판단은 사람이 하고, 여기서는 사실만 준다.
-
-// 창의 길이. lib/helpRequest.js 의 recentlyAsked 와 같은 24시간이다 —
-// 하루 안에 같은 역할로 두 번 나가면 받는 쪽이 읽기를 멈추고, 하루가 지나면
-// "어제 물었는데 답이 없다"라서 다시 묻는 것이 맞다.
-//
-// 그쪽 RECENT_HOURS 는 모듈 안 상수라 가져다 쓸 수 없어 값을 여기 적었다.
-// 한쪽만 고치면 조용히 갈라진다.
-const RECENT_HOURS = 24;
 
 export async function GET(request, { params }) {
   try {
@@ -45,8 +38,13 @@ export async function GET(request, { params }) {
       .in('id', ids)
       .eq('launch_id', id);
     if (taskError) throw taskError;
-    if ((tasks ?? []).length !== ids.length) {
-      throw new ApiError(404, '항목을 찾을 수 없습니다.');
+    // 찾은 것만으로 좁힌다. 404 를 던지지 않는다 — 이건 창이 열릴 때 한 번
+    // 부르는 정보성 호출이라, 항목 하나가 그 사이 지워졌다고 패널 전체가
+    // 「항목을 찾을 수 없습니다」가 되면 안 된다. 보내는 POST 는 다르다 —
+    // 거기서는 못 찾으면 404 로 세운다.
+    const mine = (tasks ?? []).map((t) => t.id);
+    if (mine.length === 0) {
+      return Response.json({ recent: [] });
     }
 
     const since = new Date(Date.now() - RECENT_HOURS * 60 * 60 * 1000).toISOString();
@@ -55,7 +53,7 @@ export async function GET(request, { params }) {
     const { data, error } = await supabase
       .from('launch_task_comments')
       .select('task_id, request_roles, created_at')
-      .in('task_id', ids)
+      .in('task_id', mine)
       .gte('created_at', since)
       .not('request_roles', 'is', null)
       .order('created_at', { ascending: false });
