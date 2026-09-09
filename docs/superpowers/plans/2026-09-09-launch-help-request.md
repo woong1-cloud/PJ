@@ -311,7 +311,7 @@ export function recentlyAsked(comments = [], roles = [], now = new Date()) {
 npx vitest run lib/helpRequest.test.js
 npm run test
 ```
-Expected: 새 테스트 **21개** (`it` 블록 기준) · 전체 기존 것 전부 통과.
+Expected: 새 테스트 **19개** (`it` 블록 기준: 5+5+3+6) · 전체 **1219**.
 
 - [ ] **Step 5: 커밋**
 
