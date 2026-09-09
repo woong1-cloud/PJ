@@ -130,9 +130,16 @@ export function LaunchBoard({
   // 협조 요청 창을 띄운 항목들. id 배열이다 — 단건(항목 창의 단추)과
   // 다중(고른 줄 배너)이 같은 창을 쓴다.
   const [helpFor, setHelpFor] = useState(null);
+  // 협조 요청 창을 열 때 「한마디」에 미리 넣을 글. 항목 창의 입력칸에 쓰다
+  // 만 글이 여기로 온다 — 둘 다 결국 같은 표에 쓰는 글이라 두 번 쓰게 하지
+  // 않는다. 여러 줄 배너로 여는 길에는 입력칸이 없으니 비운다.
+  const [helpMessage, setHelpMessage] = useState('');
   // 활동을 다시 받으라는 신호. 협조 요청은 그 항목에 댓글을 한 줄 남기는데,
   // 항목 창이 열린 채라면 그 창은 자기 밖에서 생긴 일을 모른다.
   const [activityKey, setActivityKey] = useState(0);
+  // 항목 창의 입력칸을 비우라는 신호. 요청을 **보낸 뒤에만** 올린다 —
+  // 그만두기로 닫았을 때 비우면 방금 쓴 말을 잃는다.
+  const [draftResetKey, setDraftResetKey] = useState(0);
   // 항목 편집 창. { mode: 'create' } 또는 { mode: 'edit', task } 또는 null.
   // 만들기·고치기가 같은 창(TaskEditDialog)을 쓴다 — 필드가 거의 같아서다.
   const [taskDialog, setTaskDialog] = useState(null);
@@ -882,7 +889,12 @@ export function LaunchBoard({
               <button
                 type="button"
                 disabled={bulkBusy}
-                onClick={() => setHelpFor([...picked])}
+                onClick={() => {
+                  // 여러 줄로 여는 길에는 입력칸이 없다. 지난번에 단건으로
+                  // 올려 둔 글이 남아 딸려 오면 안 된다.
+                  setHelpMessage('');
+                  setHelpFor([...picked]);
+                }}
                 className="rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-xs text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
               >
                 협조 요청
@@ -1053,11 +1065,15 @@ export function LaunchBoard({
           today={today}
           busy={busy === viewTask.id}
           activityKey={activityKey}
+          draftResetKey={draftResetKey}
           onNavigate={(code) => onParams?.({ task: code })}
           onAssign={(next) => patchTask(viewTask, { assignee: next })}
           onClose={() => onParams?.({ task: '' })}
           onEdit={(t) => setTaskDialog({ mode: 'edit', task: t })}
-          onHelpRequest={(t) => setHelpFor([t.id])}
+          onHelpRequest={(t, draft) => {
+            setHelpMessage(draft ?? '');
+            setHelpFor([t.id]);
+          }}
         />
       )}
 
@@ -1071,13 +1087,20 @@ export function LaunchBoard({
           tasks={tasks.filter((t) => helpFor.includes(t.id))}
           members={members}
           myMemberId={myMemberId}
-          onClose={() => setHelpFor(null)}
+          initialMessage={helpMessage}
+          onClose={() => {
+            setHelpFor(null);
+            setHelpMessage('');
+          }}
           onSent={() => {
             // 고른 것을 놓는다. 방금 보낸 줄이 계속 체크돼 있으면 곧바로 또
             // 보내게 된다.
             setPicked(new Set());
             // 항목 창이 열려 있으면 그 활동에 방금 남은 한 줄을 받게 한다.
             setActivityKey((n) => n + 1);
+            // 쓰던 글은 이미 요청에 담겨 나갔다. 원래 입력칸을 비운다 —
+            // 안 비우면 「등록」까지 눌러 같은 말이 두 줄 남는다.
+            setDraftResetKey((n) => n + 1);
           }}
         />
       )}

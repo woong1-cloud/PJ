@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { buildActivityFeed } from '@/lib/activityFeed';
 import { canModifyComment } from '@/lib/comments';
 import { CommentComposer, CommentEntry } from '@/components/comments/CommentPieces';
@@ -27,7 +27,11 @@ import { CommentComposer, CommentEntry } from '@/components/comments/CommentPiec
 // Provider 는 DOM 을 만들지 않으므로 창의 flex 뼈대(머리·몸통·발)를 건드리지
 // 않는다.
 //
-// props: launchId, taskId, memberId, reloadKey
+// props: launchId, taskId, memberId, reloadKey, draftResetKey
+//
+// draftResetKey 도 신호다. 협조 요청이 나갔을 때 "그 글은 이미 요청에 담겼으니
+// 입력칸을 비워라"는 뜻이다. 취소했을 때는 안 올라온다 — 방금 쓴 말을 잃으면
+// 안 된다.
 //
 // reloadKey 는 바깥에서 "지금 다시 받아라"고 말하는 자리다. 이 창 밖에서
 // 활동이 늘어나는 길이 생겼기 때문이다 — 협조 요청을 보내면 그 항목에 댓글이
@@ -38,7 +42,7 @@ import { CommentComposer, CommentEntry } from '@/components/comments/CommentPiec
 // 입력칸에 쓰다 만 댓글이 함께 날아간다.
 const TaskActivityContext = createContext(null);
 
-export function TaskActivity({ launchId, taskId, memberId, reloadKey, children }) {
+export function TaskActivity({ launchId, taskId, memberId, reloadKey, draftResetKey, children }) {
   const [comments, setComments] = useState([]);
   // 쓰기(등록·수정·삭제) 실패와 읽기 실패를 나눠 든다. 둘을 한 칸에 담으면
   // 목록을 못 불러온 상태에서 등록에 실패했을 때 앞의 것이 지워진다.
@@ -47,6 +51,25 @@ export function TaskActivity({ launchId, taskId, memberId, reloadKey, children }
   // @로 부를 수 있는 사람들. 이 런칭의 참여자만 온다 — 서버가 알림을 보낼 때
   // 같은 목록으로 다시 판정한다.
   const [mentionable, setMentionable] = useState([]);
+
+  // 입력칸에 쓰다 만 글의 사본. 「협조 요청…」을 누르는 자리(창의 발)와 글이
+  // 있는 자리(CommentComposer 안)가 서로 남남이라, 한 번 위로 올려야 닿는다.
+  //
+  // state 가 아니라 ref 다. 이 값은 화면에 안 그려지고 단추를 누르는 순간에만
+  // 읽힌다 — state 로 들면 한 글자 칠 때마다 문맥이 새로 만들어져서 활동
+  // 목록의 댓글 줄까지 통째로 다시 그려진다.
+  const draftRef = useRef('');
+  const setDraft = useCallback((next) => {
+    draftRef.current = next ?? '';
+  }, []);
+  const readDraft = useCallback(() => draftRef.current, []);
+
+  // 요청이 나갔으면 사본도 버린다. 아래 입력칸은 key 로 새로 마운트돼 스스로
+  // 비지만, 그때 이 사본에게는 아무도 안 알려 준다 — 안 버리면 다음 협조
+  // 요청 창에 이미 보낸 글이 또 들어간다.
+  useEffect(() => {
+    draftRef.current = '';
+  }, [draftResetKey]);
 
   const load = useCallback(() => {
     if (!launchId || !taskId) return;
@@ -148,14 +171,31 @@ export function TaskActivity({ launchId, taskId, memberId, reloadKey, children }
   }
 
   const value = useMemo(
-    () => ({ feed, mentionable, memberId, error, loadError, addComment, editComment, deleteComment }),
-    // addComment 등은 매 렌더 새로 만들어지지만 아래 두 부품만 쓰는 값이라
+    () => ({
+      feed, mentionable, memberId, error, loadError, draftResetKey, setDraft, readDraft,
+      addComment, editComment, deleteComment,
+    }),
+    // addComment 등은 매 렌더 새로 만들어지지만 아래 세 부품만 쓰는 값이라
     // 그 자체가 문제되지 않는다. 참조가 바뀌는 것을 deps 로 못 박아 둔다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [feed, mentionable, memberId, error, loadError],
+    [feed, mentionable, memberId, error, loadError, draftResetKey, setDraft, readDraft],
   );
 
   return <TaskActivityContext.Provider value={value}>{children}</TaskActivityContext.Provider>;
+}
+
+// 문맥 밖에서 불렸을 때 돌려줄 것. 매번 새 함수를 만들면 이걸 deps 에 넣은
+// 쪽이 매 렌더 다시 돈다.
+const EMPTY_DRAFT = () => '';
+
+// 입력칸에 지금 쓰다 만 글을 읽는 함수. 「협조 요청…」 단추가 누르는 순간
+// 부른다. 값이 아니라 함수를 주는 이유는 위(draftRef)와 같다 — 이 글은
+// 화면에 안 그려지므로 한 글자마다 다시 그릴 이유가 없다.
+//
+// 문맥 밖에서 부르면 늘 빈 글이다 — 단추가 없어지는 것보다 낫다.
+export function useReadTaskActivityDraft() {
+  const ctx = useContext(TaskActivityContext);
+  return ctx?.readDraft ?? EMPTY_DRAFT;
 }
 
 // 목록. 창 몸통 맨 아래에 놓인다.
@@ -201,7 +241,7 @@ export function TaskActivityList() {
 export function TaskActivityComposer() {
   const ctx = useContext(TaskActivityContext);
   if (!ctx) return null;
-  const { mentionable, error, addComment } = ctx;
+  const { mentionable, error, addComment, setDraft, draftResetKey } = ctx;
 
   return (
     // CommentComposer 의 form 은 위에 제 구분선(mt-3 border-t pt-3)을 갖는다.
@@ -211,10 +251,20 @@ export function TaskActivityComposer() {
     <div className="w-full [&>form]:mt-0 [&>form]:border-t-0 [&>form]:pt-0">
       {error && <p className="mb-2 text-[12.5px] text-red-600">{error}</p>}
       {/* imageTypes·maxImages 를 안 넘긴다 — 첨부 UI 가 안 그려진다. */}
+      {/* 초안을 위로 올린다. 등록에 성공해 부품이 제 body 를 비울 때도
+          onDraftChange('') 가 불려서, 방금 등록한 글이 다음 협조 요청 창에
+          다시 들어가지 않는다.
+
+          key 로 비운다. 협조 요청이 나가면 draftResetKey 가 올라가고, 이
+          부품이 새로 마운트되면서 쓰던 글이 사라진다 — 그 글은 이미 요청에
+          담겨 나갔으니 남겨두면 「등록」까지 눌러 같은 말이 두 줄 된다.
+          그만두기로 닫았을 때는 안 올라온다. 방금 쓴 말을 잃으면 안 된다. */}
       <CommentComposer
+        key={draftResetKey}
         onSubmit={addComment}
         mentionable={mentionable}
         placeholder="무엇이 막고 있는지, 언제 풀릴지 적어 주세요. @로 참여자를 부를 수 있습니다."
+        onDraftChange={setDraft}
       />
     </div>
   );

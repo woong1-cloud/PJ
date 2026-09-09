@@ -10,7 +10,7 @@ import { isDone, isNotApplicable } from '@/lib/launchTask';
 import { dDay, dDayLabel, dueDate } from '@/lib/launchDate';
 import { assigneeId } from '@/lib/launchMembers';
 import {
-  TaskActivity, TaskActivityComposer, TaskActivityList,
+  TaskActivity, TaskActivityComposer, TaskActivityList, useReadTaskActivityDraft,
 } from '@/components/launch/TaskActivity';
 
 // 한 항목의 연계를 한 화면에.
@@ -23,8 +23,15 @@ import {
 // 그 줄을 볼 방법이 없다.
 //
 // props: open, task(지금 보는 항목), tasks, myMemberId, launchName, openDate,
-//        today, busy, launchId, memberId, activityKey, onNavigate(code), onClose,
-//        onAssign(memberId|null), onEdit(task), onHelpRequest(task)
+//        today, busy, launchId, memberId, activityKey, draftResetKey,
+//        onNavigate(code), onClose, onAssign(memberId|null), onEdit(task),
+//        onHelpRequest(task, draft)
+//
+// onHelpRequest 는 입력칸에 쓰다 만 글을 함께 올린다. 협조 요청의 「한마디」와
+// 여기 댓글칸은 결국 같은 표에 쓰는 글이라, 두 번 쓰게 하면 안 된다.
+//
+// draftResetKey 는 "요청이 나갔으니 입력칸을 비워라"는 신호다. 보내기에
+// 성공했을 때만 올라온다 — 취소하면 안 비운다.
 //
 // activityKey 는 "활동을 다시 받아라"는 신호다. 협조 요청을 보내면 그 항목에
 // 댓글이 한 줄 생기는데, 창이 열린 채로는 아무도 그것을 알려 주지 않는다.
@@ -35,7 +42,7 @@ import {
 // 뜻이 다르고, 한쪽만 바뀌는 날이 오면 이름이 같은 편이 더 위험하다.
 export function TaskViewDialog({
   open, task, tasks = [], myMemberId, launchName, openDate, today, busy = false,
-  launchId, memberId, activityKey,
+  launchId, memberId, activityKey, draftResetKey,
   onNavigate, onClose, onAssign, onEdit, onHelpRequest,
 }) {
   // 지금 보는 항목은 주소가 정한다(prop 으로 온다). 줄을 타면 주소가 바뀌고
@@ -98,6 +105,7 @@ export function TaskViewDialog({
           taskId={current.id}
           memberId={memberId}
           reloadKey={activityKey}
+          draftResetKey={draftResetKey}
         >
           <div className="min-h-0 flex-1 overflow-y-auto">
             {/* 기한·주관·담당자. 지금까지 이 창은 연계만 보여줘서 무엇을 언제까지 누가
@@ -242,15 +250,7 @@ export function TaskViewDialog({
 
                   말줄임표(…)는 바로 안 나간다는 신호다. 진짜 메일 앞에서 한 번
                   멈추게 한다 — 누르면 창이 열린다. */}
-              {onHelpRequest && (
-                <button
-                  type="button"
-                  onClick={() => onHelpRequest(current)}
-                  className="mr-auto shrink-0 rounded-lg border border-indigo-300 bg-white px-3 py-1 text-xs font-normal text-indigo-700 hover:bg-indigo-50"
-                >
-                  협조 요청…
-                </button>
-              )}
+              {onHelpRequest && <HelpRequestButton task={current} onHelpRequest={onHelpRequest} />}
               <Button type="button" variant="outline" onClick={onClose}>
                 닫기
               </Button>
@@ -259,6 +259,29 @@ export function TaskViewDialog({
         </TaskActivity>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// 협조 요청 단추.
+//
+// 따로 뺀 이유는 하나다 — 쓰다 만 글을 함께 올려야 하는데, 그 글은
+// TaskActivity 의 문맥 안에 있다. 훅은 문맥 안에서만 부를 수 있으니
+// 이 자리에 사는 작은 부품이 필요하다.
+//
+// 안내 문구는 안 붙인다. 「쓴 글은 한마디로 넘어갑니다」 같은 줄은 아직 본
+// 적 없는 화면의 칸을 설명하는 말이라 읽는 사람이 무슨 뜻인지 모르고, 늘
+// 거기 있으면 두 번째부터 안 읽힌다. 글이 눈앞에서 옮겨 가 있는 것 자체가
+// 설명이다.
+function HelpRequestButton({ task, onHelpRequest }) {
+  const readDraft = useReadTaskActivityDraft();
+  return (
+    <button
+      type="button"
+      onClick={() => onHelpRequest(task, readDraft())}
+      className="mr-auto shrink-0 rounded-lg border border-indigo-300 bg-white px-3 py-1 text-xs font-normal text-indigo-700 hover:bg-indigo-50"
+    >
+      협조 요청…
+    </button>
   );
 }
 

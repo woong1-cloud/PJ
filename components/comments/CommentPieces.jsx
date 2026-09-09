@@ -206,9 +206,22 @@ export function CommentEntry({ comment, mentionable, mine, onEdit, onDelete, onD
 // 기본값을 두지 않는다. 두면 새로 부르는 쪽이 안 넘겼을 때 남의 화면 문구가
 // 조용히 딸려 온다.
 //
+// onDraftChange 도 같은 뜻의 선택 prop 이다. imageTypes 가 없으면 첨부 UI 를
+// 안 그리듯, 이것이 없으면 아무 일도 안 일어난다 — 요구사항 상세
+// (components/ActivityFeed.jsx)는 안 넘기므로 지금과 똑같이 움직인다.
+// 글이 바뀔 때마다 지금 글을 올려 준다. 런칭 항목 창이 「협조 요청…」을 누를
+// 때 그 글을 요청 창의 「한마디」로 넘기기 위해서다.
+//
+// 입력칸을 밖에서 비우는 prop 은 두지 않았다. 부르는 쪽이 key 를 갈아 이
+// 부품을 새로 마운트하면 body·files·fileError 가 한꺼번에 초기값으로 돌아간다 —
+// 리액트가 권하는 길이고, 여기에 신호 prop 과 effect 를 더하면 effect 안에서
+// setState 를 하게 된다(react-hooks/set-state-in-effect 가 막는다).
+//
 // props: onSubmit(body, files), mentionable, imageTypes([mime]), maxImages(수),
-//        placeholder(안내 문구)
-export function CommentComposer({ onSubmit, mentionable, imageTypes, maxImages, placeholder }) {
+//        placeholder(안내 문구), onDraftChange(body)
+export function CommentComposer({
+  onSubmit, mentionable, imageTypes, maxImages, placeholder, onDraftChange,
+}) {
   const [body, setBody] = useState('');
   const [saving, setSaving] = useState(false);
   // 등록 전까지 붙여둔 시안. 코멘트가 있어야 붙일 곳이 생기므로, 파일은
@@ -223,6 +236,12 @@ export function CommentComposer({ onSubmit, mentionable, imageTypes, maxImages, 
   useEffect(() => {
     return () => previews.forEach((url) => URL.revokeObjectURL(url));
   }, [previews]);
+
+  // 사람이 치는 길. 위로 올린 사본도 함께 바꾼다.
+  function changeBody(next) {
+    setBody(next);
+    onDraftChange?.(next);
+  }
 
   function addFiles(picked) {
     const chosen = Array.from(picked ?? []);
@@ -272,6 +291,9 @@ export function CommentComposer({ onSubmit, mentionable, imageTypes, maxImages, 
       setBody('');
       setFiles([]);
       setFileError('');
+      // 위로 올린 사본도 함께 비운다. 안 비우면 부르는 쪽이 낡은 글을
+      // 들고 있다가, 방금 등록한 글을 다음 협조 요청 창에 또 넣는다.
+      onDraftChange?.('');
     }
   }
 
@@ -279,7 +301,7 @@ export function CommentComposer({ onSubmit, mentionable, imageTypes, maxImages, 
     <form onSubmit={submit} className="mt-3 flex flex-col gap-2 border-t border-slate-100 pt-3">
       <MentionTextarea
         value={body}
-        onChange={setBody}
+        onChange={changeBody}
         members={mentionable}
         rows={2}
         aria-label="코멘트"

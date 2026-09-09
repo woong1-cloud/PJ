@@ -23,14 +23,20 @@ import {
 // 뒤 활동에 한 줄로 남고, 다른 사람이 또 보내지 않는다.
 //
 // props: open, launchId, launchName, tasks(배열), members, myMemberId,
-//        onClose, onSent({ sent, tasks })
+//        initialMessage, onClose, onSent({ sent, tasks })
+//
+// initialMessage 는 항목 창의 입력칸에 쓰다 만 글이다. 「한마디」와 그 댓글칸은
+// 결국 같은 표에 쓰는 글이라 두 번 쓰게 하지 않는다. 이 창은 열릴 때마다 새로
+// 마운트되므로(보드가 조건부로 그린다) useState 의 초기값으로 받으면 된다 —
+// 열려 있는 동안 바깥 값이 바뀌어 쓰던 한마디를 덮는 일이 없다.
 //
 // members 는 /api/launch/[id]/members 가 주는 launch_members 행이다
 // (role_name + 조인된 member 객체). mentionable 라우트는 역할 없이
 // { id, name } 만 주므로 역할별 사람 수를 못 센다 — 그래서 이 창은
 // 보드가 이미 들고 있는 명단을 그대로 받는다.
 export function HelpRequestDialog({
-  open, launchId, launchName, tasks = [], members = [], myMemberId, onClose, onSent,
+  open, launchId, launchName, tasks = [], members = [], myMemberId, initialMessage = '',
+  onClose, onSent,
 }) {
   // 보낼 항목. 여러 줄로 열었을 때 하나씩 뺄 수 있어야 한다 — 24시간 안에
   // 이미 나간 건을 보고 그것만 빼는 것이 이 체크의 쓸모다.
@@ -39,7 +45,10 @@ export function HelpRequestDialog({
   );
   // 미리 고른 역할. defaultRoles 가 막힘이면 결정권, 아니면 주관을 준다.
   const [roles, setRoles] = useState(() => uniq((tasks ?? []).flatMap((t) => defaultRoles(t))));
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState(initialMessage ?? '');
+  // 가져온 글이 있었나. 사람이 지운 뒤에도 그대로 둔다 — 이 줄은 "지금 이
+  // 칸에 글이 있다"가 아니라 "이 글은 저기서 왔다"는 말이다.
+  const [brought] = useState(() => Boolean((initialMessage ?? '').trim()));
   // 24시간 안에 나간 요청. 창이 열릴 때 한 번만 받는다.
   const [recent, setRecent] = useState([]);
   const [sending, setSending] = useState(false);
@@ -110,6 +119,7 @@ export function HelpRequestDialog({
     () => recipientsForRoles(members, roles, myMemberId),
     [members, roles, myMemberId],
   );
+
 
   const recentByTask = useMemo(() => {
     const map = new Map();
@@ -331,6 +341,11 @@ export function HelpRequestDialog({
                 placeholder="언제까지 필요한지 적으면 답이 빨라집니다."
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
               />
+              {/* 가져왔을 때만 나온다. 안 가져왔으면 이 줄도 없다 — 늘 있는
+                  안내는 두 번째부터 안 읽힌다. */}
+              {brought && (
+                <p className="mt-1 text-[11px] text-slate-400">쓰던 글을 가져왔습니다</p>
+              )}
             </div>
 
             {error && <p className="mt-2 text-[12.5px] text-red-600">{error}</p>}
