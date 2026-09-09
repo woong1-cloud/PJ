@@ -3,6 +3,7 @@ import { requireLaunchAccess } from '@/lib/permissions';
 import { errorResponse, ApiError } from '@/lib/apiError';
 import { MAX_COMMENT_BODY, normalizeCommentBody } from '@/lib/comments';
 import { recipientsForRoles, tooMany } from '@/lib/helpRequest';
+import { notifyHelpRequest } from '@/lib/notify';
 
 // 협조 요청 보내기.
 //
@@ -88,6 +89,20 @@ export async function POST(request, { params }) {
         })),
       );
     if (insertError) throw insertError;
+
+    // 벨과 메일. 절대 던지지 않으므로 await 해도 응답이 실패로 돌아서지 않는다 —
+    // 댓글은 이미 저장됐고, 메일이 실패했다고 '요청 실패'를 보이면 안 된다.
+    // 댓글 라우트가 notifyLaunchComment 를 부르는 자리와 같다.
+    // message 로 body 가 아니라 trimmed 를 넘긴다. 한마디를 안 적었을 때
+    // body 에 들어간 기본 문장을 메일에 인용하면 같은 말이 두 번 나온다.
+    await notifyHelpRequest({
+      launchId: id,
+      tasks: tasks ?? [],
+      roles: wantedRoles,
+      actorId: memberId,
+      recipientIds: recipients.map((r) => r.id),
+      message: trimmed,
+    });
 
     // 화면이 센 수가 아니라 서버가 실제로 만든 수를 돌려준다.
     // recipientsForRoles 가 다시 쓰는 mentionableFromMembers 는 이름이 빈
