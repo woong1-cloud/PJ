@@ -54,5 +54,5 @@ export const config = {
   // HTML 이 되어 무효가 되고, sw.js 는 콘텐츠 타입이 안 맞아 등록 자체가
   // 실패한다. 로그인한 뒤에는 쿠키가 붙어 통과하므로 **본인 화면에서는
   // 멀쩡해 보인다** — 설치를 권하고 싶은 로그인 화면에서만 안 된다.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api|manifest\.json|sw\.js|icons/).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api|manifest\.json|sw\.js|icons/|apple-icon).*)'],
 };

@@ -19,7 +19,10 @@ export const metadata = {
   // iOS 는 설치 프롬프트가 없다. 사용자가 공유 → 홈 화면에 추가를 직접
   // 해야 하고, apple-touch-icon 이 없으면 화면을 찍어서 아이콘으로 쓴다.
   appleWebApp: { capable: true, title: '모아', statusBarStyle: 'default' },
-  icons: { apple: '/icons/apple-touch-icon.png' },
+  // icons 를 안 적는다. app/apple-icon.png 가 있으면 Next 가 해시 붙은
+  // 주소로 <link rel="apple-touch-icon"> 을 알아서 넣는다 — app/favicon.ico
+  // 와 같은 관례다. 여기 손으로 적으면 그 해시를 못 받아, 그림을 바꿔도
+  // 주소가 그대로라 아이폰이 옛 아이콘을 계속 쓴다.
 };
 
 // themeColor 를 metadata 에 두면 Next 15 부터 빌드 경고가 난다.
