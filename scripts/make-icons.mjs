@@ -14,30 +14,47 @@ import { join } from 'node:path';
 import sharp from 'sharp';
 
 const OUT = join(process.cwd(), 'public', 'icons');
-const BRAND = '#4f46e5'; // indigo-600. 로그인 화면과 주요 단추가 쓰는 색
 
-// ratio 는 글자가 차지하는 몫이다. maskable 은 안드로이드가 원·사각·물방울로
-// 깎으므로 가장자리 20%가 잘려도 되게 그림을 가운데로 몬다.
-function svg({ size, radius, ratio }) {
-  const font = Math.round(size * ratio);
+const INK = '#000000'; // 바탕
+const PAPER = '#ffffff'; // 글자
+const ACCENT = '#6366f1'; // indigo-500. 앱이 쓰는 인디고와 이어 둔다
+
+// 검정 바탕에 흰 MOA, 그 아래 인디고 밑줄.
+//
+// 밑줄이 장식이 아니다. 순검정 아이콘은 **어두운 배경화면 위에서 경계가
+// 사라져** 글자만 떠 있는 것처럼 보인다. 검정이 아닌 요소가 하나 있어야
+// 아이콘이 물건으로 읽힌다.
+//
+// 테두리로 같은 일을 할 수도 있지만 그건 가장자리에 있어서 안드로이드가
+// 모양대로 깎을 때 통째로 날아가고, 아이폰의 부푼 모서리와도 어긋난다.
+// 밑줄은 가운데 쪽이라 어떻게 깎여도 남는다.
+function svg({ size, radius, scale }) {
+  const mid = size / 2;
+  const barWidth = size * 0.32;
+  const barHeight = size * 0.035;
   return Buffer.from(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
-  <rect width="${size}" height="${size}" rx="${radius}" fill="${BRAND}"/>
-  <text x="50%" y="50%" dy="0.35em" text-anchor="middle"
-        font-family="Malgun Gothic, Apple SD Gothic Neo, sans-serif"
-        font-size="${font}" font-weight="700" fill="#ffffff">모아</text>
+  <rect width="${size}" height="${size}" rx="${radius}" fill="${INK}"/>
+  <g transform="translate(${mid},${mid}) scale(${scale}) translate(${-mid},${-mid})">
+    <text x="50%" y="45%" dy="0.35em" text-anchor="middle"
+          font-family="Arial Black, Arial, sans-serif"
+          font-size="${size * 0.3}" font-weight="900" fill="${PAPER}">MOA</text>
+    <rect x="${(size - barWidth) / 2}" y="${size * 0.63}"
+          width="${barWidth}" height="${barHeight}" rx="${barHeight / 2}" fill="${ACCENT}"/>
+  </g>
 </svg>`,
   );
 }
 
 const JOBS = [
   // 일반 아이콘. 모서리를 둥글게 깎아 둔다.
-  { file: 'icon-192.png', size: 192, radius: 42, ratio: 0.38 },
-  { file: 'icon-512.png', size: 512, radius: 112, ratio: 0.38 },
-  // maskable 은 시스템이 모양을 씌운다. 사각으로 꽉 채우고 글자를 작게.
-  { file: 'icon-512-maskable.png', size: 512, radius: 0, ratio: 0.26 },
+  { file: 'icon-192.png', size: 192, radius: 42, scale: 1 },
+  { file: 'icon-512.png', size: 512, radius: 112, scale: 1 },
+  // maskable 은 시스템이 모양을 씌운다. 사각으로 꽉 채우고, 그림은 가운데
+  // 80% 안(안드로이드 세이프존)에 들어가도록 줄인다.
+  { file: 'icon-512-maskable.png', size: 512, radius: 0, scale: 0.78 },
   // iOS 는 자기가 모서리를 깎고, **알파를 검게 칠한다** — 배경을 꽉 채운다.
-  { file: 'apple-touch-icon.png', size: 180, radius: 0, ratio: 0.38 },
+  { file: 'apple-touch-icon.png', size: 180, radius: 0, scale: 1 },
 ];
 
 mkdirSync(OUT, { recursive: true });
