@@ -48,5 +48,11 @@ export async function middleware(request) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api).*)'],
+  // manifest.json · sw.js · icons/ 를 뺀다.
+  //
+  // 안 빼면 비로그인 상태에서 셋이 /login 으로 307 된다. 매니페스트는
+  // HTML 이 되어 무효가 되고, sw.js 는 콘텐츠 타입이 안 맞아 등록 자체가
+  // 실패한다. 로그인한 뒤에는 쿠키가 붙어 통과하므로 **본인 화면에서는
+  // 멀쩡해 보인다** — 설치를 권하고 싶은 로그인 화면에서만 안 된다.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api|manifest\.json|sw\.js|icons/).*)'],
 };
