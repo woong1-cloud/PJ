@@ -62,8 +62,16 @@ export async function POST(request, { params }) {
     // 틀린 이유를 보여 주고, 사람은 역할을 다시 고르며 헤맨다.
     if (memberError) throw memberError;
 
-    const recipients = recipientsForRoles(members ?? [], wantedRoles);
-    if (recipients.length === 0) throw new ApiError(400, '그 역할에 참여자가 없습니다.');
+    // 자기를 빼고 센다. notifyHelpRequest 도 빼고 보내므로, 여기서 안 빼면
+    // 돌려주는 sent 가 실제 발송보다 1 크고 화면이 그 수를 그대로 말한다.
+    const inRoles = recipientsForRoles(members ?? [], wantedRoles);
+    if (inRoles.length === 0) throw new ApiError(400, '그 역할에 참여자가 없습니다.');
+    const recipients = recipientsForRoles(members ?? [], wantedRoles, memberId);
+    // 그 역할이 나 혼자인 경우. 위와 이유가 달라 문구도 달라야 한다 —
+    // 「참여자가 없습니다」를 보면 명단을 고치러 가지만, 여기서는 고칠 것이 없다.
+    if (recipients.length === 0) {
+      throw new ApiError(400, '그 역할에 본인 말고 다른 참여자가 없습니다.');
+    }
     if (tooMany(recipients.length)) throw new ApiError(400, '한 번에 20명까지 보낼 수 있습니다.');
 
     // body 는 not null 이다. 한마디를 안 적고 보내는 것이 정상 경로라
