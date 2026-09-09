@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-export function BrandSwitcher({ readOnly = false }) {
+export function BrandSwitcher({ compact = false }) {
   const { identity } = useIdentity();
   const globalAdmin = isGlobalAdmin(identity);
   const [brands, setBrands] = useState([]);
@@ -39,20 +39,35 @@ export function BrandSwitcher({ readOnly = false }) {
     window.location.reload();
   }
 
-  // 오갈 곳이 없으면 드롭다운을 띄울 이유가 없다.
+  // 오갈 곳이 없으면 드롭다운을 띄울 이유가 없다. 브랜드가 하나인 사람은
+  // 여기서 이름만 본다 — 대부분이 그렇다.
   //
-  // readOnly 는 모바일 상단바가 쓴다. 폰에서 브랜드를 바꾸는 사람은 전체
-  // 관리자뿐이고 그 사람은 데스크톱에서 일한다. 다만 어느 브랜드를 보고
-  // 있는지는 반드시 보여야 한다 — 모르는 채로 요구사항을 올리는 것이 가장
-  // 위험하다. 그래서 전환만 막고 표시는 남긴다.
-  if (readOnly || brands.length <= 1) {
+  // readOnly 인자가 있었다. 모바일 상단바가 전환을 막으려고 쓰던 것인데,
+  // 그 근거가 「폰에서 브랜드를 바꾸는 사람은 전체관리자뿐이고 그 사람은
+  // 데스크톱에서 일한다」였다. PWA 로 앱을 깔면서 그 전제가 깨져서 뺐다 —
+  // 부르는 쪽이 둘뿐이고 둘 다 안 넘기므로 남겨 둘 이유가 없다.
+  if (brands.length <= 1) {
     return <span className="text-sm font-medium text-slate-900">{current?.name ?? ''}</span>;
   }
 
   const items = brands.map((b) => ({ value: b.id, label: b.name }));
   return (
     <Select items={items} value={identity.brandId} onValueChange={handlePick}>
-      <SelectTrigger className="h-8 w-36 text-sm font-medium">
+      {/* compact 는 폰이다. w-36(144px) 을 고정하면 375px 폭에서 오른쪽
+          아이콘 넷과 부딪힌다. 내용만큼 차지하되 상한을 둔다.
+          130px 은 실측이다 — 375px 에서 좌우 여백 32, 오른쪽 아이콘 묶음 144,
+          사이 여백 8, 「모아 ·」 56 을 빼면 135px 이 남는다.
+          vw 를 안 쓴다. 폰마다 뷰포트가 달라 같은 값이 아니고, 좁은 폰에서
+          넘치는 것을 미리 못 잰다. min-w-0 이 있어야 더 좁은 폰에서 줄어든다.
+          긴 이름은 잘린다 — SelectValue 가 line-clamp-1 이라 그렇게 된다.
+          어느 브랜드인지는 앞 몇 글자로 안다. */}
+      <SelectTrigger
+        className={
+          compact
+            ? 'h-8 w-auto min-w-0 max-w-[130px] text-sm font-medium'
+            : 'h-8 w-36 text-sm font-medium'
+        }
+      >
         <SelectValue placeholder="브랜드" />
       </SelectTrigger>
       <SelectContent>

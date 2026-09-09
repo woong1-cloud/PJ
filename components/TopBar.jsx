@@ -90,12 +90,15 @@ export function TopBar() {
         <span className="hidden h-4 w-px bg-slate-200 md:block" />
         <span className="text-slate-300 md:hidden">·</span>
 
-        {/* 모바일에서는 전환을 막고 표시만 한다. 폰에서 브랜드를 바꾸는 사람은
-            전체관리자뿐이고 그 사람은 데스크톱에서 일한다. 그래도 어느 브랜드를
-            보고 있는지는 반드시 보여야 한다 — 모르는 채로 요구사항을 올리는
-            것이 가장 위험하다. */}
-        <div className="min-w-0 truncate md:hidden">
-          <BrandSwitcher readOnly />
+        {/* 모바일에서도 전환할 수 있다.
+            원래는 표시만 하고 막아 뒀다. 근거는 「폰에서 브랜드를 바꾸는
+            사람은 전체관리자뿐이고 그 사람은 데스크톱에서 일한다」였는데,
+            PWA 로 앱을 깔면서 그 전제가 깨졌다 — 폰이 일하는 자리가 됐고,
+            거기서 브랜드를 못 바꾸면 전체관리자에게는 앱이 반쪽이다.
+            브랜드가 하나인 사람에게는 지금과 똑같이 이름만 보인다
+            (BrandSwitcher 가 brands.length <= 1 이면 글자만 그린다). */}
+        <div className="min-w-0 md:hidden">
+          <BrandSwitcher compact />
         </div>
         <div className="hidden md:block">
           <BrandSwitcher />
