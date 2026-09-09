@@ -27,6 +27,7 @@ import { NotApplicableDialog } from '@/components/launch/NotApplicableDialog';
 import { TaskViewDialog } from '@/components/launch/TaskViewDialog';
 import { TaskEditDialog } from '@/components/launch/TaskEditDialog';
 import { BlockDialog } from '@/components/launch/BlockDialog';
+import { HelpRequestDialog } from '@/components/launch/HelpRequestDialog';
 
 // 역할 문자열 하나. support_role 에 '온라인BU 광고기획 , 브랜드PM' 처럼
 // 쉼표로 둘이 든 값이 5건 있다 — 정확히 같은지만 보면 그 5건이 안 잡힌다.
@@ -126,6 +127,12 @@ export function LaunchBoard({
   const [blockFor, setBlockFor] = useState(null);
   // ⋯ 메뉴가 열린 항목. 마찬가지로 한 번에 하나만 연다.
   const [menuFor, setMenuFor] = useState(null);
+  // 협조 요청 창을 띄운 항목들. id 배열이다 — 단건(항목 창의 단추)과
+  // 다중(고른 줄 배너)이 같은 창을 쓴다.
+  const [helpFor, setHelpFor] = useState(null);
+  // 활동을 다시 받으라는 신호. 협조 요청은 그 항목에 댓글을 한 줄 남기는데,
+  // 항목 창이 열린 채라면 그 창은 자기 밖에서 생긴 일을 모른다.
+  const [activityKey, setActivityKey] = useState(0);
   // 항목 편집 창. { mode: 'create' } 또는 { mode: 'edit', task } 또는 null.
   // 만들기·고치기가 같은 창(TaskEditDialog)을 쓴다 — 필드가 거의 같아서다.
   const [taskDialog, setTaskDialog] = useState(null);
@@ -861,14 +868,26 @@ export function LaunchBoard({
               다시 해당으로
             </button>
           ) : (
-            <button
-              type="button"
-              disabled={bulkBusy}
-              onClick={() => setNaFor({ ids: [...picked], title: '' })}
-              className="rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-xs text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
-            >
-              해당없음으로
-            </button>
+            <>
+              <button
+                type="button"
+                disabled={bulkBusy}
+                onClick={() => setNaFor({ ids: [...picked], title: '' })}
+                className="rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-xs text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+              >
+                해당없음으로
+              </button>
+              {/* 해당없음 보기에서는 안 그린다. 안 하기로 둔 것에 협조를 구할
+                  일이 없어서 삼항의 else 쪽에만 둔다. */}
+              <button
+                type="button"
+                disabled={bulkBusy}
+                onClick={() => setHelpFor([...picked])}
+                className="rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-xs text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+              >
+                협조 요청
+              </button>
+            </>
           )}
           <button
             type="button"
@@ -1033,10 +1052,33 @@ export function LaunchBoard({
           openDate={openDate}
           today={today}
           busy={busy === viewTask.id}
+          activityKey={activityKey}
           onNavigate={(code) => onParams?.({ task: code })}
           onAssign={(next) => patchTask(viewTask, { assignee: next })}
           onClose={() => onParams?.({ task: '' })}
           onEdit={(t) => setTaskDialog({ mode: 'edit', task: t })}
+          onHelpRequest={(t) => setHelpFor([t.id])}
+        />
+      )}
+
+      {/* 조건부로 그린다. 닫혀도 계속 그리면 고른 항목·역할·쓰다 만 한마디가
+          그대로 남아, 다음에 다른 항목으로 열었을 때 지난 값이 보인다. */}
+      {helpFor && (
+        <HelpRequestDialog
+          open
+          launchId={launch?.id}
+          launchName={launch?.name}
+          tasks={tasks.filter((t) => helpFor.includes(t.id))}
+          members={members}
+          myMemberId={myMemberId}
+          onClose={() => setHelpFor(null)}
+          onSent={() => {
+            // 고른 것을 놓는다. 방금 보낸 줄이 계속 체크돼 있으면 곧바로 또
+            // 보내게 된다.
+            setPicked(new Set());
+            // 항목 창이 열려 있으면 그 활동에 방금 남은 한 줄을 받게 한다.
+            setActivityKey((n) => n + 1);
+          }}
         />
       )}
 

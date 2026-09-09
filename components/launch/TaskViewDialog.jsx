@@ -23,16 +23,20 @@ import {
 // 그 줄을 볼 방법이 없다.
 //
 // props: open, task(지금 보는 항목), tasks, myMemberId, launchName, openDate,
-//        today, busy, launchId, memberId, onNavigate(code), onClose,
-//        onAssign(memberId|null), onEdit(task)
+//        today, busy, launchId, memberId, activityKey, onNavigate(code), onClose,
+//        onAssign(memberId|null), onEdit(task), onHelpRequest(task)
+//
+// activityKey 는 "활동을 다시 받아라"는 신호다. 협조 요청을 보내면 그 항목에
+// 댓글이 한 줄 생기는데, 창이 열린 채로는 아무도 그것을 알려 주지 않는다.
+// key 로 강제 리마운트하지 않는다 — 스크롤과 쓰다 만 댓글이 날아간다.
 //
 // memberId 는 myMemberId 와 같은 값이지만 이름을 따로 받는다 — 담당자 칸의
 // '나'(맡을 수 있는 사람)와 활동의 '나'(자기 댓글만 고칠 수 있는 사람)는
 // 뜻이 다르고, 한쪽만 바뀌는 날이 오면 이름이 같은 편이 더 위험하다.
 export function TaskViewDialog({
   open, task, tasks = [], myMemberId, launchName, openDate, today, busy = false,
-  launchId, memberId,
-  onNavigate, onClose, onAssign, onEdit,
+  launchId, memberId, activityKey,
+  onNavigate, onClose, onAssign, onEdit, onHelpRequest,
 }) {
   // 지금 보는 항목은 주소가 정한다(prop 으로 온다). 줄을 타면 주소가 바뀌고
   // 이 창이 다시 그려진다.
@@ -69,6 +73,17 @@ export function TaskViewDialog({
           <DialogTitle className="flex flex-wrap items-center gap-2 pr-10">
             <span className="text-sm tabular-nums text-slate-400">{current.code}</span>
             <span className="min-w-0 flex-1">{current.title}</span>
+            {/* 「고치기」 왼쪽이다. 이 창을 보다가 그 자리에서 부르는 것이
+                협조 요청의 첫째 입구다(둘째는 보드에서 여러 줄 골라 한 번에). */}
+            {onHelpRequest && (
+              <button
+                type="button"
+                onClick={() => onHelpRequest(current)}
+                className="shrink-0 rounded-lg border border-indigo-300 bg-white px-3 py-1 text-xs font-normal text-indigo-700 hover:bg-indigo-50"
+              >
+                협조 요청
+              </button>
+            )}
             {onEdit && (
               <button
                 type="button"
@@ -89,7 +104,12 @@ export function TaskViewDialog({
             둘이 한 조회를 나눠 쓰기 때문이다(components/launch/TaskActivity.jsx).
             Provider 는 DOM 을 만들지 않으므로 2단계에서 잡아 둔 뼈대
             (머리 shrink-0 · 몸통 flex-1 스크롤 · 발 shrink-0)는 그대로다. */}
-        <TaskActivity launchId={launchId} taskId={current.id} memberId={memberId}>
+        <TaskActivity
+          launchId={launchId}
+          taskId={current.id}
+          memberId={memberId}
+          reloadKey={activityKey}
+        >
           <div className="min-h-0 flex-1 overflow-y-auto">
             {/* 기한·주관·담당자. 지금까지 이 창은 연계만 보여줘서 무엇을 언제까지 누가
                 하는지는 고치기 창을 열어야 알 수 있었다. */}

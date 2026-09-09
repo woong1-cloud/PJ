@@ -27,10 +27,18 @@ import { CommentComposer, CommentEntry } from '@/components/comments/CommentPiec
 // Provider 는 DOM 을 만들지 않으므로 창의 flex 뼈대(머리·몸통·발)를 건드리지
 // 않는다.
 //
-// props: launchId, taskId, memberId
+// props: launchId, taskId, memberId, reloadKey
+//
+// reloadKey 는 바깥에서 "지금 다시 받아라"고 말하는 자리다. 이 창 밖에서
+// 활동이 늘어나는 길이 생겼기 때문이다 — 협조 요청을 보내면 그 항목에 댓글이
+// 한 줄 생기는데, 여기서는 그것을 알 방법이 없다. 값이 무엇인지는 안 본다.
+// 바뀌기만 하면 다시 받는다.
+//
+// key 로 이 컴포넌트를 갈아 끼우지 않는 이유: 리마운트하면 스크롤 자리와
+// 입력칸에 쓰다 만 댓글이 함께 날아간다.
 const TaskActivityContext = createContext(null);
 
-export function TaskActivity({ launchId, taskId, memberId, children }) {
+export function TaskActivity({ launchId, taskId, memberId, reloadKey, children }) {
   const [comments, setComments] = useState([]);
   // 쓰기(등록·수정·삭제) 실패와 읽기 실패를 나눠 든다. 둘을 한 칸에 담으면
   // 목록을 못 불러온 상태에서 등록에 실패했을 때 앞의 것이 지워진다.
@@ -60,9 +68,14 @@ export function TaskActivity({ launchId, taskId, memberId, children }) {
   // taskId 가 deps 에 있어야 한다(load 가 그것으로 만들어진다). 창 안에서
   // 연계를 타면 같은 컴포넌트가 다른 항목을 보게 되는데, 다시 안 받으면
   // 18-22 를 열어놓고 18-12 의 댓글을 읽게 된다.
+  //
+  // reloadKey 는 load 안에서 안 쓰이므로 useCallback 이 아니라 여기 deps 에
+  // 붙인다 — load 에 넣으면 쓰지도 않는 값으로 함수가 다시 만들어진다.
   useEffect(() => {
+    // reloadKey 는 값이 아니라 신호다. 바뀌면 다시 받으라는 뜻이라 effect
+    // 안에서 읽을 것이 없고, deps 에만 적힌다.
     load();
-  }, [load]);
+  }, [load, reloadKey]);
 
   // 목록을 못 받아도 댓글은 쓸 수 있어야 한다. 자동완성은 편의이고, 실패를
   // 배너로 띄우면 "댓글이 안 되나?"로 읽힌다. 조용히 비운다.
