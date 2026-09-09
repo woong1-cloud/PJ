@@ -120,6 +120,17 @@ export function HelpRequestDialog({
     [members, roles, myMemberId],
   );
 
+  // 내가 고른 역할에 나도 들어 있나.
+  //
+  // 실제로 겪은 일: 자기를 「온라인BU 서비스기획」에 넣고 그 역할로 열었더니
+  // 대상자가 0명이었다. 명단에 분명히 있는데 0이 뜨니 "명단 반영이 안 됐나"로
+  // 읽힌다. 실제로는 보낸 사람을 빼기 때문이고 그 동작 자체는 맞다 — 자기가
+  // 보낸 메일을 자기가 받으면 그때부터 이 메일은 소음이다.
+  // 빠진 것을 감추지 말고 빠진 채로 보여 준다. 그 0 이 이 한 줄로 설명된다.
+  const meExcluded = useMemo(
+    () => Boolean(myMemberId) && inRoles.some((p) => p.id === myMemberId),
+    [inRoles, myMemberId],
+  );
 
   const recentByTask = useMemo(() => {
     const map = new Map();
@@ -319,6 +330,16 @@ export function HelpRequestDialog({
                   <span className="text-amber-700">
                     이 역할에 참여자가 없습니다 — 명단에 넣어야 보낼 수 있습니다.
                   </span>
+                )}
+                {/* 받는 사람 칩과 눈에 띄게 달라야 한다. 저쪽은 채운 남색,
+                    이쪽은 점선 테두리에 흐린 글자다 — 세어진 사람이 아니라
+                    빠진 사람이라는 뜻이다. */}
+                {meExcluded && (
+                  <p className="mt-1.5 text-[12px]">
+                    <span className="rounded border border-dashed border-slate-300 px-1.5 py-0.5 text-slate-400">
+                      나 · 보낸 사람이라 제외
+                    </span>
+                  </p>
                 )}
               </div>
               {over && (
