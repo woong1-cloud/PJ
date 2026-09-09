@@ -73,17 +73,6 @@ export function TaskViewDialog({
           <DialogTitle className="flex flex-wrap items-center gap-2 pr-10">
             <span className="text-sm tabular-nums text-slate-400">{current.code}</span>
             <span className="min-w-0 flex-1">{current.title}</span>
-            {/* 「고치기」 왼쪽이다. 이 창을 보다가 그 자리에서 부르는 것이
-                협조 요청의 첫째 입구다(둘째는 보드에서 여러 줄 골라 한 번에). */}
-            {onHelpRequest && (
-              <button
-                type="button"
-                onClick={() => onHelpRequest(current)}
-                className="shrink-0 rounded-lg border border-indigo-300 bg-white px-3 py-1 text-xs font-normal text-indigo-700 hover:bg-indigo-50"
-              >
-                협조 요청
-              </button>
-            )}
             {onEdit && (
               <button
                 type="button"
@@ -243,8 +232,25 @@ export function TaskViewDialog({
           <DialogFooter className="shrink-0 flex-col sm:flex-col sm:justify-start">
             <TaskActivityComposer />
             {/* 발은 items-stretch 라 단추가 한 줄을 다 먹는다. 한 겹 싸서
-                오른쪽에 붙인다 — 원래 자리와 같다. */}
-            <div className="flex justify-end">
+                오른쪽에 붙인다 — 「닫기」는 원래 자리와 같다. */}
+            <div className="flex items-center justify-end gap-2">
+              {/* 협조 요청은 머리가 아니라 여기다. 이건 항목의 값을 안 바꾼다 —
+                  댓글과 같은 표에 같은 줄을 쓰고 request_roles 가 찼는지만
+                  다르다. 형제는 「고치기」가 아니라 「등록」이라, 읽고 나서
+                  눈이 닿는 자리인 입력칸 아래 왼쪽 끝에 둔다. 머리에서 빼면
+                  긴 제목이 두 줄이어도 단추가 그 사이에 끼지 않는다.
+
+                  말줄임표(…)는 바로 안 나간다는 신호다. 진짜 메일 앞에서 한 번
+                  멈추게 한다 — 누르면 창이 열린다. */}
+              {onHelpRequest && (
+                <button
+                  type="button"
+                  onClick={() => onHelpRequest(current)}
+                  className="mr-auto shrink-0 rounded-lg border border-indigo-300 bg-white px-3 py-1 text-xs font-normal text-indigo-700 hover:bg-indigo-50"
+                >
+                  협조 요청…
+                </button>
+              )}
               <Button type="button" variant="outline" onClick={onClose}>
                 닫기
               </Button>
