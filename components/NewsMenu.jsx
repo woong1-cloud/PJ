@@ -6,6 +6,7 @@ import { SparklesIcon } from 'lucide-react';
 import { NEWS, POPOVER_LIMIT, unseenNews } from '@/lib/newsItems';
 import { readDismissed, shouldOpenDialog, writeDismissed } from '@/lib/newsDismiss';
 import { NewsDialog } from '@/components/NewsDialog';
+import { NewsItem } from '@/components/news/NewsItem';
 
 // 업데이트 소식 입구.
 //
@@ -116,13 +117,7 @@ export function NewsMenu() {
                 만든 것이 다시 뎁스를 만든다. */}
             <ul className="flex flex-col gap-3 overflow-y-auto px-3 py-3">
               {visible.map((item) => (
-                <li key={item.date} className="border-l-2 border-indigo-500 pl-2.5">
-                  <p className="text-[11px] text-slate-400">{item.date}</p>
-                  <p className="mt-0.5 text-sm font-medium text-slate-900">{item.title}</p>
-                  <p className="mt-0.5 text-xs leading-relaxed break-keep text-slate-600">
-                    {item.body}
-                  </p>
-                </li>
+                <NewsItem key={item.date} item={item} compact />
               ))}
             </ul>
 

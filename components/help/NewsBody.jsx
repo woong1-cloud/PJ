@@ -1,4 +1,5 @@
 import { NEWS } from '@/lib/newsItems';
+import { NewsItem } from '@/components/news/NewsItem';
 
 // 지금까지의 업데이트 소식 전부.
 //
@@ -14,11 +15,7 @@ export function NewsBody() {
 
       <ul className="flex flex-col gap-4">
         {NEWS.map((item) => (
-          <li key={item.date} className="border-l-2 border-indigo-500 pl-3">
-            <p className="text-[11px] text-slate-400">{item.date}</p>
-            <p className="mt-0.5 text-sm font-medium text-slate-900">{item.title}</p>
-            <p className="mt-1 text-sm leading-relaxed break-keep text-slate-600">{item.body}</p>
-          </li>
+          <NewsItem key={item.date} item={item} />
         ))}
       </ul>
 
