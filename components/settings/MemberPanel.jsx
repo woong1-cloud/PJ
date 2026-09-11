@@ -8,14 +8,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { TIER_LABELS } from '@/lib/tiers';
+import { BRAND_TIERS, TIER_LABELS } from '@/lib/tiers';
 import { displayAffiliation } from '@/lib/organizations';
 import { displayJobRole } from '@/lib/jobRoles';
-
-// 브랜드 배치에서 고를 수 있는 등급. 1차는 없다 — 전체관리자는 브랜드에
-// 매인 값이 아니라 사람에 붙는 값이고, 그건 목록의 '⋯' 에서 준다.
-// API(PATCH /api/brand-team/[id])도 이 셋만 받는다.
-const TIERS = ['2차', '3차', '4차'];
 
 function Section({ title, action, children }) {
   return (
@@ -148,9 +143,12 @@ export function MemberPanel({
                   {role.brandName}
                 </span>
                 {/* 목록의 줄에서 걷어낸 셀렉트가 여기 하나씩 선다. 한 사람을
-                    열었을 때만 보이므로, 화면에 한 번에 여섯 개가 한계다. */}
+                    열었을 때만 보이므로, 화면에 한 번에 여섯 개가 한계다.
+
+                    고를 수 있는 등급은 BRAND_TIERS 하나를 본다 — 1차가 없는
+                    이유는 거기 적혀 있고, 전체관리자는 목록의 '⋯' 에서 준다. */}
                 <Select
-                  items={TIERS.map((t) => ({ value: t, label: TIER_LABELS[t] ?? t }))}
+                  items={BRAND_TIERS.map((t) => ({ value: t, label: TIER_LABELS[t] ?? t }))}
                   value={role.tier}
                   onValueChange={(v) => onChangeTier(member, role.brandId, v)}
                 >
@@ -161,7 +159,7 @@ export function MemberPanel({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {TIERS.map((t) => (
+                    {BRAND_TIERS.map((t) => (
                       <SelectItem key={t} value={t}>
                         {TIER_LABELS[t] ?? t}
                       </SelectItem>

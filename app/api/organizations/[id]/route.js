@@ -1,7 +1,7 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { requireGlobalAdmin } from '@/lib/permissions';
 import { errorResponse, ApiError } from '@/lib/apiError';
-import { TIER_RANK } from '@/lib/tiers';
+import { BRAND_TIERS } from '@/lib/tiers';
 
 // 조직 수정.
 //
@@ -27,7 +27,7 @@ export async function PATCH(request, { params }) {
     // 본부으로 되돌리는 길이 없으면 잘못 만든 조직을 고칠 수 없다.
     if (brandId !== undefined) updates.brand_id = brandId || null;
     if (defaultTier !== undefined) {
-      if (defaultTier && !Object.prototype.hasOwnProperty.call(TIER_RANK, defaultTier)) {
+      if (defaultTier && !BRAND_TIERS.includes(defaultTier)) {
         throw new ApiError(400, '유효하지 않은 등급입니다.');
       }
       updates.default_tier = defaultTier || null;

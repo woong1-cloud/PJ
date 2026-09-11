@@ -9,9 +9,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { BrandTeamAssignDialog } from '@/components/BrandTeamAssignDialog';
-import { TIER_LABELS } from '@/lib/tiers';
-
-const TIERS = ['3차', '4차'];
+import { BRAND_TIERS, TIER_LABELS } from '@/lib/tiers';
 
 // props: members(브랜드 배치 목록), teamMembers(전사 활성 풀), identity, onChanged()
 export function BrandTeamSection({ members, teamMembers, identity, onChanged }) {
@@ -79,7 +77,7 @@ export function BrandTeamSection({ members, teamMembers, identity, onChanged }) 
               <td className="py-2">{m.name}</td>
               <td className="py-2">
                 <Select
-                  items={TIERS.map((t) => ({ value: t, label: TIER_LABELS[t] }))}
+                  items={BRAND_TIERS.map((t) => ({ value: t, label: TIER_LABELS[t] }))}
                   value={m.tier}
                   onValueChange={(v) => updateRole(m.id, { tier: v })}
                 >
@@ -87,7 +85,7 @@ export function BrandTeamSection({ members, teamMembers, identity, onChanged }) 
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {TIERS.map((t) => (
+                    {BRAND_TIERS.map((t) => (
                       <SelectItem key={t} value={t}>
                         {TIER_LABELS[t]}
                       </SelectItem>

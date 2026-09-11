@@ -1,7 +1,7 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { requireGlobalAdmin } from '@/lib/permissions';
 import { errorResponse, ApiError } from '@/lib/apiError';
-import { TIER_RANK } from '@/lib/tiers';
+import { BRAND_TIERS } from '@/lib/tiers';
 
 // 조직 목록·생성.
 //
@@ -36,9 +36,11 @@ export async function POST(request) {
     // 등급 문자열을 그대로 믿지 않는다. 모르는 값이 DB CHECK 까지 가면
     // 사용자는 23514 라는 숫자만 보게 된다.
     //
-    // hasOwnProperty 로 확인하는 이유는 'toString' 같은 값이 프로토타입을
-    // 타고 통과하는 것을 막기 위해서다(lib/organizations.js 와 같은 규칙).
-    if (defaultTier && !Object.prototype.hasOwnProperty.call(TIER_RANK, defaultTier)) {
+    // BRAND_TIERS 로 확인한다. 배열이라 예전의 hasOwnProperty 처럼
+    // 'toString' 이 프로토타입을 타고 통과할 일이 없고, 브랜드 배치 화면이
+    // 고를 수 있는 값과 같은 목록이라 기본등급이 배치할 수 없는 값으로
+    // 저장되지 않는다.
+    if (defaultTier && !BRAND_TIERS.includes(defaultTier)) {
       throw new ApiError(400, '유효하지 않은 등급입니다.');
     }
 

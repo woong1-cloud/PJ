@@ -11,9 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { TIER_LABELS, TIER_HINTS } from '@/lib/tiers';
+import { BRAND_TIERS, TIER_LABELS, TIER_HINTS } from '@/lib/tiers';
 
-const TIERS = ['1차', '2차', '3차', '4차'];
 // 셀렉트에서 "정하지 않음"을 고를 수 있어야 한다. 빈 문자열은 base-ui 가
 // "선택 안 됨"과 구분하지 못해 항목이 늘 선택된 것처럼 보인다
 // (lib/filterFields.js 의 CLEAR_FILTER_VALUE 와 같은 이유).
@@ -126,7 +125,7 @@ export function OrganizationSettings() {
   ];
   const tierItems = [
     { value: NONE, label: '정하지 않음' },
-    ...TIERS.map((t) => ({ value: t, label: TIER_LABELS[t] })),
+    ...BRAND_TIERS.map((t) => ({ value: t, label: TIER_LABELS[t] })),
   ];
 
   return (

@@ -2,6 +2,7 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { requireBrandAccess } from '@/lib/permissions';
 import { errorResponse, ApiError } from '@/lib/apiError';
+import { BRAND_TIERS } from '@/lib/tiers';
 
 export async function GET(request) {
   try {
@@ -48,7 +49,7 @@ export async function POST(request) {
     // 고르는 등급인 4차를 배치하면 400이 났다. DB 제약(0004)과 화면이 이미
     // 허용하는 값이라 여기만 맞춘다. 가장 낮은 등급을 받아 주는 것이므로
     // 어떤 권한도 넓어지지 않는다.
-    if (!['2차', '3차', '4차'].includes(tier)) throw new ApiError(400, '유효하지 않은 tier입니다.');
+    if (!BRAND_TIERS.includes(tier)) throw new ApiError(400, '유효하지 않은 tier입니다.');
     if (subRole && !['기획', '개발', '뷰어'].includes(subRole)) {
       throw new ApiError(400, '유효하지 않은 역할입니다.');
     }

@@ -18,9 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { TIER_LABELS, TIER_HINTS } from '@/lib/tiers';
-
-const TIERS = ['3차', '4차'];
+import { BRAND_TIERS, TIER_LABELS, TIER_HINTS } from '@/lib/tiers';
 
 // '역할'(기획/개발/뷰어) 칸을 없앴다.
 //
@@ -204,7 +202,7 @@ export function BrandTeamAssignDialog({
               <div className="flex flex-col gap-1">
                 <Label>권한 등급</Label>
                 <Select
-                  items={TIERS.map((t) => ({ value: t, label: TIER_LABELS[t] }))}
+                  items={BRAND_TIERS.map((t) => ({ value: t, label: TIER_LABELS[t] }))}
                   value={tier}
                   onValueChange={setTier}
                 >
@@ -212,7 +210,7 @@ export function BrandTeamAssignDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {TIERS.map((t) => (
+                    {BRAND_TIERS.map((t) => (
                       <SelectItem key={t} value={t}>
                         {TIER_LABELS[t]}
                       </SelectItem>

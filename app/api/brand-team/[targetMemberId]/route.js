@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { requireBrandAccess } from '@/lib/permissions';
 import { errorResponse, ApiError } from '@/lib/apiError';
 import { checkLastBrandAdmin } from '@/lib/checkLastBrandAdmin';
-import { TIER_RANK } from '@/lib/tiers';
+import { BRAND_TIERS, canManageBrand } from '@/lib/tiers';
 
 const LAST_ADMIN_MESSAGE = '이 브랜드의 마지막 2차 관리자는 해제하거나 강등할 수 없습니다.';
 
@@ -13,7 +13,7 @@ export async function PATCH(request, { params }) {
     const body = await request.json();
     const { brandId, tier, subRole } = body;
     if (!brandId) throw new ApiError(400, 'brandId가 필요합니다.');
-    if (tier !== undefined && !['2차', '3차', '4차'].includes(tier)) {
+    if (tier !== undefined && !BRAND_TIERS.includes(tier)) {
       throw new ApiError(400, '유효하지 않은 tier입니다.');
     }
     if (subRole !== undefined && subRole !== null && !['기획', '개발', '뷰어'].includes(subRole)) {
@@ -27,7 +27,7 @@ export async function PATCH(request, { params }) {
     // 2차 미만으로 내리는 모든 경우를 막아야 한다. 예전에는 '3차'만 검사했는데,
     // 4차를 허용하는 순간 마지막 관리자를 4차로 강등해 이 가드를 건너뛸 수 있게
     // 된다. 등급 하나를 넓히면 그 아래를 지키던 검사도 같이 넓혀야 한다.
-    if (tier !== undefined && TIER_RANK[tier] < TIER_RANK['2차']) {
+    if (tier !== undefined && !canManageBrand({ tier })) {
       const { data: roles, error: rolesError } = await supabase
         .from('user_brand_roles')
         .select('team_member_id, brand_id, tier')
