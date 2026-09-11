@@ -14,6 +14,7 @@ import { AccountCredentialDialog } from '@/components/AccountCredentialDialog';
 import { BrandTeamAssignDialog } from '@/components/BrandTeamAssignDialog';
 import { TeamMemberEditDialog } from '@/components/TeamMemberEditDialog';
 import { MemberPanel } from '@/components/settings/MemberPanel';
+import { DemoteAdminDialog } from '@/components/settings/DemoteAdminDialog';
 
 // 타이핑마다 주소를 바꾸면 라우터가 계속 리렌더를 민다. 300ms 멈춘 뒤에만.
 const SEARCH_DEBOUNCE_MS = 300;
@@ -106,6 +107,9 @@ function MembersScreen() {
   const [accountDialogTarget, setAccountDialogTarget] = useState(null);
   const [assignTarget, setAssignTarget] = useState(null);
   const [editTarget, setEditTarget] = useState(null);
+  // 전체관리자 해제만 창을 거친다. 지정은 그대로 간다 — 권한이 늘어나는 쪽은
+  // 누른 사람이 의도한 그대로고, 되돌리는 길도 같은 메뉴에 있다.
+  const [demoteTarget, setDemoteTarget] = useState(null);
   // 패널은 사람 자체가 아니라 id 만 들고 있는다. 객체를 들고 있으면 등급을
   // 바꾼 뒤 refresh() 가 돌아도 패널만 옛 값을 계속 그린다 — 아래 selectedMember.
   const [selectedId, setSelectedId] = useState(null);
@@ -250,7 +254,9 @@ function MembersScreen() {
         onCreate={() => setMemberDialogOpen(true)}
         onAccount={setAccountDialogTarget}
         onToggleGlobalAdmin={(m) =>
-          patchMember(m, { isGlobalAdmin: !m.is_global_admin }, '전체관리자 권한 변경 실패')
+          m.is_global_admin
+            ? setDemoteTarget(m)
+            : patchMember(m, { isGlobalAdmin: true }, '전체관리자 권한 변경 실패')
         }
         onToggleActive={(m) => patchMember(m, { isActive: !m.is_active }, '재직여부 변경 실패')}
         onEdit={setEditTarget}
@@ -269,6 +275,21 @@ function MembersScreen() {
           onAssignBrand={setAssignTarget}
           onChangeTier={changeTier}
           onRemoveBrand={removeBrand}
+        />
+      )}
+
+      {/* 해제하면 저장된 브랜드 배치로 떨어진다 — 무엇이 남고 무엇을 잃는지를
+          먼저 보여 준다. brands 는 활성만 추린 activeBrands 가 아니라 전체다 —
+          비활성 브랜드의 배치는 목록에 그 브랜드가 있어야 가려낼 수 있다.
+          닫혔을 때는 아예 안 그린다 — 계속 그려 두면 지난 사람이 남는다. */}
+      {demoteTarget && (
+        <DemoteAdminDialog
+          member={demoteTarget}
+          brands={brands}
+          onClose={() => setDemoteTarget(null)}
+          onConfirm={(m) =>
+            patchMember(m, { isGlobalAdmin: false }, '전체관리자 권한 변경 실패')
+          }
         />
       )}
 
