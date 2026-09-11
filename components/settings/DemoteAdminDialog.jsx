@@ -95,14 +95,28 @@ export function DemoteImpactSummary({ name, impact }) {
 //   onClose()
 export function DemoteAdminDialog({ member, brands, onConfirm, onClose }) {
   const [saving, setSaving] = useState(false);
+  // 서버가 막는 경우가 있다 — 마지막 전체 관리자는 해제할 수 없다
+  // (lib/checkLastGlobalAdmin.js). 그 규칙을 여기서 다시 세지 않는다.
+  // 서버가 돌려준 문구를 그대로 보인다.
+  //
+  // 페이지 맨 위의 배너에 맡기지 않는 이유: 목록 아래쪽 줄에서 열었으면
+  // 스크롤이 내려가 있어서, 창이 닫힌 뒤 배너가 화면 밖에 뜬다. 누른
+  // 사람은 아무 일도 안 일어난 것으로 본다.
+  const [error, setError] = useState('');
 
   const impact = demoteImpact({ brandRoles: member?.brandRoles, brands });
   const name = member?.name ?? '';
 
   async function confirm() {
     setSaving(true);
-    await onConfirm(member);
+    setError('');
+    const result = await onConfirm(member);
     setSaving(false);
+    // 결과를 안 주는 부르는 쪽도 있을 수 있다. 그때는 예전처럼 닫는다.
+    if (result && result.ok === false) {
+      setError(result.message ?? '해제하지 못했습니다.');
+      return;
+    }
     onClose();
   }
 
@@ -124,6 +138,8 @@ export function DemoteAdminDialog({ member, brands, onConfirm, onClose }) {
         </DialogHeader>
 
         <DemoteImpactSummary name={name} impact={impact} />
+
+        {error && <p className="text-sm text-red-600">{error}</p>}
 
         {/* keep 이 비어도 막지 않는다. 그만두는 사람을 정리하려는 것일 수도
             있고, 그때 이 창이 유일한 길을 막으면 다른 길로 돌아가게 된다. */}

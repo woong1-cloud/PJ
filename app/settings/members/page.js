@@ -167,10 +167,15 @@ function MembersScreen() {
     });
     if (!res.ok) {
       const d = await res.json();
-      setActionError(d.error ?? fallbackMessage);
-      return;
+      const message = d.error ?? fallbackMessage;
+      setActionError(message);
+      // 부르는 쪽이 실패를 알 수 있게 돌려준다. 배너는 화면 맨 위에 있어서,
+      // 목록 아래쪽 줄에서 부른 경우 스크롤 밖이라 안 보인다. 창을 띄우고
+      // 부르는 자리(전체관리자 해제)는 이 값을 받아 창 안에서 보인다.
+      return { ok: false, message };
     }
     refresh();
+    return { ok: true };
   }
 
   // 등급 변경은 team_members 가 아니라 user_brand_roles 를 고친다. 그래서
