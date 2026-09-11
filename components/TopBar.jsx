@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useIdentity } from './IdentityProvider';
 import { BrandSwitcher } from './BrandSwitcher';
 import { NotificationBell } from './NotificationBell';
@@ -47,6 +47,32 @@ export function TopBar() {
   const { identity, logout } = useIdentity();
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // 설정 안에 볼 것이 있나. 지금은 새로 온 의견 하나뿐이다.
+  //
+  // 이 점이 없으면 전체 관리자가 새 의견이 온 줄 알 방법이 아예 없다.
+  // 예전에는 계정 메뉴의 「받은 의견」 옆에 숫자가 붙어 있었는데, 설정
+  // 화면들을 「설정」 한 줄로 접으면서 그 자리가 사라졌다. 숫자를 그대로
+  // 옮기지 않고 점으로 바꾼 이유는, 이 줄이 가리키는 것이 의견 하나가
+  // 아니라 설정 전체이기 때문이다 — 숫자를 적으면 무엇의 숫자인지 모른다.
+  //
+  // 메뉴를 열 때만 받는다. 모든 화면에서 미리 받아 둘 만큼 급한 것이
+  // 아니고, 전체 관리자가 넷이라 폴링할 이유도 없다.
+  const [settingsDot, setSettingsDot] = useState(false);
+  useEffect(() => {
+    if (!menuOpen || !globalAdmin) return undefined;
+    let alive = true;
+    fetch('/api/admin/feedback?only=count')
+      .then((res) => (res.ok ? res.json() : null))
+      // 못 받으면 점을 안 찍는다. 메뉴가 안 열리는 것보다 낫다.
+      .then((data) => {
+        if (alive && data) setSettingsDot((data.fresh ?? 0) > 0);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [menuOpen, globalAdmin]);
   // 의견 창의 열림 상태를 NewsMenu 가 아니라 여기서 갖는다. 입구가 둘이라
   // (소식 팝오버 하단, 계정 메뉴) 한쪽 안에 두면 다른 쪽에서 열 수 없다.
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -238,7 +264,13 @@ export function TopBar() {
                   고친다. */}
               <div className="my-1 border-t border-slate-100" />
               <MenuLink href="/settings" onClick={closeMenu}>
-                설정
+                <span className="flex-1">설정</span>
+                {settingsDot && (
+                  <span
+                    aria-label="새로 온 의견이 있습니다"
+                    className="ml-2 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-600"
+                  />
+                )}
               </MenuLink>
               {/* 등급과 무관하게 누구나 볼 수 있다 — 설명이 가장 필요한 사람이
                   권한이 가장 낮은 요청자이기 때문이다. */}
