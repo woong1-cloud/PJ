@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useIdentity } from '@/components/IdentityProvider';
 import { isGlobalAdmin } from '@/lib/tiers';
-import { AdminSectionNav } from '@/components/AdminSectionNav';
 import { Button } from '@/components/ui/button';
 import {
   ACKED_FEEDBACK_STATUS,
@@ -79,8 +78,6 @@ export default function AdminFeedbackPage() {
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4">
-      <AdminSectionNav />
-
       <div className="flex items-baseline gap-2">
         <h1 className="text-lg font-semibold text-slate-900">받은 의견</h1>
         {fresh > 0 && (

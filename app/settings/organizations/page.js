@@ -7,7 +7,7 @@ import { JobRoleSettings } from '@/components/JobRoleSettings';
 
 // 조직 관리.
 //
-// /admin/brands 에 섹션으로 붙이지 않은 이유: 그 화면은 이미 브랜드 목록·팀
+// /settings/brands 에 섹션으로 붙이지 않은 이유: 그 화면은 이미 브랜드 목록·팀
 // 배치·전체관리자 토글로 붐빈다. 조직은 가입 화면에 직접 노출되는 목록이라
 // 따로 다룰 값어치가 있다.
 //

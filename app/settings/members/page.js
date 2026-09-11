@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { useIdentity } from '@/components/IdentityProvider';
 import { isGlobalAdmin } from '@/lib/tiers';
 import { suggestTierFromOrg } from '@/lib/organizations';
-import { AdminSectionNav } from '@/components/AdminSectionNav';
 import { PendingMembersSection } from '@/components/PendingMembersSection';
 import { TeamMemberListSection } from '@/components/TeamMemberListSection';
 import { TeamMemberFormDialog } from '@/components/TeamMemberFormDialog';
@@ -121,7 +120,6 @@ export default function AdminMembersPage() {
           전사 팀원을 등록하고, 계정을 발급하고, 브랜드에 배치합니다.
         </p>
       </div>
-      <AdminSectionNav />
       {actionError && <p className="text-sm text-red-600">{actionError}</p>}
 
       <PendingMembersSection members={pendingMembers} onAssign={setAssignTarget} />

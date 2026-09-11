@@ -4,13 +4,12 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useIdentity } from '@/components/IdentityProvider';
 import { isGlobalAdmin } from '@/lib/tiers';
-import { AdminSectionNav } from '@/components/AdminSectionNav';
 import { BrandListSection } from '@/components/BrandListSection';
 import { BrandFormDialog } from '@/components/BrandFormDialog';
 
 // 이 화면은 "브랜드"만 다룬다. 예전에는 브랜드·전사 팀원·배치 대기가 한 화면에
 // 겹쳐 있어서, 열 때마다 지금 보고 있는 게 셋 중 무엇인지부터 골라내야 했다.
-// 사람에 대한 일은 전부 /admin/members 로 옮겼다.
+// 사람에 대한 일은 전부 /settings/members 로 옮겼다.
 export default function AdminBrandsPage() {
   const { identity } = useIdentity();
   const router = useRouter();
@@ -91,7 +90,6 @@ export default function AdminBrandsPage() {
           브랜드를 만들고 고칩니다. 브랜드 이름을 누르면 그 브랜드에 배치된 팀원이 펼쳐집니다.
         </p>
       </div>
-      <AdminSectionNav />
       {actionError && <p className="text-sm text-red-600">{actionError}</p>}
 
       <BrandListSection
