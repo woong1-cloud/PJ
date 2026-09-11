@@ -294,6 +294,12 @@ export function TopBar() {
               <MenuLink href="/help" onClick={closeMenu}>
                 도움말
               </MenuLink>
+              {/* 이동 링크(요구사항·주간회의)와 섞지 않는다. 그건 매일 쓰는
+                  것이고 이건 한 번 쓰는 것이다. 권한으로도 안 가린다 —
+                  깔 사람은 전부다. */}
+              <MenuLink href="/install" onClick={closeMenu}>
+                폰에 설치하기
+              </MenuLink>
               {/* 주 입구는 소식 팝오버 하단이다. 여기에도 한 줄 남기는 이유:
                   "설정 비슷한 것"을 계정 메뉴에서 찾는 사람이 실제로 있고,
                   한 줄 값이면 두 곳에 두는 편이 낫다. 같은 창을 연다. */}
