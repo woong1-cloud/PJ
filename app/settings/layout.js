@@ -1,5 +1,6 @@
 import { IdentityProvider } from '@/components/IdentityProvider';
 import { TopBar } from '@/components/TopBar';
+import { SettingsGuard } from '@/components/settings/SettingsGuard';
 import { SettingsRail } from '@/components/settings/SettingsRail';
 
 // 설정은 한 입구다.
@@ -11,11 +12,14 @@ import { SettingsRail } from '@/components/settings/SettingsRail';
 export default function SettingsLayout({ children }) {
   return (
     <IdentityProvider>
+      {/* 레일에 없는 설정 화면을 주소로 열면 되돌린다. 레일 · 본문보다 위에
+          둔다 — 페이지가 그려지기 전에 걸러야 「권한이 없습니다」가 안 번쩍인다. */}
+      <SettingsGuard />
       <div className="min-h-screen bg-slate-50 print:bg-white">
         {/* 인쇄에서 상단바를 뺀다. 「폰에 설치하기」가 이 아래로 들어오는데
             그 화면은 종이로 나눠 주려고 인쇄한다 — 그때 필요한 건 QR 과
-            순서뿐이다. 지금 app/install/layout.js 가 하던 일을 여기서
-            이어받는다(다음 작업에서 그 파일이 없어진다). */}
+            순서뿐이다. 예전 app/install/layout.js 가 하던 일을 여기서
+            이어받았다(그 파일은 없어졌다). */}
         <div className="print:hidden">
           <TopBar />
         </div>
