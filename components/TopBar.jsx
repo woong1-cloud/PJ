@@ -48,6 +48,12 @@ export function TopBar() {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // 의견 창의 열림 상태를 NewsMenu 가 아니라 여기서 갖는다. 입구가 둘이라
+  // (소식 팝오버 하단, 계정 메뉴) 한쪽 안에 두면 다른 쪽에서 열 수 없다.
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const process = canProcess(identity);
+  const globalAdmin = isGlobalAdmin(identity);
+
   // 설정 안에 볼 것이 있나. 지금은 새로 온 의견 하나뿐이다.
   //
   // 이 점이 없으면 전체 관리자가 새 의견이 온 줄 알 방법이 아예 없다.
@@ -58,6 +64,13 @@ export function TopBar() {
   //
   // 메뉴를 열 때만 받는다. 모든 화면에서 미리 받아 둘 만큼 급한 것이
   // 아니고, 전체 관리자가 넷이라 폴링할 이유도 없다.
+  //
+  // **globalAdmin 선언 아래에 있어야 한다.** 처음에 이것을 menuOpen 바로
+  // 밑에 넣었다가 운영을 한 번 세웠다. 의존성 배열은 렌더 도중 이 자리에서
+  // 바로 평가되므로, 아직 선언 안 된 globalAdmin 을 읽으면 그 자리에서
+  // 예외가 난다. 상단바는 모든 화면에 있어서 로그인한 사람의 모든 페이지가
+  // 죽었다. 빌드도 테스트도 린트도 못 잡았다 — 서버에서 미리 그릴 때는
+  // 로그인 정보가 없어 이 부품이 안 그려지기 때문이다.
   const [settingsDot, setSettingsDot] = useState(false);
   useEffect(() => {
     if (!menuOpen || !globalAdmin) return undefined;
@@ -73,11 +86,6 @@ export function TopBar() {
       alive = false;
     };
   }, [menuOpen, globalAdmin]);
-  // 의견 창의 열림 상태를 NewsMenu 가 아니라 여기서 갖는다. 입구가 둘이라
-  // (소식 팝오버 하단, 계정 메뉴) 한쪽 안에 두면 다른 쪽에서 열 수 없다.
-  const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const process = canProcess(identity);
-  const globalAdmin = isGlobalAdmin(identity);
   // 런칭은 명단에 든 사람에게 보인다. 전체 관리자는 늘 본다(/api/me 참고).
   // 메뉴를 감추는 것은 보안이 아니다 — 막는 것은 서버다. 여기서는 누를 데가
   // 없는 메뉴를 안 보이게 할 뿐이다.

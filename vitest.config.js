@@ -1,6 +1,12 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  // 화면 부품을 테스트하려면 @/ 를 풀 수 있어야 한다. 지금까지는 순수
+  // 함수만 테스트해서(lib/ 안에서 상대 경로로) 걸린 적이 없었다.
+  resolve: {
+    alias: { '@': fileURLToPath(new URL('.', import.meta.url)) },
+  },
   test: {
     environment: 'node',
     // dist/ 를 빼지 않으면 npm run package 로 ZIP 을 한 번 만든 뒤부터
