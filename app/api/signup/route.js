@@ -130,7 +130,7 @@ export async function POST(request) {
       throw insertError;
     }
 
-    // 배치 대기는 사람이 기다리는 대기열인데, 지금까지는 관리자가 /admin/members
+    // 배치 대기는 사람이 기다리는 대기열인데, 지금까지는 관리자가 /settings/members
     // 를 열어봐야만 알 수 있었다. 가입은 드문 사건이라 더 잘 놓친다 — 매일
     // 확인할 이유가 없는 화면이기 때문이다.
     //

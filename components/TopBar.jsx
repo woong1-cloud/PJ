@@ -146,8 +146,8 @@ export function TopBar() {
           )}
           {globalAdmin && (
             <NavLink
-              href="/admin/organizations"
-              active={pathname.startsWith('/admin/organizations')}
+              href="/settings/organizations"
+              active={pathname.startsWith('/settings/organizations')}
             >
               조직
             </NavLink>
@@ -260,7 +260,7 @@ export function TopBar() {
                       설정'이고 바로 아래 '브랜드 관리'가 있어서, 계정 메뉴
                       안의 '설정'은 내 계정 설정으로 읽힌다. 화면 제목과
                       같은 이름을 쓴다. */}
-                  <MenuLink href="/requirements/settings" onClick={closeMenu}>
+                  <MenuLink href="/settings/brand/team" onClick={closeMenu}>
                     브랜드 설정
                   </MenuLink>
                 </>
@@ -271,13 +271,13 @@ export function TopBar() {
                 <>
                   {/* 브랜드 설정이 이미 선을 그었으면 또 긋지 않는다. */}
                   {!manageBrand && <div className="my-1 border-t border-slate-100" />}
-                  <MenuLink href="/admin/brands" onClick={closeMenu}>
+                  <MenuLink href="/settings/brands" onClick={closeMenu}>
                     브랜드 관리
                   </MenuLink>
-                  <MenuLink href="/admin/members" onClick={closeMenu}>
+                  <MenuLink href="/settings/members" onClick={closeMenu}>
                     팀원 관리
                   </MenuLink>
-                  <MenuLink href="/admin/feedback" onClick={closeMenu}>
+                  <MenuLink href="/settings/feedback" onClick={closeMenu}>
                     <span className="flex-1">받은 의견</span>
                     {freshFeedback > 0 && (
                       <span className="ml-2 rounded-full bg-indigo-600 px-1.5 py-0.5 text-[11px] font-medium text-white tabular-nums">
@@ -297,7 +297,7 @@ export function TopBar() {
               {/* 이동 링크(요구사항·주간회의)와 섞지 않는다. 그건 매일 쓰는
                   것이고 이건 한 번 쓰는 것이다. 권한으로도 안 가린다 —
                   깔 사람은 전부다. */}
-              <MenuLink href="/install" onClick={closeMenu}>
+              <MenuLink href="/settings/install" onClick={closeMenu}>
                 폰에 설치하기
               </MenuLink>
               {/* 주 입구는 소식 팝오버 하단이다. 여기에도 한 줄 남기는 이유:
@@ -315,7 +315,7 @@ export function TopBar() {
               </button>
 
               <div className="my-1 border-t border-slate-100" />
-              <MenuLink href="/change-password" onClick={closeMenu}>
+              <MenuLink href="/settings/password" onClick={closeMenu}>
                 비밀번호 변경
               </MenuLink>
               <button
