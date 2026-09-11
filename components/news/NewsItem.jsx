@@ -28,6 +28,9 @@ export function NewsItem({ item, compact = false }) {
       {/* 그림은 팝업에서만. 여기가 "읽고 나중에" 를 "지금" 으로 바꾸는
           자리다 — QR 이 눈앞에 있으면 폰을 그 자리에서 든다. */}
       {item.image && !compact && (
+        {/* next/image 를 안 쓴다. QR 은 다시 샘플링되면 안 되는 그림이고,
+            크기가 고정이라 최적화가 보탤 것이 없다. 이 경고는 그래서 끈다. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={item.image}
           alt=""
