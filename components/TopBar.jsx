@@ -2,14 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useIdentity } from './IdentityProvider';
 import { BrandSwitcher } from './BrandSwitcher';
 import { NotificationBell } from './NotificationBell';
 import { MessageSquarePlusIcon } from 'lucide-react';
 import { NewsMenu } from './NewsMenu';
 import { FeedbackDialog } from './FeedbackDialog';
-import { canManageBrand, canProcess, isGlobalAdmin } from '@/lib/tiers';
+import { canProcess, isGlobalAdmin } from '@/lib/tiers';
 
 function NavLink({ href, active, children }) {
   return (
@@ -50,7 +50,6 @@ export function TopBar() {
   // 의견 창의 열림 상태를 NewsMenu 가 아니라 여기서 갖는다. 입구가 둘이라
   // (소식 팝오버 하단, 계정 메뉴) 한쪽 안에 두면 다른 쪽에서 열 수 없다.
   const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const manageBrand = canManageBrand(identity);
   const process = canProcess(identity);
   const globalAdmin = isGlobalAdmin(identity);
   // 런칭은 명단에 든 사람에게 보인다. 전체 관리자는 늘 본다(/api/me 참고).
@@ -58,20 +57,6 @@ export function TopBar() {
   // 없는 메뉴를 안 보이게 할 뿐이다.
   const seesLaunch = identity?.hasLaunch === true || globalAdmin;
   const closeMenu = () => setMenuOpen(false);
-
-  // 새로 온 의견 수. 메뉴를 열 때만 받는다 — 모든 화면에서 미리 받아 둘
-  // 만큼 급한 숫자가 아니고, 전체 관리자 둘뿐이라 폴링할 이유도 없다.
-  const [freshFeedback, setFreshFeedback] = useState(0);
-  useEffect(() => {
-    if (!menuOpen || !globalAdmin) return undefined;
-    let alive = true;
-    fetch('/api/admin/feedback?only=count')
-      .then((res) => (res.ok ? res.json() : null))
-      // 못 받으면 배지를 안 그린다. 메뉴가 안 열리는 것보다 낫다.
-      .then((data) => { if (alive && data) setFreshFeedback(data.fresh ?? 0); })
-      .catch(() => {});
-    return () => { alive = false; };
-  }, [menuOpen, globalAdmin]);
 
   return (
     <header className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3">
@@ -142,14 +127,6 @@ export function TopBar() {
           {globalAdmin && (
             <NavLink href="/admin/dashboard" active={pathname.startsWith('/admin/dashboard')}>
               대시보드
-            </NavLink>
-          )}
-          {globalAdmin && (
-            <NavLink
-              href="/settings/organizations"
-              active={pathname.startsWith('/settings/organizations')}
-            >
-              조직
             </NavLink>
           )}
         </div>
@@ -249,56 +226,24 @@ export function TopBar() {
                 {globalAdmin && <p className="text-xs text-slate-400">전체 관리자</p>}
               </div>
 
-              {/* 세 덩어리다 — 관리 · 도움 · 계정.
-                  구분선을 항상 그리지 않는다. 일반 사용자에게는 관리 묶음이
-                  통째로 없어서 네 줄뿐인데, 거기에 선 셋을 그으면 빈 칸만
-                  늘어난다. */}
-              {manageBrand && (
-                <>
-                  <div className="my-1 border-t border-slate-100" />
-                  {/* '설정'이라고만 적혀 있었다. 실제 화면 제목은 '브랜드
-                      설정'이고 바로 아래 '브랜드 관리'가 있어서, 계정 메뉴
-                      안의 '설정'은 내 계정 설정으로 읽힌다. 화면 제목과
-                      같은 이름을 쓴다. */}
-                  <MenuLink href="/settings/brand/team" onClick={closeMenu}>
-                    브랜드 설정
-                  </MenuLink>
-                </>
-              )}
-              {/* 관리 화면이 둘로 갈렸으니 입구도 둘이다. 하나로 묶어 두면
-                  "팀원 관리는 어디였지"를 브랜드 화면에서 다시 찾게 된다. */}
-              {globalAdmin && (
-                <>
-                  {/* 브랜드 설정이 이미 선을 그었으면 또 긋지 않는다. */}
-                  {!manageBrand && <div className="my-1 border-t border-slate-100" />}
-                  <MenuLink href="/settings/brands" onClick={closeMenu}>
-                    브랜드 관리
-                  </MenuLink>
-                  <MenuLink href="/settings/members" onClick={closeMenu}>
-                    팀원 관리
-                  </MenuLink>
-                  <MenuLink href="/settings/feedback" onClick={closeMenu}>
-                    <span className="flex-1">받은 의견</span>
-                    {freshFeedback > 0 && (
-                      <span className="ml-2 rounded-full bg-indigo-600 px-1.5 py-0.5 text-[11px] font-medium text-white tabular-nums">
-                        {freshFeedback > 99 ? '99+' : freshFeedback}
-                      </span>
-                    )}
-                  </MenuLink>
-                </>
-              )}
+              {/* 설정 화면 링크를 낱낱이 늘어놓지 않는다.
+                  전에는 등급에 따라 여기가 여섯 줄까지 늘어났다. 그런데 그
+                  줄들은 이름만으로 안 갈렸다 — '브랜드 설정'과 '브랜드 관리'가
+                  나란히 있었고, 어느 쪽이 지금 보는 브랜드의 것인지 눌러 보기
+                  전에는 몰랐다. 이제 /settings 가 레일로 그 갈래를 보여 준다.
+                  여기서는 문 하나만 연다.
 
+                  등급에 따라 안에서 무엇이 보이는지는 lib/settingsNav.js 가
+                  가른다 — 여기서 또 가르면 두 곳을 맞추게 되고, 언젠가 한쪽만
+                  고친다. */}
               <div className="my-1 border-t border-slate-100" />
+              <MenuLink href="/settings" onClick={closeMenu}>
+                설정
+              </MenuLink>
               {/* 등급과 무관하게 누구나 볼 수 있다 — 설명이 가장 필요한 사람이
                   권한이 가장 낮은 요청자이기 때문이다. */}
               <MenuLink href="/help" onClick={closeMenu}>
                 도움말
-              </MenuLink>
-              {/* 이동 링크(요구사항·주간회의)와 섞지 않는다. 그건 매일 쓰는
-                  것이고 이건 한 번 쓰는 것이다. 권한으로도 안 가린다 —
-                  깔 사람은 전부다. */}
-              <MenuLink href="/settings/install" onClick={closeMenu}>
-                폰에 설치하기
               </MenuLink>
               {/* 주 입구는 소식 팝오버 하단이다. 여기에도 한 줄 남기는 이유:
                   "설정 비슷한 것"을 계정 메뉴에서 찾는 사람이 실제로 있고,
@@ -315,9 +260,6 @@ export function TopBar() {
               </button>
 
               <div className="my-1 border-t border-slate-100" />
-              <MenuLink href="/settings/password" onClick={closeMenu}>
-                비밀번호 변경
-              </MenuLink>
               <button
                 type="button"
                 onClick={logout}
