@@ -15,6 +15,7 @@ import { BrandTeamAssignDialog } from '@/components/BrandTeamAssignDialog';
 import { TeamMemberEditDialog } from '@/components/TeamMemberEditDialog';
 import { MemberPanel } from '@/components/settings/MemberPanel';
 import { DemoteAdminDialog } from '@/components/settings/DemoteAdminDialog';
+import { ActionErrorBar } from '@/components/settings/ActionErrorBar';
 
 // 타이핑마다 주소를 바꾸면 라우터가 계속 리렌더를 민다. 300ms 멈춘 뒤에만.
 const SEARCH_DEBOUNCE_MS = 300;
@@ -169,8 +170,8 @@ function MembersScreen() {
       const d = await res.json();
       const message = d.error ?? fallbackMessage;
       setActionError(message);
-      // 부르는 쪽이 실패를 알 수 있게 돌려준다. 배너는 화면 맨 위에 있어서,
-      // 목록 아래쪽 줄에서 부른 경우 스크롤 밖이라 안 보인다. 창을 띄우고
+      // 부르는 쪽이 실패를 알 수 있게 돌려준다. 오류 줄은 화면 아래에 떠
+      // 있지만 창이 열려 있으면 창의 어두운 막 뒤에 깔린다. 창을 띄우고
       // 부르는 자리(전체관리자 해제)는 이 값을 받아 창 안에서 보인다.
       return { ok: false, message };
     }
@@ -241,7 +242,7 @@ function MembersScreen() {
           전사 팀원을 등록하고, 계정을 발급하고, 브랜드에 배치합니다.
         </p>
       </div>
-      {actionError && <p className="text-sm text-red-600">{actionError}</p>}
+      <ActionErrorBar message={actionError} onClose={() => setActionError('')} />
 
       <PendingMembersSection members={pendingMembers} onAssign={setAssignTarget} />
 
