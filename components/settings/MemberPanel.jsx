@@ -11,6 +11,7 @@ import {
 import { BRAND_TIERS, TIER_LABELS } from '@/lib/tiers';
 import { displayAffiliation } from '@/lib/organizations';
 import { displayJobRole } from '@/lib/jobRoles';
+import { hasNoOrganization } from '@/lib/memberFilter';
 
 function Section({ title, action, children }) {
   return (
@@ -106,7 +107,22 @@ export function MemberPanel({
         <dl className="flex flex-col gap-1 text-sm">
           <div className="flex justify-between gap-2">
             <dt className="text-slate-500">소속</dt>
-            <dd className="text-right text-slate-800">{displayAffiliation(member)}</dd>
+            <dd className="text-right text-slate-800">
+              {hasNoOrganization(member) ? (
+                // 목록 줄과 같은 판정·같은 표시다. 옛 자유 입력값이 제대로 된
+                // 소속처럼 보이지 않게 흐리게 적는다.
+                <>
+                  {displayAffiliation(member) !== '—' && (
+                    <span className="mr-1.5 text-slate-400">{displayAffiliation(member)}</span>
+                  )}
+                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500">
+                    소속 미지정
+                  </span>
+                </>
+              ) : (
+                displayAffiliation(member)
+              )}
+            </dd>
           </div>
           <div className="flex justify-between gap-2">
             <dt className="text-slate-500">직무</dt>
@@ -133,6 +149,14 @@ export function MemberPanel({
           </button>
         }
       >
+        {member?.is_global_admin && (
+          // 전체관리자는 이 배치를 안 읽는다(lib/checkBrandAccess.js 첫 줄).
+          // 아래 셀렉트를 바꿔도 지금 권한은 그대로라, 말해 두지 않으면 고친
+          // 사람이 반영이 안 됐다고 본다.
+          <p className="text-xs text-slate-500">
+            전체 관리자라 지금은 모든 브랜드에 들어갑니다. 아래 배치는 해제하면 적용됩니다.
+          </p>
+        )}
         {roles.length === 0 ? (
           <p className="text-sm text-slate-400">아직 배치된 브랜드가 없습니다.</p>
         ) : (

@@ -4,15 +4,85 @@ import { useState } from 'react';
 import { QuickFilterChips } from '@/components/QuickFilterChips';
 import { FilterSelect } from '@/components/FilterSelect';
 import { memberBrandLabel } from '@/lib/memberBrandLabel';
-import { BRAND_NONE, MEMBER_FILTERS } from '@/lib/memberFilter';
+import { BRAND_NONE, MEMBER_FILTERS, hasNoOrganization } from '@/lib/memberFilter';
+import { demoteImpact } from '@/lib/globalAdminDemote';
 import { TIER_LABELS } from '@/lib/tiers';
 import { displayAffiliation } from '@/lib/organizations';
 import { displayJobRole } from '@/lib/jobRoles';
 
 // 칩에 적을 말. 순서는 여기가 아니라 MEMBER_FILTERS 가 정한다 — 칩을 하나
 // 더 만들 때 순서와 이름을 서로 다른 파일에서 고치게 두지 않는다.
-const FILTER_LABELS = { all: '전체', active: '재직중', off: '비활성', admin: '전체관리자' };
+const FILTER_LABELS = {
+  all: '전체',
+  active: '재직중',
+  off: '비활성',
+  admin: '전체관리자',
+  noOrg: '소속 미지정',
+};
 const CHIPS = MEMBER_FILTERS.map((key) => ({ key, label: FILTER_LABELS[key] ?? key }));
+
+// 전체관리자의 「브랜드 · 등급」 칸.
+//
+// 저장된 배치를 그대로 적으면 두 칸이 「이 사람이 뭘 할 수 있나」에 서로 다른
+// 답을 한다. 전체관리자는 브랜드 배치도 소속도 안 읽고 모든 활성 브랜드에
+// 1차로 들어간다(lib/checkBrandAccess.js 첫 줄). 저장된 「실무 관리자」는
+// 지금 할 수 있는 일이 아니다.
+//
+// 그렇다고 저장값을 숨기지는 않는다. **해제하는 순간 그 값이 살아난다** —
+// 안 보이면 무엇이 남는지 모르는 채로 권한을 끊게 된다. 그래서 지금 권한을
+// 위에, 해제 뒤에 남을 것을 아래 흐린 줄에 적는다.
+//
+// 세는 일은 창과 같은 lib/globalAdminDemote.js 가 한다. 여기서 따로 세면
+// 창과 목록이 다른 말을 하게 된다.
+//
+// 등급은 브랜드마다 따로 적는다. 괄호 하나로 묶으면 등급이 섞인 사람에게
+// 거짓말이 된다 — 스파오 실무 관리자이면서 미쏘 요청자인 사람이 실제로 있다.
+function GlobalAdminBrandCell({ member, brands }) {
+  const { keep } = demoteImpact({ brandRoles: member?.brandRoles, brands });
+
+  return (
+    <div className="flex flex-col">
+      {/* 가운데점을 넣는다. 다른 줄은 「스파오 실무 관리자」처럼 붙여 쓰지만
+          거기는 앞이 고유명사라 경계가 저절로 보인다. 여기는 양쪽이 다 보통
+          명사라 붙여 두면 한 덩어리로 읽힌다. */}
+      <span className="text-slate-600">
+        모든 브랜드
+        <span className="ml-1.5 text-xs text-slate-500">· {TIER_LABELS['1차']}</span>
+      </span>
+      <span className="text-xs text-slate-400">
+        {keep.length === 0
+          ? '해제하면: 들어갈 곳이 없습니다'
+          : `해제하면: ${keep
+              .map((k) => `${k.name} (${TIER_LABELS[k.tier] ?? k.tier})`)
+              .join(' · ')}`}
+      </span>
+    </div>
+  );
+}
+
+// 「소속 · 직무」 칸.
+//
+// 조직으로 이관이 안 된 사람은 displayAffiliation 이 옛 자유 입력값(「본부」)을
+// 돌려줘서, 제대로 된 소속과 똑같이 보인다. 그래서 그 값을 흐리게 적고
+// 「소속 미지정」을 붙인다. 판정은 칩과 같은 hasNoOrganization 이다 — 따로
+// 판정하면 칩에는 잡히는데 줄에는 표시가 없는 사람이 생긴다.
+function AffiliationCell({ member }) {
+  const job = displayJobRole(member);
+  const jobText = job && job !== '—' ? job : '';
+
+  if (!hasNoOrganization(member)) {
+    return [displayAffiliation(member), jobText].filter((v) => v && v !== '—').join(' · ') || '—';
+  }
+
+  const legacy = displayAffiliation(member);
+  return (
+    <span>
+      {legacy && legacy !== '—' && <span className="mr-1.5 text-slate-400">{legacy}</span>}
+      <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500">소속 미지정</span>
+      {jobText && <span> · {jobText}</span>}
+    </span>
+  );
+}
 
 // 한 줄의 '⋯'.
 //
@@ -91,7 +161,10 @@ function MemberRowMenu({ member, onAccount, onToggleGlobalAdmin, onToggleActive,
 //   members    이미 좁혀진 목록. 거르는 셈은 lib/memberFilter.js 가 한다
 //   counts     memberCounts(전체) — 브랜드·검색을 뺀 수다. 이유는 그 파일에
 //   q, f, brand     툴바에 그릴 현재 값(주소에서 온다)
-//   brands          활성 브랜드 [{ id, name }]
+//   brands          활성 브랜드 [{ id, name }]. 툴바의 브랜드 드롭다운이 쓴다
+//   allBrands       **전체** 브랜드 [{ id, name, is_active }]. 전체관리자 줄의
+//                   「해제하면」이 demoteImpact 로 쓴다. 활성만 넘기면 비활성
+//                   브랜드의 배치가 통째로 안 보여서 줄이 거짓말을 한다
 //   currentBrandId  상단바에서 보고 있는 브랜드. memberBrandLabel 이 쓴다
 //   onSearch(v) · onFilter(key) · onBrand(v)   툴바 조작
 //   onCreate() · onAccount(m) · onToggleGlobalAdmin(m) · onToggleActive(m) · onEdit(m)
@@ -121,6 +194,7 @@ export function TeamMemberListSection({
   onEdit,
   onSelect,
   selectedId,
+  allBrands,
 }) {
   // '배치 없음'을 브랜드 칸에 같이 넣는다. 지금은 배치가 없는 사람을 찾을
   // 방법이 아예 없다 — 그 사람들이야말로 이 화면에서 손대야 할 사람이다.
@@ -213,15 +287,15 @@ export function TeamMemberListSection({
                   <span className="block text-xs text-slate-400">{m.email || '—'}</span>
                 </td>
                 <td className="hidden py-2 text-slate-500 sm:table-cell">
-                  {[displayAffiliation(m), displayJobRole(m)]
-                    .filter((v) => v && v !== '—')
-                    .join(' · ') || '—'}
+                  <AffiliationCell member={m} />
                 </td>
                 <td className="py-2">
                   {/* 셀렉트가 아니라 문구다. 배치와 등급은 패널에서 바꾼다 —
                       무엇이 걸려 있는지 읽는 자리와 바꾸는 자리를 나눠야 22줄이
                       표로 읽힌다. */}
-                  {label.empty ? (
+                  {m.is_global_admin ? (
+                    <GlobalAdminBrandCell member={m} brands={allBrands} />
+                  ) : label.empty ? (
                     <span className="text-slate-400">배치 없음</span>
                   ) : (
                     <span className="text-slate-600">

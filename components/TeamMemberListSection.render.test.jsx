@@ -34,7 +34,7 @@ const members = [
     name: '한지웅',
     email: 'woong@example.com',
     is_active: true,
-    is_global_admin: true,
+    is_global_admin: false,
     hasAccount: true,
     organization: { name: '온라인BU' },
     jobRole: { name: '기획자' },
@@ -61,6 +61,11 @@ const base = {
   f: 'all',
   brand: '',
   brands: [{ id: 'b1', name: '스파오' }],
+  allBrands: [
+    { id: 'b1', name: '스파오', is_active: true },
+    { id: 'b2', name: '미쏘', is_active: true },
+    { id: 'b3', name: '로엠', is_active: false },
+  ],
   currentBrandId: 'b1',
   ...handlers,
 };
@@ -79,6 +84,39 @@ describe('TeamMemberListSection 이 그려진다', () => {
     expect(html).toContain('2명 보임');
   });
 
+  // 전체관리자는 배치를 안 읽고 모든 활성 브랜드에 들어간다. 저장된 배치를
+  // 그대로 적으면 줄이 권한에 대해 거짓말을 한다. 그렇다고 숨기지는 않는다 —
+  // 해제하면 그 배치가 살아난다.
+  it('전체관리자 줄은 지금 권한과 해제 뒤를 함께 말한다', () => {
+    const admin = {
+      id: 'g1',
+      name: '변기석',
+      is_active: true,
+      is_global_admin: true,
+      hasAccount: true,
+      affiliation: '본부',
+      brandRoles: [
+        { brandId: 'b1', brandName: '스파오', tier: '2차' },
+        { brandId: 'b3', brandName: '로엠', tier: '2차' },
+      ],
+    };
+    const html = plain(renderToString(<TeamMemberListSection {...base} members={[admin]} />));
+    expect(html).toContain('모든 브랜드');
+    expect(html).toContain('· 전체 관리자');
+    // 비활성 브랜드(로엠)의 배치는 해제해도 못 들어가므로 안 적는다.
+    expect(html).toContain('해제하면: 스파오 (실무 관리자)');
+    expect(html).not.toContain('로엠');
+    // 조직이 없어 옛 값으로 떨어진 소속은 표시가 붙는다.
+    expect(html).toContain('본부');
+    expect(html).toContain('소속 미지정');
+  });
+
+  it('전체관리자에게 들어갈 배치가 없으면 그렇게 말한다', () => {
+    const admin = { id: 'g2', name: '장재혁', is_global_admin: true, brandRoles: [] };
+    const html = plain(renderToString(<TeamMemberListSection {...base} members={[admin]} />));
+    expect(html).toContain('해제하면: 들어갈 곳이 없습니다');
+  });
+
   it('좁혀서 아무도 없으면 그렇다고 말한다', () => {
     const html = plain(renderToString(<TeamMemberListSection {...base} members={[]} />));
     expect(html).toContain('찾는 조건에 맞는 직원이 없습니다.');
@@ -90,6 +128,7 @@ describe('TeamMemberListSection 이 그려진다', () => {
   it('칸이 비어 있어도 안 터진다', () => {
     for (const patch of [
       { brands: undefined },
+      { allBrands: undefined, members: [{ id: 'x', name: '관리자', is_global_admin: true }] },
       { counts: undefined },
       { members: [{ id: 'x', name: '이름만', brandRoles: null }] },
       { members: [{ id: 'x', name: '이름만' }], currentBrandId: null },

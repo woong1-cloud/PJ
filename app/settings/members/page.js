@@ -252,6 +252,7 @@ function MembersScreen() {
         f={f}
         brand={brand}
         brands={activeBrands}
+        allBrands={brands}
         currentBrandId={identity?.brandId ?? null}
         onSearch={setQ}
         onFilter={(key) => setParams({ f: key === f ? 'all' : key })}

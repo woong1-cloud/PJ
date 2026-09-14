@@ -77,6 +77,16 @@ describe('MemberPanel 이 그려진다', () => {
     }
   });
 
+  // 전체관리자는 배치를 안 읽는다. 셀렉트를 바꿔도 지금 권한은 그대로라는
+  // 것을 패널이 말해야 한다. 소속이 옛 값으로 떨어진 사람은 표시가 붙는다.
+  it('전체관리자·소속 미지정이면 그렇다고 말한다', () => {
+    const subject = { ...member, is_global_admin: true, organization: null, affiliation: '본부' };
+    const html = renderToString(<MemberPanel member={subject} {...handlers} />).replaceAll('<!-- -->', '');
+    expect(html).toContain('아래 배치는 해제하면 적용됩니다');
+    expect(html).toContain('본부');
+    expect(html).toContain('소속 미지정');
+  });
+
   // 목록이 갱신되는 사이 member 가 잠깐 비는 경로가 생길 수 있다. 그때
   // 화면 전체가 죽는 것보다는 빈 패널이 낫다.
   it('사람이 비어 있어도 안 터진다', () => {
